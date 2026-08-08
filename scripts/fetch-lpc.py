@@ -33,16 +33,32 @@ REPO = "LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator"
 RAW = f"https://raw.githubusercontent.com/{REPO}/master"
 OUT = "public/sprites/lpc"
 
-# Body types to try, best first. Hair/hats use "adult"; gear uses "male".
-BODY_KEYS = ["male", "adult", "universal", "muscular", "teen", "female", "child"]
+# Body types the app offers. Every sheet is fetched once per body, because an
+# item drawn for one silhouette does not line up on the other.
+BODIES = ["male", "female"]
+
+# Which key to read out of a sheet definition, best first, per body. Most
+# definitions carry every body type; the tail is insurance so a layer is never
+# silently dropped. Hair and hats resolve to a shared "adult" directory, which
+# the download cache collapses back to one file.
+BODY_KEYS = {
+    "male": ["male", "muscular", "teen", "universal", "adult", "female"],
+    "female": ["female", "teen", "universal", "adult", "male"],
+}
 
 # ---------------------------------------------------------------------------
 # What we actually use, keyed by the item ids already in src/lib/game.ts.
 # ---------------------------------------------------------------------------
 
+# Heads are the exception: they are a *style* sheet, so "Human Male" points
+# every body type at the male art. Picking a head therefore means picking a
+# different definition rather than a different key inside one.
 BASE = {
-    "body": "body/body",
-    "head": "head/heads/human/heads_human_male",
+    "body": {"male": "body/body", "female": "body/body"},
+    "head": {
+        "male": "head/heads/human/heads_human_male",
+        "female": "head/heads/human/heads_human_female",
+    },
 }
 
 TORSO = {
@@ -147,27 +163,39 @@ PREFER = {
 }
 
 
+# Each item is now resolved once per body type, so the same URL is commonly
+# requested twice (identically, for anything shared like hair). Cache both.
+_fetched = {}
+_definitions = {}
+
+
 def get(url, binary=False):
     # Some contributors' variant filenames contain spaces.
     url = urllib.parse.quote(url, safe=":/?#[]@!$&'()*+,;=~")
+    if url in _fetched:
+        return _fetched[url]
     try:
         with urllib.request.urlopen(url, timeout=60) as r:
-            return r.read() if binary else r.read().decode("utf-8")
+            out = r.read() if binary else r.read().decode("utf-8")
     except urllib.error.HTTPError:
-        return None
+        out = None
     except Exception as e:
         print(f"    ! {e}", file=sys.stderr)
-        return None
+        out = None
+    _fetched[url] = out
+    return out
 
 
 def definition(path):
+    if path in _definitions:
+        return _definitions[path]
     raw = get(f"{RAW}/sheet_definitions/{path}.json")
-    if raw is None:
-        return None
     try:
-        return json.loads(raw)
+        out = json.loads(raw) if raw is not None else None
     except json.JSONDecodeError:
-        return None
+        out = None
+    _definitions[path] = out
+    return out
 
 
 def pick_variant(variants, slot):
@@ -180,8 +208,8 @@ def pick_variant(variants, slot):
     return variants[0]
 
 
-def resolve(defn, slot):
-    """Yield (url, zPos) for every drawable layer of one item."""
+def resolve(defn, slot, body):
+    """Yield (rel, blob, zPos) for every drawable layer of one item, for one body."""
     variants = defn.get("variants") or []
     variant = pick_variant(variants, slot)
     out = []
@@ -192,7 +220,7 @@ def resolve(defn, slot):
         if any(x in str(layer) for x in ("attack_", "/behind/")):
             continue
 
-        d = next((layer[k] for k in BODY_KEYS if layer.get(k)), None)
+        d = next((layer[k] for k in BODY_KEYS[body] if layer.get(k)), None)
         if not d:
             continue
 
@@ -351,38 +379,56 @@ def main():
     for slot, table in groups:
         manifest["slots"][slot] = {}
         for item_id, defpath in table.items():
-            defn = definition(defpath)
-            if defn is None:
-                print(f"  MISS def  {slot}/{item_id}  ({defpath})")
-                misses.append(f"{slot}/{item_id} definition {defpath}")
-                continue
-
-            layers = resolve(defn, slot)
-            if not layers:
-                print(f"  MISS png  {slot}/{item_id}  ({defpath})")
-                misses.append(f"{slot}/{item_id} no png")
-                continue
-
             kind = "body" if slot == "base" else ("hair" if slot == "hair" else None)
-            entries = []
-            for rel, blob, z in layers:
-                dest = os.path.join(OUT, rel)
-                os.makedirs(os.path.dirname(dest), exist_ok=True)
-                with open(dest, "wb") as f:
-                    f.write(blob)
-                entry = {"src": f"/sprites/lpc/{rel}", "z": z}
-                if kind:
-                    ramp_name = detect_ramp(blob, manifest.get("palettes", {}).get(kind, {}))
-                    if ramp_name:
-                        entry["baseRamp"] = ramp_name
-                entries.append(entry)
+            bodies = {}
+            name = item_id
 
-            manifest["slots"][slot][item_id] = {
-                "name": defn.get("name", item_id),
-                "layers": sorted(entries, key=lambda e: e["z"]),
-            }
-            all_credits += credits_of(defn)
-            print(f"  ok  {slot}/{item_id:<12} {len(entries)} layer(s)")
+            for body in BODIES:
+                # A dict here means the item is a different sheet per body
+                # (heads), rather than a different key inside one sheet.
+                path = defpath[body] if isinstance(defpath, dict) else defpath
+                defn = definition(path)
+                if defn is None:
+                    print(f"  MISS def  {slot}/{item_id}/{body}  ({path})")
+                    misses.append(f"{slot}/{item_id}/{body} definition {path}")
+                    continue
+
+                layers = resolve(defn, slot, body)
+                if not layers:
+                    print(f"  MISS png  {slot}/{item_id}/{body}  ({path})")
+                    misses.append(f"{slot}/{item_id}/{body} no png")
+                    continue
+
+                entries = []
+                for rel, blob, z in layers:
+                    dest = os.path.join(OUT, rel)
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    with open(dest, "wb") as f:
+                        f.write(blob)
+                    entry = {"src": f"/sprites/lpc/{rel}", "z": z}
+                    if kind:
+                        ramp_name = detect_ramp(
+                            blob, manifest.get("palettes", {}).get(kind, {})
+                        )
+                        if ramp_name:
+                            entry["baseRamp"] = ramp_name
+                    entries.append(entry)
+
+                bodies[body] = sorted(entries, key=lambda e: e["z"])
+                name = defn.get("name", item_id)
+                all_credits += credits_of(defn)
+
+            if not bodies:
+                continue
+
+            # A body that resolved nothing borrows another's art rather than
+            # rendering a hole. Shouldn't happen — reported above if it does.
+            for body in BODIES:
+                bodies.setdefault(body, next(iter(bodies.values())))
+
+            manifest["slots"][slot][item_id] = {"name": name, "bodies": bodies}
+            counts = "/".join(str(len(bodies[b])) for b in BODIES)
+            print(f"  ok  {slot}/{item_id:<12} {counts} layer(s) [{'/'.join(BODIES)}]")
 
     # ---- eyes: fetched by path, since there is no definition to resolve -----
     manifest["slots"]["eyes"] = {}
@@ -399,9 +445,13 @@ def main():
         with open(dest, "wb") as f:
             f.write(blob)
 
+        # One sheet serves both bodies — LPC draws adult eyes at the same
+        # offset regardless — but it is stored per body so the renderer has a
+        # single shape to read.
+        layer = [{"src": f"/sprites/lpc/{rel}", "z": EYES_Z}]
         manifest["slots"]["eyes"][color] = {
             "name": color.capitalize(),
-            "layers": [{"src": f"/sprites/lpc/{rel}", "z": EYES_Z}],
+            "bodies": {body: layer for body in BODIES},
         }
         print(f"  ok  eyes/{color:<12} 1 layer(s)")
 

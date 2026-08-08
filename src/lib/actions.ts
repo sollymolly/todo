@@ -5,6 +5,8 @@ import { sql } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
 import {
   COLOR_KEYS,
+  BODY_TYPES,
+  DEFAULT_BODY,
   DEFAULT_EYES,
   EYE_COLORS,
   HAIR_COLORS,
@@ -235,6 +237,9 @@ export async function saveAppearance(appearance: Appearance) {
 
   // Only accept values that exist in the catalogue.
   const clean: Appearance = {
+    body: BODY_TYPES.some((b) => b.id === appearance.body)
+      ? appearance.body
+      : DEFAULT_BODY,
     skin: SKINS.some((s) => s.id === appearance.skin) ? appearance.skin : "fair",
     hair: HAIR_STYLES.some((h) => h.id === appearance.hair)
       ? appearance.hair

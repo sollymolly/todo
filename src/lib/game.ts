@@ -1,4 +1,4 @@
-import type { Appearance, Equipped, Slot } from "./types";
+import type { Appearance, BodyType, Equipped, Slot } from "./types";
 
 /* ==========================================================================
    XP economy — these mirror the SQL functions in db/schema.sql.
@@ -247,7 +247,20 @@ export const EYE_COLORS: { id: string; label: string; hex: string }[] = [
 
 export const DEFAULT_EYES = "blue";
 
+/**
+ * The two LPC body sheets. Labelled by silhouette rather than by identity,
+ * because that is honestly all the art encodes — every other appearance and
+ * gear option is shared between them.
+ */
+export const BODY_TYPES: { id: BodyType; label: string }[] = [
+  { id: "male", label: "Masculine" },
+  { id: "female", label: "Feminine" },
+];
+
+export const DEFAULT_BODY: BodyType = "male";
+
 export const DEFAULT_APPEARANCE: Appearance = {
+  body: DEFAULT_BODY,
   skin: "fair",
   hair: "tousled",
   hairColor: "chestnut",

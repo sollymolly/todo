@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import manifest from "../../public/sprites/lpc/manifest.json";
-import { DEFAULT_EYES } from "@/lib/game";
-import type { Appearance, Equipped } from "@/lib/types";
+import { DEFAULT_BODY, DEFAULT_EYES } from "@/lib/game";
+import type { Appearance, BodyType, Equipped } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
    Draws the character by compositing LPC sprite layers onto a canvas.
@@ -26,7 +26,8 @@ const CROP_TOP = 7;
 const VIEW_H = FRAME - CROP_TOP;
 
 type Layer = { src: string; z: number; baseRamp?: string };
-type SlotTable = Record<string, { name: string; layers: Layer[] }>;
+/** Every item ships one layer list per body type — gear doesn't line up across them. */
+type SlotTable = Record<string, { name: string; bodies: Record<string, Layer[]> }>;
 
 const SLOTS = manifest.slots as unknown as Record<string, SlotTable>;
 const PALETTES = manifest.palettes as unknown as Record<
@@ -157,7 +158,11 @@ export default function CharacterSprite({
   const [frame, setFrame] = useState(0);
   const timer = useRef<number | null>(null);
 
+  // Friends' profiles are raw jsonb and predate this field, so don't trust it.
+  const body: BodyType = appearance.body === "female" ? "female" : DEFAULT_BODY;
+
   const key = [
+    body,
     appearance.skin,
     appearance.hair,
     appearance.hairColor,
@@ -193,7 +198,8 @@ export default function CharacterSprite({
         if (!id || id === "none") return;
         const item = SLOTS[slot]?.[id];
         if (!item) return;
-        for (const layer of item.layers) {
+        const layers = item.bodies[body] ?? item.bodies[DEFAULT_BODY] ?? [];
+        for (const layer of layers) {
           let recolor;
           if (tint?.to.length) {
             // Each sheet declares the ramp it was drawn in; without that we

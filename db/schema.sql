@@ -25,10 +25,11 @@ create table if not exists profiles (
   display_name  text not null default 'Adventurer',
   xp            integer not null default 0,
   appearance    jsonb not null default '{
+                   "body": "male",
                    "skin": "fair",
                    "hair": "tousled",
                    "hairColor": "chestnut",
-                   "eyes": "bright"
+                   "eyes": "blue"
                  }'::jsonb,
   equipped      jsonb not null default '{
                    "torso": "rags",

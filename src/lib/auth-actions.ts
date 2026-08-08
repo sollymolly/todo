@@ -27,6 +27,38 @@ export type LoginProbe =
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME = /^[a-zA-Z0-9_]{3,20}$/;
 
+/**
+ * Every new account starts already befriended to whoever runs the instance,
+ * so nobody lands on an empty Companions page. Set OWNER_EMAIL to move it.
+ *
+ * Worth being clear about what this grants, since the new user never agreed
+ * to it: an accepted friendship is mutual, so the owner can see their
+ * category names with open counts, their completed-quest total and level, and
+ * can open a DM thread with them. Quest titles and notes stay private.
+ */
+const OWNER_EMAIL = (
+  process.env.OWNER_EMAIL ?? "solpark0624@gmail.com"
+).trim().toLowerCase();
+
+async function befriendOwner(newUserId: string) {
+  try {
+    // The owner is stored as the requester so the pair ordering is
+    // deterministic. Nothing happens if that account doesn't exist yet, or if
+    // the person signing up *is* the owner.
+    await sql`
+      insert into friendships (requester_id, addressee_id, status, responded_at)
+      select u.id, ${newUserId}::uuid, 'accepted', now()
+        from users u
+       where u.email = ${OWNER_EMAIL}
+         and u.id <> ${newUserId}::uuid
+      on conflict (requester_id, addressee_id) do nothing
+    `;
+  } catch {
+    // A missing friendships table or any other hiccup must never cost someone
+    // their account — they just start with no companions, as before.
+  }
+}
+
 /** Which login flow an account needs, before any secret is sent. */
 export async function probeAccount(email: string): Promise<LoginProbe> {
   const mail = email.trim().toLowerCase();
@@ -93,6 +125,7 @@ export async function signUp(input: {
 
     const userId = rows[0].id;
     await sql`select bootstrap_user(${userId}::uuid, ${input.displayName.trim() || username}::text)`;
+    await befriendOwner(userId);
     await startSession(userId);
 
     revalidatePath("/", "layout");

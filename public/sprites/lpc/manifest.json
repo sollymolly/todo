@@ -6,587 +6,1099 @@
   "base": {
    "body": {
     "name": "Body Color",
-    "layers": [
-     {
-      "src": "/sprites/lpc/body/bodies/male/walk.png",
-      "z": 10,
-      "baseRamp": "light"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/body/bodies/male/walk.png",
+       "z": 10,
+       "baseRamp": "light"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/body/bodies/female/walk.png",
+       "z": 10,
+       "baseRamp": "light"
+      }
+     ]
+    }
    },
    "head": {
-    "name": "Human Male",
-    "layers": [
-     {
-      "src": "/sprites/lpc/head/heads/human/male/walk.png",
-      "z": 100,
-      "baseRamp": "light"
-     }
-    ]
+    "name": "Human Female",
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/head/heads/human/male/walk.png",
+       "z": 100,
+       "baseRamp": "light"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/head/heads/human/female/walk.png",
+       "z": 100,
+       "baseRamp": "light"
+      }
+     ]
+    }
    }
   },
   "torso": {
    "rags": {
     "name": "Sleeveless",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/walk/brown.png",
-      "z": 35
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/walk/brown.png",
+       "z": 35
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/walk/brown.png",
+       "z": 35
+      }
+     ]
+    }
    },
    "tunic": {
     "name": "Longsleeve",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/walk.png",
-      "z": 35
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/walk.png",
+       "z": 35
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/walk.png",
+       "z": 35
+      }
+     ]
+    }
    },
    "jerkin": {
     "name": "Leather",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/armour/leather/male/walk.png",
-      "z": 60
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/armour/leather/male/walk.png",
+       "z": 60
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/armour/leather/female/walk.png",
+       "z": 60
+      }
+     ]
+    }
    },
    "scale": {
     "name": "Legion",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/armour/legion/male/walk.png",
-      "z": 60
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/armour/legion/male/walk.png",
+       "z": 60
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/armour/legion/female/walk.png",
+       "z": 60
+      }
+     ]
+    }
    },
    "chain": {
     "name": "Chainmail",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/chainmail/male/walk.png",
-      "z": 50
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/chainmail/male/walk.png",
+       "z": 50
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/chainmail/female/walk.png",
+       "z": 50
+      }
+     ]
+    }
    },
    "plate": {
     "name": "Plate",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
-      "z": 60
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
+       "z": 60
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/armour/plate/female/walk.png",
+       "z": 60
+      }
+     ]
+    }
    },
    "gilded": {
     "name": "Plate",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
-      "z": 60
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
+       "z": 60
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/armour/plate/female/walk.png",
+       "z": 60
+      }
+     ]
+    }
    },
    "dragonscale": {
     "name": "Plate",
-    "layers": [
-     {
-      "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
-      "z": 60
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
+       "z": 60
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/torso/armour/plate/female/walk.png",
+       "z": 60
+      }
+     ]
+    }
    }
   },
   "weapon": {
    "stick": {
     "name": "Cane",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/polearm/cane/male/walk/cane.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/polearm/cane/male/walk/cane.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/polearm/cane/female/walk/cane.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "dagger": {
     "name": "Dagger",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/sword/dagger/walk/dagger.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/sword/dagger/walk/dagger.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/sword/dagger/walk/dagger.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "shortsword": {
     "name": "Arming Sword",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/sword/arming/universal/bg/walk/brass.png",
-      "z": 9
-     },
-     {
-      "src": "/sprites/lpc/weapon/sword/arming/universal/fg/walk/brass.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/sword/arming/universal/bg/walk/brass.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/arming/universal/fg/walk/brass.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/sword/arming/universal/bg/walk/brass.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/arming/universal/fg/walk/brass.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "axe": {
     "name": "Waraxe",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/blunt/waraxe/walk/waraxe.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/blunt/waraxe/walk/waraxe.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/blunt/waraxe/walk/waraxe.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "hammer": {
     "name": "Mace",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/blunt/mace/universal_behind/walk/mace.png",
-      "z": 9
-     },
-     {
-      "src": "/sprites/lpc/weapon/blunt/mace/walk/mace.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/blunt/mace/universal_behind/walk/mace.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/blunt/mace/walk/mace.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/blunt/mace/universal_behind/walk/mace.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/blunt/mace/walk/mace.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "longsword": {
     "name": "Longsword",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/sword/longsword/universal_behind/walk/longsword.png",
-      "z": 9
-     },
-     {
-      "src": "/sprites/lpc/weapon/sword/longsword/walk/longsword.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/sword/longsword/universal_behind/walk/longsword.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/longsword/walk/longsword.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/sword/longsword/universal_behind/walk/longsword.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/longsword/walk/longsword.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "flamebrand": {
     "name": "Glowsword",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/sword/glowsword/universal_behind/walk/blue.png",
-      "z": 9
-     },
-     {
-      "src": "/sprites/lpc/weapon/sword/glowsword/walk/blue.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/sword/glowsword/universal_behind/walk/blue.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/glowsword/walk/blue.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/sword/glowsword/universal_behind/walk/blue.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/glowsword/walk/blue.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "runeblade": {
     "name": "Katana",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/sword/katana/walk//katana.png",
-      "z": 140
-     },
-     {
-      "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/sword/katana/walk//katana.png",
+       "z": 140
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/sword/katana/walk//katana.png",
+       "z": 140
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+       "z": 140
+      }
+     ]
+    }
    },
    "dragonfang": {
     "name": "Scimitar",
-    "layers": [
-     {
-      "src": "/sprites/lpc/weapon/sword/scimitar/walk//scimitar.png",
-      "z": 140
-     },
-     {
-      "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
-      "z": 140
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/weapon/sword/scimitar/walk//scimitar.png",
+       "z": 140
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+       "z": 140
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/weapon/sword/scimitar/walk//scimitar.png",
+       "z": 140
+      },
+      {
+       "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+       "z": 140
+      }
+     ]
+    }
    }
   },
   "head": {
    "bandana": {
     "name": "Bandana",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hat/cloth/bandana/adult/walk.png",
-      "z": 120
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hat/cloth/bandana/adult/walk.png",
+       "z": 120
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hat/cloth/bandana/adult/walk.png",
+       "z": 120
+      }
+     ]
+    }
    },
    "cap": {
     "name": "Leather Cap",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png",
-      "z": 130
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png",
+       "z": 130
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png",
+       "z": 130
+      }
+     ]
+    }
    },
    "helm": {
     "name": "Bascinet",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hat/helmet/bascinet/adult/walk.png",
-      "z": 130
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hat/helmet/bascinet/adult/walk.png",
+       "z": 130
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hat/helmet/bascinet/adult/walk.png",
+       "z": 130
+      }
+     ]
+    }
    },
    "greathelm": {
     "name": "Greathelm",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hat/helmet/greathelm/male/walk.png",
-      "z": 130
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hat/helmet/greathelm/male/walk.png",
+       "z": 130
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hat/helmet/greathelm/female/walk.png",
+       "z": 130
+      }
+     ]
+    }
    },
    "crown": {
     "name": "Crown",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hat/formal/crown/adult/walk/steel.png",
-      "z": 130
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hat/formal/crown/adult/walk/steel.png",
+       "z": 130
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hat/formal/crown/adult/walk/steel.png",
+       "z": 130
+      }
+     ]
+    }
    },
    "dragoncrown": {
     "name": "Horned helmet",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hat/helmet/horned/adult/walk.png",
-      "z": 130
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hat/helmet/horned/adult/walk.png",
+       "z": 130
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hat/helmet/horned/adult/walk.png",
+       "z": 130
+      }
+     ]
+    }
    }
   },
   "cape": {
    "tattered": {
     "name": "Tattered",
-    "layers": [
-     {
-      "src": "/sprites/lpc/cape/tattered/bg/walk.png",
-      "z": 5
-     },
-     {
-      "src": "/sprites/lpc/cape/tattered/fg/walk.png",
-      "z": 85
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/cape/tattered/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/tattered/fg/walk.png",
+       "z": 85
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/cape/tattered/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/tattered/fg/walk.png",
+       "z": 85
+      }
+     ]
+    }
    },
    "traveler": {
     "name": "Solid",
-    "layers": [
-     {
-      "src": "/sprites/lpc/cape/solid/bg/walk.png",
-      "z": 5
-     },
-     {
-      "src": "/sprites/lpc/cape/solid/fg/walk.png",
-      "z": 85
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/cape/solid/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/solid/fg/walk.png",
+       "z": 85
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/cape/solid/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/solid/fg/walk.png",
+       "z": 85
+      }
+     ]
+    }
    },
    "heraldic": {
     "name": "Solid",
-    "layers": [
-     {
-      "src": "/sprites/lpc/cape/solid/bg/walk.png",
-      "z": 5
-     },
-     {
-      "src": "/sprites/lpc/cape/solid/fg/walk.png",
-      "z": 85
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/cape/solid/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/solid/fg/walk.png",
+       "z": 85
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/cape/solid/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/solid/fg/walk.png",
+       "z": 85
+      }
+     ]
+    }
    },
    "mantle": {
     "name": "Cape Trim",
-    "layers": [
-     {
-      "src": "/sprites/lpc/cape/trim/walk.png",
-      "z": 90
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/cape/trim/walk.png",
+       "z": 90
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/cape/trim/walk.png",
+       "z": 90
+      }
+     ]
+    }
    },
    "starcloak": {
     "name": "Solid",
-    "layers": [
-     {
-      "src": "/sprites/lpc/cape/solid/bg/walk.png",
-      "z": 5
-     },
-     {
-      "src": "/sprites/lpc/cape/solid/fg/walk.png",
-      "z": 85
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/cape/solid/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/solid/fg/walk.png",
+       "z": 85
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/cape/solid/bg/walk.png",
+       "z": 5
+      },
+      {
+       "src": "/sprites/lpc/cape/solid/fg/walk.png",
+       "z": 85
+      }
+     ]
+    }
    }
   },
   "offhand": {
    "buckler": {
     "name": "Round Shield",
-    "layers": [
-     {
-      "src": "/sprites/lpc/shield/round/walk/brown.png",
-      "z": 110
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/shield/round/walk/brown.png",
+       "z": 110
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/shield/round/walk/brown.png",
+       "z": 110
+      }
+     ]
+    }
    },
    "kite": {
     "name": "Revised Heater Shield Base",
-    "layers": [
-     {
-      "src": "/sprites/lpc/shield/heater/revised/wood/bg/walk.png",
-      "z": 2
-     },
-     {
-      "src": "/sprites/lpc/shield/heater/revised/wood/fg/walk.png",
-      "z": 110
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/shield/heater/revised/wood/bg/walk.png",
+       "z": 2
+      },
+      {
+       "src": "/sprites/lpc/shield/heater/revised/wood/fg/walk.png",
+       "z": 110
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/shield/heater/revised/wood/bg/walk.png",
+       "z": 2
+      },
+      {
+       "src": "/sprites/lpc/shield/heater/revised/wood/fg/walk.png",
+       "z": 110
+      }
+     ]
+    }
    },
    "tower": {
     "name": "Heater Shield Base",
-    "layers": [
-     {
-      "src": "/sprites/lpc/shield/heater/original/wood/fg/walk.png",
-      "z": 110
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/shield/heater/original/wood/fg/walk.png",
+       "z": 110
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/shield/heater/original/wood/fg/walk.png",
+       "z": 110
+      }
+     ]
+    }
    },
    "lantern": {
     "name": "Spartan Shield",
-    "layers": [
-     {
-      "src": "/sprites/lpc/shield/spartan/bg/walk/spartan.png",
-      "z": 2
-     },
-     {
-      "src": "/sprites/lpc/shield/spartan/fg/walk/spartan.png",
-      "z": 110
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/shield/spartan/bg/walk/spartan.png",
+       "z": 2
+      },
+      {
+       "src": "/sprites/lpc/shield/spartan/fg/walk/spartan.png",
+       "z": 110
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/shield/spartan/bg/walk/spartan.png",
+       "z": 2
+      },
+      {
+       "src": "/sprites/lpc/shield/spartan/fg/walk/spartan.png",
+       "z": 110
+      }
+     ]
+    }
    },
    "aegis": {
     "name": "Crusader shield",
-    "layers": [
-     {
-      "src": "/sprites/lpc/shield/crusader/bg/walk/crusader.png",
-      "z": 2
-     },
-     {
-      "src": "/sprites/lpc/shield/crusader/fg/male/walk/crusader.png",
-      "z": 110
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/shield/crusader/bg/walk/crusader.png",
+       "z": 2
+      },
+      {
+       "src": "/sprites/lpc/shield/crusader/fg/male/walk/crusader.png",
+       "z": 110
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/shield/crusader/bg/walk/crusader.png",
+       "z": 2
+      },
+      {
+       "src": "/sprites/lpc/shield/crusader/fg/female/walk/crusader.png",
+       "z": 110
+      }
+     ]
+    }
    }
   },
   "legs": {
    "cloth": {
     "name": "Pants",
-    "layers": [
-     {
-      "src": "/sprites/lpc/legs/pants/male/walk.png",
-      "z": 20
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/legs/pants/male/walk.png",
+       "z": 20
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/legs/pants/thin/walk.png",
+       "z": 20
+      }
+     ]
+    }
    },
    "armour": {
     "name": "Armour",
-    "layers": [
-     {
-      "src": "/sprites/lpc/legs/armour/plate/male/walk.png",
-      "z": 20
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/legs/armour/plate/male/walk.png",
+       "z": 20
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/legs/armour/plate/thin/walk.png",
+       "z": 20
+      }
+     ]
+    }
    }
   },
   "feet": {
    "boots": {
     "name": "Basic Boots",
-    "layers": [
-     {
-      "src": "/sprites/lpc/feet/boots/basic/male/walk.png",
-      "z": 25
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/feet/boots/basic/male/walk.png",
+       "z": 25
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/feet/boots/basic/thin/walk.png",
+       "z": 25
+      }
+     ]
+    }
    },
    "armour": {
     "name": "Armour",
-    "layers": [
-     {
-      "src": "/sprites/lpc/feet/armour/plate/male/walk.png",
-      "z": 15
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/feet/armour/plate/male/walk.png",
+       "z": 15
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/feet/armour/plate/thin/walk.png",
+       "z": 15
+      }
+     ]
+    }
    }
   },
   "hair": {
    "tousled": {
     "name": "Messy1",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/messy1/adult/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/messy1/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/messy1/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    },
    "long": {
     "name": "Long",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/long/adult/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/long/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/long/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    },
    "braided": {
     "name": "Braid",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/braid/adult/bg/walk.png",
-      "z": 9,
-      "baseRamp": "orange"
-     },
-     {
-      "src": "/sprites/lpc/hair/braid/adult/fg/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/braid/adult/bg/walk.png",
+       "z": 9,
+       "baseRamp": "orange"
+      },
+      {
+       "src": "/sprites/lpc/hair/braid/adult/fg/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/braid/adult/bg/walk.png",
+       "z": 9,
+       "baseRamp": "orange"
+      },
+      {
+       "src": "/sprites/lpc/hair/braid/adult/fg/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    },
    "ponytail": {
     "name": "Ponytail",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/ponytail/adult/bg/walk.png",
-      "z": 9
-     },
-     {
-      "src": "/sprites/lpc/hair/ponytail/adult/fg/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/ponytail/adult/bg/walk.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/hair/ponytail/adult/fg/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/ponytail/adult/bg/walk.png",
+       "z": 9
+      },
+      {
+       "src": "/sprites/lpc/hair/ponytail/adult/fg/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    },
    "curly": {
     "name": "Curly short",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/curly_short/adult/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/curly_short/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/curly_short/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    },
    "buzz": {
     "name": "Buzzcut",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/buzzcut/adult/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/buzzcut/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/buzzcut/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    },
    "topknot": {
     "name": "Long Topknot",
-    "layers": [
-     {
-      "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/walk.png",
-      "z": 9,
-      "baseRamp": "orange"
-     },
-     {
-      "src": "/sprites/lpc/hair/parted_side_bangs/adult/walk.png",
-      "z": 120,
-      "baseRamp": "orange"
-     },
-     {
-      "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/walk.png",
-      "z": 145,
-      "baseRamp": "orange"
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/walk.png",
+       "z": 9,
+       "baseRamp": "orange"
+      },
+      {
+       "src": "/sprites/lpc/hair/parted_side_bangs/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      },
+      {
+       "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/walk.png",
+       "z": 145,
+       "baseRamp": "orange"
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/walk.png",
+       "z": 9,
+       "baseRamp": "orange"
+      },
+      {
+       "src": "/sprites/lpc/hair/parted_side_bangs/adult/walk.png",
+       "z": 120,
+       "baseRamp": "orange"
+      },
+      {
+       "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/walk.png",
+       "z": 145,
+       "baseRamp": "orange"
+      }
+     ]
+    }
    }
   },
   "eyes": {
    "blue": {
     "name": "Blue",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/blue.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/blue.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/blue.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "brown": {
     "name": "Brown",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/brown.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/brown.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/brown.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "gray": {
     "name": "Gray",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/gray.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/gray.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/gray.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "green": {
     "name": "Green",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/green.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/green.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/green.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "orange": {
     "name": "Orange",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/orange.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/orange.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/orange.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "purple": {
     "name": "Purple",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/purple.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/purple.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/purple.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "red": {
     "name": "Red",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/red.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/red.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/red.png",
+       "z": 101
+      }
+     ]
+    }
    },
    "yellow": {
     "name": "Yellow",
-    "layers": [
-     {
-      "src": "/sprites/lpc/eyes/human/adult/default/walk/yellow.png",
-      "z": 101
-     }
-    ]
+    "bodies": {
+     "male": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/yellow.png",
+       "z": 101
+      }
+     ],
+     "female": [
+      {
+       "src": "/sprites/lpc/eyes/human/adult/default/walk/yellow.png",
+       "z": 101
+      }
+     ]
+    }
    }
   }
  },

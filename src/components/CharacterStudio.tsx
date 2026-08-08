@@ -7,6 +7,7 @@ import CharacterSprite from "@/components/CharacterSprite";
 import XPBar from "@/components/XPBar";
 import Scenery from "@/components/Scenery";
 import {
+  BODY_TYPES,
   EYE_COLORS,
   HAIR_COLORS,
   HAIR_STYLES,
@@ -186,6 +187,20 @@ export default function CharacterStudio({
 
             {tab === "look" ? (
               <div className="space-y-4">
+                <Group title="Body">
+                  <div className="flex flex-wrap gap-1.5">
+                    {BODY_TYPES.map((b) => (
+                      <Chip
+                        key={b.id}
+                        on={appearance.body === b.id}
+                        onClick={() => setLook({ body: b.id })}
+                      >
+                        {b.label}
+                      </Chip>
+                    ))}
+                  </div>
+                </Group>
+
                 <Group title="Skin">
                   <div className="flex flex-wrap gap-2">
                     {SKINS.map((s) => (

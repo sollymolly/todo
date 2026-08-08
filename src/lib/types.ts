@@ -2,7 +2,11 @@ export type QuestStatus = "open" | "done" | "failed";
 
 export type Slot = "torso" | "weapon" | "head" | "cape" | "offhand";
 
+/** Which LPC body the sprite is drawn on. Gear is fetched per body. */
+export type BodyType = "male" | "female";
+
 export type Appearance = {
+  body: BodyType;
   skin: string;
   hair: string;
   hairColor: string;

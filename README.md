@@ -42,6 +42,7 @@ cp .env.local.example .env.local
 | --- | --- |
 | `DATABASE_URL` | The pooled Neon connection string from step 1 |
 | `SESSION_SECRET` | Signs your session cookie. Generate with `openssl rand -base64 32` |
+| `OWNER_EMAIL` | *Optional.* Whoever every new account is befriended to on sign-up. Defaults to the constant in `src/lib/auth-actions.ts` |
 
 Both are server-only and never reach the browser. `.env*` is gitignored.
 
@@ -123,6 +124,18 @@ selected rather than recoloured. The head sheet has blue eyes painted on and
 the chosen sheet is drawn over them, which is why the layer sits at z-101 —
 above the head, below the hair.
 
+**Body type** (masculine / feminine) swaps the whole sprite set, not just the
+torso: armour drawn for one silhouette does not line up on the other. So
+`manifest.json` stores a layer list *per body* for every item, and
+`fetch-lpc.py` resolves each sheet twice. Around 50 of the 65 sheets turn out
+to be shared — hair and headwear resolve to a common `adult` directory — so
+the download only grows by about 15 files.
+
+Heads are a further exception: they are a *style* sheet, so LPC's "Human Male"
+definition points every body type at the male art. Choosing a head therefore
+means choosing a different **definition**, not a different key inside one.
+That's why `BASE` in the fetch script maps body type to a path.
+
 `scripts/fetch-lpc.py` pulls only the sheets this app uses (~50 files, ~400 KB)
 straight from the generator's GitHub repo, resolving each path from its sheet
 definition and detecting which palette ramp it was drawn in. Re-run it after
@@ -166,7 +179,8 @@ The curve and every wardrobe item are in `RANKS` and `ITEMS` in
 ranks, add gear, or change what unlocks when.
 
 Five equipment slots (armour, weapon, headgear, cloak, off-hand) unlock by
-level. Appearance — skin, hair style, hair colour, eyes — is always free.
+level. Appearance — body, skin, hair style, hair colour, eye colour — is always
+free.
 Equipping is re-checked server-side against your level, so the level gate is
 real rather than cosmetic.
 
@@ -186,6 +200,24 @@ Self-contained, no third-party service:
 
 Sign-in gives a deliberately vague "email or password is incorrect" and spends
 the same time whether or not the account exists, so it leaks nothing either way.
+
+### The owner is everyone's first companion
+
+Every account created through sign-up is given an **already-accepted**
+friendship with the instance owner, so nobody lands on an empty Companions
+page. The owner's address is `OWNER_EMAIL` (falling back to a constant in
+`src/lib/auth-actions.ts`); it does nothing until an account with that address
+exists, and never friends that account to itself.
+
+Be deliberate about this, because the new user didn't agree to it. An accepted
+friendship is mutual, so it lets the owner see their **category names with open
+counts**, their level and completed-quest total, and open a DM thread with
+them. Quest titles and notes stay private. If that's more than you want,
+changing `'accepted'` to `'pending'` in `befriendOwner` turns it into a request
+they can decline — the rest of the app already handles that state.
+
+It never blocks sign-up: any failure is swallowed and the account is created
+regardless.
 
 ### Changing a password
 
