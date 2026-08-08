@@ -244,7 +244,7 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
               )}
 
               <p className="pt-1 text-center text-[10px] leading-relaxed text-mud-400">
-                🔒 Your password becomes keys in this browser. It is never sent
+                Your password becomes keys in this browser. It is never sent
                 to the server, and neither is anything needed to read your
                 messages.
               </p>

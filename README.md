@@ -105,6 +105,26 @@ granted. Total XP never drops below zero.
 
 It's an honour system — nothing verifies you actually did the thing.
 
+### Order and urgency
+
+Quests sort by deadline: soonest first, undated ones at the bottom, creation
+time as the tiebreak. There is deliberately **no manual ordering** — a stored
+position would outrank the date it was meant to reflect, so editing a deadline
+wouldn't move the quest. Dragging still moves a quest between categories; it
+just no longer decides where in the list it lands.
+
+The deadline chip colours by how soon it is, so a board reads at a glance:
+
+| When | Colour |
+| --- | --- |
+| Overdue, or due today or tomorrow | **Red** |
+| 2–4 days away | **Amber** |
+| 5 or more days away | **Green** |
+
+`urgencyOf` and `byDeadline` both live in
+[`src/lib/date.ts`](src/lib/date.ts), next to the SQL `ORDER BY` they mirror,
+so the three can't drift apart.
+
 **All of these numbers live in [`db/schema.sql`](db/schema.sql)** (`quest_xp`
 and `quest_penalty`), and are mirrored in `XP` in
 [`src/lib/game.ts`](src/lib/game.ts) purely to drive the previews in the UI. If
@@ -268,7 +288,7 @@ src/components/
   CharacterSprite.tsx      composites LPC layers on canvas, palette recolour;
                            click plays the walk cycle in place
   Scenery.tsx              static tiled countryside, seamless CSS repeat
-  CategoryBoard.tsx        fixed-height boxes, inline add, drag-and-drop
+  CategoryBoard.tsx        fixed-height boxes, inline add, drag between boxes
   QuestRow.tsx             one quest; drag source, portalled ⋯ menu
   Fx.tsx                   particle bursts and floating XP numbers
   Dashboard.tsx            board state, optimistic updates, level-up detection

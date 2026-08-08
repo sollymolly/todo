@@ -259,8 +259,7 @@ export default function DuePicker({
             : "border-mud-300 bg-white/70 text-mud-500 hover:border-mud-500"
         }`}
       >
-        <span aria-hidden>🕰️</span>
-        <span className="flex-1 truncate">
+                <span className="flex-1 truncate">
           {selected ? describeDue(selected.toISOString()) : "No deadline"}
         </span>
         {selected && (

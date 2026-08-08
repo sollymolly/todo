@@ -65,7 +65,7 @@ export default function CharacterCard({
 
       {/* Each slot links straight into the Armoury with that tab open. */}
       <ul className="mt-4 space-y-1">
-        {SLOTS.map(({ slot, label, icon }) => {
+        {SLOTS.map(({ slot, label }) => {
           const item = findItem(slot, equipped[slot]);
           return (
             <li key={slot}>
@@ -73,7 +73,6 @@ export default function CharacterCard({
                 href={`/character?slot=${slot}`}
                 className="group flex items-center gap-2 rounded-lg border border-transparent bg-white/60 px-2.5 py-1.5 text-xs transition hover:border-grass-400 hover:bg-grass-50"
               >
-                <span className="w-4 text-center">{icon}</span>
                 <span className="w-16 shrink-0 font-semibold text-mud-500">
                   {label}
                 </span>
@@ -81,7 +80,7 @@ export default function CharacterCard({
                   {item?.name ?? "—"}
                 </span>
                 <span className="ml-auto shrink-0 text-mud-300 transition group-hover:text-grass-600">
-                  ✎
+                  →
                 </span>
               </Link>
             </li>
@@ -116,7 +115,7 @@ function Sparkles({ trigger }: { trigger: number }) {
         animate={{ opacity: 0 }}
         transition={{ duration: 1 }}
       >
-        {["✨", "⭐️", "💫", "✨", "🍃", "⭐️"].map((g, i) => {
+        {["✦", "✧", "★", "✦", "◆", "✧"].map((g, i) => {
           const a = (i / 6) * Math.PI * 2;
           return (
             <motion.span

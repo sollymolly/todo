@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { CATEGORY_ICONS, COLOR_KEYS, colorOf } from "@/lib/game";
+import { COLOR_KEYS, colorOf } from "@/lib/game";
 import { addCategory, deleteCategory, updateCategory } from "@/lib/actions";
 import type { Category } from "@/lib/types";
 
@@ -18,7 +18,6 @@ export default function CategoryManager({
   onChanged: () => void;
 }) {
   const [name, setName] = useState("");
-  const [icon, setIcon] = useState(CATEGORY_ICONS[0]);
   const [color, setColor] = useState(COLOR_KEYS[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +98,7 @@ export default function CategoryManager({
               disabled={busy || !name.trim()}
               onClick={() =>
                 run(async () => {
-                  await addCategory({ name, icon, color });
+                  await addCategory({ name, color });
                   setName("");
                 })
               }
@@ -109,7 +108,6 @@ export default function CategoryManager({
             </button>
           </div>
 
-          <IconPicker value={icon} onChange={setIcon} />
           <ColorPicker value={color} onChange={setColor} />
         </div>
 
@@ -146,7 +144,7 @@ function CategoryRow({
   confirming: boolean;
   onConfirm: () => void;
   onCancelConfirm: () => void;
-  onSave: (patch: { name?: string; icon?: string; color?: string }) => void;
+  onSave: (patch: { name?: string; color?: string }) => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -157,7 +155,6 @@ function CategoryRow({
     <li className="rounded-xl border border-mud-200 bg-white/70">
       <div className="flex items-center gap-2 p-2">
         <span className={`size-2.5 rounded-full ${c.dot}`} />
-        <span className="text-lg">{cat.icon}</span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -195,45 +192,17 @@ function CategoryRow({
             onClick={onConfirm}
             className="shrink-0 rounded-lg px-2 py-1 text-xs text-mud-400 transition hover:bg-red-100 hover:text-red-700"
           >
-            🗑
+            Delete
           </button>
         )}
       </div>
 
       {open && (
         <div className="border-t border-mud-200 px-2 pb-2">
-          <IconPicker value={cat.icon} onChange={(v) => onSave({ icon: v })} />
           <ColorPicker value={cat.color} onChange={(v) => onSave({ color: v })} />
         </div>
       )}
     </li>
-  );
-}
-
-function IconPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1">
-      {CATEGORY_ICONS.map((ic) => (
-        <button
-          key={ic}
-          type="button"
-          onClick={() => onChange(ic)}
-          className={`grid size-8 place-items-center rounded-lg text-base transition ${
-            value === ic
-              ? "bg-grass-100 ring-2 ring-grass-500"
-              : "hover:bg-mud-100"
-          }`}
-        >
-          {ic}
-        </button>
-      ))}
-    </div>
   );
 }
 

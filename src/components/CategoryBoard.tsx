@@ -1,11 +1,11 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import QuestRow from "@/components/QuestRow";
 import DuePicker from "@/components/DuePicker";
 import { colorOf } from "@/lib/game";
-import { isOverdue, localInputToIso } from "@/lib/date";
+import { byDeadline, isOverdue, localInputToIso } from "@/lib/date";
 import type { Category, Todo } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
@@ -41,7 +41,7 @@ export default function CategoryBoard({
   todos: Todo[];
   handlers: RowHandlers;
   onInlineAdd: (draft: InlineDraft) => Promise<void>;
-  onMove: (todoId: string, categoryId: string | null, before: Todo | null, after: Todo | null) => void;
+  onMove: (todoId: string, categoryId: string | null) => void;
 }) {
   const open = useMemo(() => todos.filter((t) => t.status === "open"), [todos]);
   const loose = open.filter((t) => !t.category_id);
@@ -82,25 +82,17 @@ function Box({
   items: Todo[];
   handlers: RowHandlers;
   onInlineAdd: (draft: InlineDraft) => Promise<void>;
-  onMove: (todoId: string, categoryId: string | null, before: Todo | null, after: Todo | null) => void;
+  onMove: (todoId: string, categoryId: string | null) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [over, setOver] = useState(false);
-  const [gap, setGap] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const c = colorOf(category?.color ?? "amber");
 
-  // Manual drag order wins. Anything never dragged falls back to the old
-  // rule: soonest deadline first, undated quests at the very bottom.
-  const sorted = [...items].sort((a, b) => {
-    if (a.position != null && b.position != null) return a.position - b.position;
-    if (a.position != null) return -1;
-    if (b.position != null) return 1;
-    if (!a.due_date && !b.due_date) return b.created_at.localeCompare(a.created_at);
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    return a.due_date.localeCompare(b.due_date);
-  });
+  // Deadline order, always. There is deliberately no manual override: a quest
+  // has to land in the right place the moment its deadline is edited, and a
+  // stored position would silently outrank the date it was meant to reflect.
+  const sorted = [...items].sort(byDeadline);
 
   const overdue = items.filter((t) => isOverdue(t.due_date)).length;
 
@@ -111,50 +103,24 @@ function Box({
 
   return (
     <section
+      // Dragging still moves a quest between categories — it just no longer
+      // decides where in the list it lands, because the deadline does.
       onDragOver={(e) => {
         // Only claim the drop if a quest is what's being dragged.
         if (!e.dataTransfer.types.includes("text/quest-id")) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         if (!over) setOver(true);
-
-        // Which gap between rows is the pointer nearest?
-        const rows = Array.from(
-          listRef.current?.querySelectorAll<HTMLElement>("[data-quest-row]") ?? []
-        );
-        let idx = rows.length;
-        for (let i = 0; i < rows.length; i++) {
-          const r = rows[i].getBoundingClientRect();
-          if (e.clientY < r.top + r.height / 2) {
-            idx = i;
-            break;
-          }
-        }
-        setGap(idx);
       }}
       onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          setOver(false);
-          setGap(null);
-        }
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false);
       }}
       onDrop={(e) => {
         const id = e.dataTransfer.getData("text/quest-id");
-        const idx = gap ?? sorted.length;
         setOver(false);
-        setGap(null);
         if (!id) return;
         e.preventDefault();
-
-        // Neighbours in the target list, ignoring the row being moved.
-        const without = sorted.filter((t) => t.id !== id);
-        const clamped = Math.min(idx, without.length);
-        onMove(
-          id,
-          category?.id ?? null,
-          without[clamped - 1] ?? null,
-          without[clamped] ?? null
-        );
+        onMove(id, category?.id ?? null);
       }}
       className={`panel flex flex-col overflow-hidden rounded-2xl transition ${
         overdue > 0 ? "border-red-300" : ""
@@ -164,7 +130,6 @@ function Box({
       <header
         className={`flex items-center gap-2 border-b border-mud-200 px-3 py-2 ${c.head}`}
       >
-        <span className="text-base">{category?.icon ?? "📥"}</span>
         <h3 className={`flex-1 truncate font-display text-sm font-bold tracking-wide ${c.text}`}>
           {category?.name ?? "Uncategorised"}
         </h3>
@@ -222,31 +187,22 @@ function Box({
         ) : (
           <ul className="space-y-1.5">
             <AnimatePresence initial={false}>
-              {sorted.map((t, i) => (
-                <Fragment key={t.id}>
-                  {over && gap === i && <Caret />}
-                  <QuestRow
-                    todo={t}
-                    category={category ?? undefined}
-                    compact
-                    draggable
-                    showCategory={false}
-                    {...handlers}
-                  />
-                </Fragment>
+              {sorted.map((t) => (
+                <QuestRow
+                  key={t.id}
+                  todo={t}
+                  category={category ?? undefined}
+                  compact
+                  draggable
+                  showCategory={false}
+                  {...handlers}
+                />
               ))}
             </AnimatePresence>
-            {over && (gap === null || gap >= sorted.length) && <Caret />}
           </ul>
         )}
       </div>
     </section>
-  );
-}
-
-function Caret() {
-  return (
-    <li aria-hidden className="h-1 rounded-full bg-grass-500 shadow-[0_0_6px_rgba(88,154,53,0.6)]" />
   );
 }
 

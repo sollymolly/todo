@@ -49,14 +49,13 @@ export async function addTodo(input: {
 
   // Returns the created row so the client can show it immediately.
   const rows = (await sql`
-    insert into todos (user_id, title, notes, due_date, category_id, position)
+    insert into todos (user_id, title, notes, due_date, category_id)
     values (
       ${userId}::uuid,
       ${title.slice(0, 200)},
       ${notes},
       ${input.dueDate || null}::timestamptz,
-      ${input.categoryId || null}::uuid,
-      (select coalesce(max(position), 0) + 1024 from todos where user_id = ${userId}::uuid)
+      ${input.categoryId || null}::uuid
     )
     returning *
   `) as Record<string, unknown>[];
@@ -127,29 +126,16 @@ export async function deleteTodo(id: string) {
 }
 
 /**
- * Drag-and-drop. `position` is the midpoint between the neighbours a quest was
- * dropped between, so only the dragged row is written — no renumbering.
+ * Dragging a quest onto another category. Only the category moves — where it
+ * sits in that list is decided by its deadline, not by where it was dropped.
  */
-export async function moveTodo(
-  id: string,
-  categoryId: string | null,
-  position?: number
-) {
+export async function moveTodo(id: string, categoryId: string | null) {
   const userId = await requireUserId();
 
-  if (position === undefined) {
-    await sql`
-      update todos set category_id = ${categoryId || null}::uuid
-      where id = ${id}::uuid and user_id = ${userId}::uuid
-    `;
-  } else {
-    await sql`
-      update todos
-         set category_id = ${categoryId || null}::uuid,
-             position    = ${position}
-       where id = ${id}::uuid and user_id = ${userId}::uuid
-    `;
-  }
+  await sql`
+    update todos set category_id = ${categoryId || null}::uuid
+    where id = ${id}::uuid and user_id = ${userId}::uuid
+  `;
 
   bump();
 }
@@ -171,22 +157,17 @@ export async function sweepOverdue(): Promise<{
 /* Categories                                                                 */
 /* ========================================================================== */
 
-export async function addCategory(input: {
-  name: string;
-  icon: string;
-  color: string;
-}) {
+export async function addCategory(input: { name: string; color: string }) {
   const userId = await requireUserId();
 
   const name = input.name.trim();
   if (!name) throw new Error("Give the category a name");
 
   await sql`
-    insert into categories (user_id, name, icon, color, sort_order)
+    insert into categories (user_id, name, color, sort_order)
     values (
       ${userId}::uuid,
       ${name.slice(0, 40)},
-      ${input.icon || "📜"},
       ${COLOR_KEYS.includes(input.color) ? input.color : "amber"},
       (select coalesce(max(sort_order) + 1, 0) from categories where user_id = ${userId}::uuid)
     )
@@ -197,7 +178,7 @@ export async function addCategory(input: {
 
 export async function updateCategory(
   id: string,
-  patch: { name?: string; icon?: string; color?: string }
+  patch: { name?: string; color?: string }
 ) {
   const userId = await requireUserId();
 
@@ -213,7 +194,6 @@ export async function updateCategory(
   await sql`
     update categories set
       name  = coalesce(${name?.slice(0, 40) ?? null}, name),
-      icon  = coalesce(${patch.icon ?? null}, icon),
       color = coalesce(${color}, color)
     where id = ${id}::uuid and user_id = ${userId}::uuid
   `;

@@ -139,7 +139,7 @@ export default function AccountForm({ account }: { account: Account }) {
           ) : (
             <form onSubmit={submit} className="mt-4 space-y-3">
               <p className="rounded-lg bg-mud-100 px-3 py-2 text-xs leading-relaxed text-mud-600">
-                🔒 Your password unlocks the key that reads your messages, so
+                Your password unlocks the key that reads your messages, so
                 this re-encrypts that key in your browser as part of the change.
                 Your conversations are preserved and your friends see nothing
                 different.

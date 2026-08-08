@@ -48,7 +48,8 @@ create table if not exists categories (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references users(id) on delete cascade,
   name        text not null,
-  icon        text not null default '📜',
+  -- Legacy. Categories are identified by name and colour; nothing reads this.
+  icon        text not null default '',
   color       text not null default 'amber',
   sort_order  integer not null default 0,
   created_at  timestamptz not null default now()
@@ -68,8 +69,7 @@ create table if not exists todos (
   status        text not null default 'open' check (status in ('open','done','failed')),
   completed_at  timestamptz,
   xp_awarded    integer not null default 0,
-  -- Manual drag order within a category. Sparse (steps of ~1024) so a quest
-  -- can be dropped between two others without renumbering the whole list.
+  -- Legacy. Quests are ordered by due_date now, so nothing reads this.
   position      double precision,
   created_at    timestamptz not null default now()
 );
@@ -102,14 +102,14 @@ begin
   values (p_user, coalesce(nullif(trim(p_name), ''), 'Adventurer'))
   on conflict (id) do nothing;
 
-  insert into categories (user_id, name, icon, color, sort_order)
-  select p_user, v.name, v.icon, v.color, v.ord
+  insert into categories (user_id, name, color, sort_order)
+  select p_user, v.name, v.color, v.ord
     from (values
-      ('Work',     '⚒️', 'amber',   0),
-      ('Fitness',  '💪', 'rose',    1),
-      ('Music',    '🎻', 'violet',  2),
-      ('Personal', '🏡', 'emerald', 3)
-    ) as v(name, icon, color, ord)
+      ('Work',     'amber',   0),
+      ('Fitness',  'rose',    1),
+      ('Music',    'violet',  2),
+      ('Personal', 'emerald', 3)
+    ) as v(name, color, ord)
    where not exists (select 1 from categories where user_id = p_user);
 end;
 $$;

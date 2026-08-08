@@ -103,7 +103,7 @@ export default function CharacterStudio({
                   : "bg-amber-100 text-amber-900 ring-amber-300"
               }`}
             >
-              {error ? error : `🔒 ${flash}`}
+              {error ? error : flash}
             </motion.div>
           )}
         </AnimatePresence>
@@ -172,15 +172,15 @@ export default function CharacterStudio({
           <div className="min-w-0">
             <div className="mb-4 flex flex-wrap gap-1.5">
               <TabButton on={tab === "look"} onClick={() => setTab("look")}>
-                🎨 Appearance
+                Appearance
               </TabButton>
-              {SLOTS.map(({ slot, label, icon }) => (
+              {SLOTS.map(({ slot, label }) => (
                 <TabButton
                   key={slot}
                   on={tab === slot}
                   onClick={() => setTab(slot)}
                 >
-                  {icon} {label}
+                  {label}
                 </TabButton>
               ))}
             </div>
@@ -259,9 +259,7 @@ export default function CharacterStudio({
               </div>
             ) : (
               <Group
-                title={`${SLOTS.find((s) => s.slot === tab)?.icon} ${
-                  SLOTS.find((s) => s.slot === tab)?.label
-                }`}
+                title={SLOTS.find((s) => s.slot === tab)?.label ?? ""}
               >
                 <ul className="grid gap-1.5 sm:grid-cols-2">
                   {itemsForSlot(tab).map((item) => {
@@ -280,7 +278,7 @@ export default function CharacterStudio({
                           }`}
                         >
                           <span className="mt-0.5 text-sm">
-                            {locked ? "🔒" : on ? "✅" : "▫️"}
+                            {locked ? "✕" : on ? "✓" : "·"}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-baseline justify-between gap-2">

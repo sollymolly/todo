@@ -26,7 +26,9 @@ export default async function Home() {
     const [profileRows, categoryRows, todoRows] = await Promise.all([
       sql`select * from profiles where id = ${userId}::uuid`,
       sql`select * from categories where user_id = ${userId}::uuid order by sort_order`,
-      sql`select * from todos where user_id = ${userId}::uuid order by position nulls last, created_at desc`,
+      // Same rule as byDeadline() on the client: soonest first, undated last.
+      sql`select * from todos where user_id = ${userId}::uuid
+           order by due_date asc nulls last, created_at asc`,
     ]);
 
     profile = (profileRows as Profile[])[0] ?? null;

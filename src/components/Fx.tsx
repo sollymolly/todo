@@ -39,9 +39,9 @@ export function useFx() {
 }
 
 const GLYPHS = {
-  good: ["✨", "⭐️", "🪙", "💫"],
-  great: ["⚔️", "✨", "🪙", "👑", "💎", "⭐️"],
-  bad: ["💀", "🌫️", "🖤"],
+  good: ["✦", "✧", "◆", "•"],
+  great: ["★", "✦", "◆", "✧", "▲", "•"],
+  bad: ["✕", "▪", "·"],
 } as const;
 
 /** Trajectories are rolled once, in the event handler, never during render. */

@@ -108,12 +108,12 @@ export type Item = {
   blurb: string;
 };
 
-export const SLOTS: { slot: Slot; label: string; icon: string }[] = [
-  { slot: "torso", label: "Armor", icon: "🥋" },
-  { slot: "weapon", label: "Weapon", icon: "⚔️" },
-  { slot: "head", label: "Headgear", icon: "🪖" },
-  { slot: "cape", label: "Cloak", icon: "🧣" },
-  { slot: "offhand", label: "Off-hand", icon: "🛡️" },
+export const SLOTS: { slot: Slot; label: string }[] = [
+  { slot: "torso", label: "Armor" },
+  { slot: "weapon", label: "Weapon" },
+  { slot: "head", label: "Headgear" },
+  { slot: "cape", label: "Cloak" },
+  { slot: "offhand", label: "Off-hand" },
 ];
 
 export const ITEMS: Item[] = [
@@ -300,7 +300,3 @@ export function colorOf(key: string) {
   return CATEGORY_COLORS[key] ?? CATEGORY_COLORS.amber;
 }
 
-export const CATEGORY_ICONS = [
-  "⚒️", "💪", "🎻", "🏡", "📚", "🧪", "🍳", "💰", "🌱", "🎨",
-  "🗡️", "🛡️", "📜", "🧭", "🔮", "🏹", "⛰️", "🐉",
-];

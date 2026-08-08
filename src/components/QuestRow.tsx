@@ -4,10 +4,27 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { colorOf, XP } from "@/lib/game";
-import { describeDue, describeDueShort, formatStamp, isOverdue } from "@/lib/date";
+import {
+  describeDue,
+  describeDueShort,
+  formatStamp,
+  isOverdue,
+  urgencyOf,
+  type Urgency,
+} from "@/lib/date";
 import type { Category, Todo } from "@/lib/types";
 
 const MENU_W = 190;
+
+/* How soon a deadline reads at a glance. Written out in full rather than
+   composed, because Tailwind only ships classes it can see as literal text. */
+const URGENCY: Record<Urgency, string> = {
+  overdue: "bg-red-100 text-red-700 ring-red-300",
+  urgent: "bg-red-100 text-red-700 ring-red-300",
+  soon: "bg-amber-100 text-amber-800 ring-amber-300",
+  // grass stops at 700 in globals.css — 800 would render with no colour.
+  later: "bg-grass-100 text-grass-700 ring-grass-300",
+};
 
 export default function QuestRow({
   todo,
@@ -179,7 +196,7 @@ export default function QuestRow({
             <span className="text-xs font-bold text-red-600">✕</span>
           ) : (
             <span className="scale-0 text-xs opacity-0 transition-all group-hover/box:scale-100 group-hover/box:opacity-100">
-              ⚔️
+              ✓
             </span>
           )}
         </button>
@@ -213,7 +230,7 @@ export default function QuestRow({
           <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
             {category && showCategory && (
               <span className={`rounded-md px-1.5 py-0.5 font-semibold ${c.soft} ${c.text} ring-1 ring-inset ${c.ring}`}>
-                {category.icon} {category.name}
+                {category.name}
               </span>
             )}
 
@@ -222,12 +239,10 @@ export default function QuestRow({
                 className={`rounded-md px-1.5 py-0.5 font-semibold ring-1 ring-inset ${
                   done || failed
                     ? "bg-mud-50 text-mud-400 ring-mud-200"
-                    : overdue
-                      ? "bg-red-100 text-red-700 ring-red-300"
-                      : "bg-sky-50 text-sky-800 ring-sky-300"
+                    : URGENCY[urgencyOf(todo.due_date)]
                 }`}
               >
-                🕰️ {compact ? describeDueShort(todo.due_date) : describeDue(todo.due_date)}
+                {compact ? describeDueShort(todo.due_date) : describeDue(todo.due_date)}
               </span>
             ) : (
               !done &&
@@ -295,7 +310,7 @@ export default function QuestRow({
                       onEdit(todo);
                     }}
                   >
-                    ✎ Edit quest
+                    Edit quest
                   </MenuItem>
                 )}
                 {done && (
@@ -305,7 +320,7 @@ export default function QuestRow({
                       onUncomplete(todo);
                     }}
                   >
-                    ↩ Undo (return XP)
+                    Undo (return XP)
                   </MenuItem>
                 )}
                 {todo.status === "open" && todo.due_date && (
@@ -316,7 +331,7 @@ export default function QuestRow({
                       onAbandon(todo, { x: e.clientX, y: e.clientY });
                     }}
                   >
-                    🏳️ Abandon ({XP.penalty} XP)
+                    Abandon ({XP.penalty} XP)
                   </MenuItem>
                 )}
                 <MenuItem
@@ -326,7 +341,7 @@ export default function QuestRow({
                     onDelete(todo);
                   }}
                 >
-                  🗑 Delete
+                  Delete
                 </MenuItem>
               </motion.div>
             )}

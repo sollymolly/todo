@@ -114,7 +114,7 @@ export default function Friends({
 
         {!hasKeys && (
           <p className="mb-4 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 ring-1 ring-amber-300">
-            🔑 This account has no encryption keys yet. Sign out and back in to
+            This account has no encryption keys yet. Sign out and back in to
             create them, then messaging will unlock.
           </p>
         )}
@@ -332,7 +332,7 @@ function FriendCard({
                 key={c.name}
                 className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${col.soft} ${col.text} ring-1 ring-inset ${col.ring}`}
               >
-                {c.icon} {c.name} · {c.open}
+                {c.name} · {c.open}
               </li>
             );
           })}
@@ -344,7 +344,7 @@ function FriendCard({
           onClick={onOpen}
           className="relative flex-1 rounded-lg bg-grass-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-grass-500"
         >
-          🔒 Message
+          Message
           {friend.unread > 0 && (
             <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-red-600 text-[10px] font-bold text-white">
               {friend.unread}
@@ -418,7 +418,7 @@ function Thread({
         try {
           text = await openMessage(priv, pub, { iv: m.iv, body: m.body });
         } catch {
-          text = "⚠️ Could not decrypt this message.";
+          text = "Could not decrypt this message.";
         }
         out.push({
           id: m.id,
@@ -548,7 +548,7 @@ function Thread({
               {friend.display_name}
             </p>
             <p className="text-[11px] text-mud-500">
-              🔒 End-to-end encrypted · @{friend.username}
+              End-to-end encrypted · @{friend.username}
             </p>
           </div>
           <button

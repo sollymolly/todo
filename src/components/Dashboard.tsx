@@ -236,26 +236,10 @@ function Inner({
     if (created) setTodos((prev) => [created, ...prev]);
   };
 
-  /* Drop position is the midpoint between the two neighbours, so only the
-     dragged quest is written and the rest keep their order. */
-  const handleMove = (
-    todoId: string,
-    categoryId: string | null,
-    before: Todo | null,
-    after: Todo | null
-  ) =>
+  const handleMove = (todoId: string, categoryId: string | null) =>
     guard(async () => {
-      const lo = before?.position ?? null;
-      const hi = after?.position ?? null;
-
-      let position: number;
-      if (lo != null && hi != null) position = (lo + hi) / 2;
-      else if (lo != null) position = lo + 1024;
-      else if (hi != null) position = hi - 1024;
-      else position = Date.now();
-
-      patch(todoId, { category_id: categoryId, position });
-      await moveTodo(todoId, categoryId, position);
+      patch(todoId, { category_id: categoryId });
+      await moveTodo(todoId, categoryId);
     });
 
   function quickAdd(categoryId: string | null) {
@@ -295,7 +279,7 @@ function Inner({
             href="/friends"
             className="relative rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
           >
-            🤝 Companions
+            Companions
             {unread > 0 && (
               <span
                 aria-label={`${unread} unread message${unread === 1 ? "" : "s"}`}
@@ -310,7 +294,7 @@ function Inner({
             title="Account"
             className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
           >
-            ⚙
+            Account
           </Link>
           <form action={signOut}>
             <button
@@ -332,7 +316,7 @@ function Inner({
             className="mb-4 overflow-hidden"
           >
             <div className="flex items-center justify-between gap-3 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-semibold text-red-800 ring-1 ring-inset ring-red-300">
-              <span>💀 {banner}</span>
+              <span>{banner}</span>
               <button
                 onClick={() => setBanner(null)}
                 className="shrink-0 text-red-500 transition hover:text-red-800"
@@ -395,8 +379,7 @@ function Inner({
                 onClick={() => quickAdd(null)}
                 className="panel panel-hover flex w-full items-center gap-2.5 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-mud-500 transition hover:text-grass-700"
               >
-                <span className="text-base">⚔️</span>
-                What must be done?
+                                What must be done?
               </button>
             )}
           </div>
@@ -413,11 +396,11 @@ function Inner({
             </h2>
             <button
               onClick={() => setManaging(true)}
-              className="grid size-7 place-items-center rounded-lg border border-mud-300 bg-white/80 text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+              className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
               aria-label="Manage categories"
               title="Manage categories"
             >
-              ⚙
+              Manage
             </button>
           </div>
 

@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import CharacterSprite from "@/components/CharacterSprite";
-import { RANKS, unlockedAtLevel, SLOTS } from "@/lib/game";
+import { RANKS, unlockedAtLevel } from "@/lib/game";
 import type { Appearance, Equipped } from "@/lib/types";
 
 export default function LevelUpModal({
@@ -102,7 +102,6 @@ export default function LevelUpModal({
                         transition={{ delay: 0.35 + i * 0.09 }}
                       >
                         <span>
-                          {SLOTS.find((s) => s.slot === item.slot)?.icon}
                         </span>
                         <span className="font-bold text-grass-700">
                           {item.name}

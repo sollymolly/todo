@@ -17,6 +17,47 @@ export function isOverdue(iso: string | null): boolean {
   return !!iso && new Date(iso).getTime() < Date.now();
 }
 
+/* --------------------------------------------------------------------------
+   Ordering and urgency.
+
+   Both live here so the board, the row colour and the server ORDER BY can
+   never drift apart — the bug that made a quest keep its old slot after its
+   deadline was edited.
+   -------------------------------------------------------------------------- */
+
+export type Urgency = "overdue" | "urgent" | "soon" | "later";
+
+/** overdue · due today or tomorrow · 2–4 days · 5 days or more. */
+export function urgencyOf(iso: string): Urgency {
+  if (isOverdue(iso)) return "overdue";
+  const days = daysAway(iso);
+  if (days <= 1) return "urgent";
+  if (days <= 4) return "soon";
+  return "later";
+}
+
+/**
+ * Soonest deadline first, undated quests last, creation time as the tiebreak
+ * so the order is total and never wobbles between renders.
+ *
+ * ISO strings compare correctly as text — they're fixed-width and UTC — so
+ * this needs no Date parsing.
+ */
+export function byDeadline(
+  a: { due_date: string | null; created_at: string },
+  b: { due_date: string | null; created_at: string }
+): number {
+  if (a.due_date && b.due_date) {
+    return (
+      a.due_date.localeCompare(b.due_date) ||
+      a.created_at.localeCompare(b.created_at)
+    );
+  }
+  if (a.due_date) return -1;
+  if (b.due_date) return 1;
+  return a.created_at.localeCompare(b.created_at);
+}
+
 const TIME = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",

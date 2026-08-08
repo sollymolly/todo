@@ -98,7 +98,6 @@ export default function QuestForm({
                       : "border-mud-200 bg-white/60 text-mud-600 hover:border-mud-400 hover:bg-white"
                   }`}
                 >
-                  <span className="text-base">{cat.icon}</span>
                   <span className="truncate">{cat.name}</span>
                 </button>
               );

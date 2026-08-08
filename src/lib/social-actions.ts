@@ -28,7 +28,7 @@ export type PublicProfile = {
 export type FriendSummary = PublicProfile & {
   friendship_id: string;
   completed: number;
-  categories: { name: string; icon: string; color: string; open: number }[];
+  categories: { name: string; color: string; open: number }[];
   unread: number;
 };
 
@@ -250,20 +250,19 @@ export async function listFriends(): Promise<FriendSummary[]> {
     select
       c.user_id,
       c.name,
-      c.icon,
       c.color,
       (select count(*)::int from todos t
         where t.category_id = c.id and t.status = 'open') as open
     from categories c
     where c.user_id = any(${ids}::uuid[])
     order by c.sort_order
-  `) as { user_id: string; name: string; icon: string; color: string; open: number }[];
+  `) as { user_id: string; name: string; color: string; open: number }[];
 
   return rows.map((r) => ({
     ...(r as unknown as FriendSummary),
     categories: cats
       .filter((c) => c.user_id === r.user_id)
-      .map(({ name, icon, color, open }) => ({ name, icon, color, open })),
+      .map(({ name, color, open }) => ({ name, color, open })),
   }));
 }
 
