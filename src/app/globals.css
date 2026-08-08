@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: var(--font-cinzel), Georgia, serif;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  /* Mud — parchment through to dark earth. Body text is mud-900. */
+  --color-mud-50: #fdf8ef;
+  --color-mud-100: #f4ead6;
+  --color-mud-200: #e6d5b6;
+  --color-mud-300: #d0b48c;
+  --color-mud-400: #b08f63;
+  --color-mud-500: #8d6c45;
+  --color-mud-600: #705435;
+  --color-mud-700: #573f28;
+  --color-mud-800: #3e2d1c;
+  --color-mud-900: #2a1e13;
+
+  /* Grass — the reward colour; everything healthy and growing. */
+  --color-grass-100: #e2f4cd;
+  --color-grass-200: #c3e7a2;
+  --color-grass-300: #9bd472;
+  --color-grass-400: #74bb48;
+  --color-grass-500: #589a35;
+  --color-grass-600: #437a28;
+  --color-grass-700: #345f1f;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100dvh;
+  color: var(--color-mud-900);
+  font-family: var(--font-sans);
+  background: #cfe4f2;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(116, 187, 72, 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbars
+   -------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(112, 84, 53, 0.4) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(112, 84, 53, 0.32);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(112, 84, 53, 0.55); }
+
+/* --------------------------------------------------------------------------
+   Surfaces — aged parchment pinned over the landscape.
+   -------------------------------------------------------------------------- */
+.panel {
+  background: linear-gradient(180deg, #fdf9f0 0%, #f4e9d5 100%);
+  border: 1px solid var(--color-mud-300);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 10px 22px -14px rgba(42, 30, 19, 0.55);
+}
+
+.panel-hover {
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+.panel-hover:hover {
+  border-color: var(--color-mud-500);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 14px 26px -14px rgba(42, 30, 19, 0.6);
+}
+
+/* Inputs and other sunken areas. */
+.field {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--color-mud-300);
+  color: var(--color-mud-900);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.field::placeholder { color: rgba(112, 84, 53, 0.45); }
+.field:focus {
+  outline: none;
+  border-color: var(--color-grass-500);
+  box-shadow: 0 0 0 3px rgba(116, 187, 72, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Character idle motion
+   -------------------------------------------------------------------------- */
+@keyframes char-bob {
+  0%, 100% { transform: translateY(0) }
+  50%      { transform: translateY(-5px) }
+}
+@keyframes cape-sway {
+  0%, 100% { transform: rotate(-1.1deg) }
+  50%      { transform: rotate(1.4deg) }
+}
+
+.char-idle {
+  animation: char-bob 3.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+.char-cape {
+  animation: cape-sway 4.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+/* --------------------------------------------------------------------------
+   Scenery motion
+   -------------------------------------------------------------------------- */
+@keyframes drift {
+  from { transform: translateX(-6%) }
+  to   { transform: translateX(106%) }
+}
+@keyframes sway {
+  0%, 100% { transform: rotate(-1.6deg) }
+  50%      { transform: rotate(1.6deg) }
+}
+.cloud-drift { animation: drift 90s linear infinite; }
+.banner-sway {
+  animation: sway 3.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+
+@keyframes float-up {
+  0%   { transform: translateY(0) scale(0.85); opacity: 0 }
+  20%  { opacity: 1 }
+  100% { transform: translateY(-58px) scale(1.15); opacity: 0 }
+}
+.float-up { animation: float-up 1.5s ease-out forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .char-idle, .char-cape, .cloud-drift, .banner-sway { animation: none !important; }
+}

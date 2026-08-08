@@ -1,0 +1,1177 @@
+{
+ "frame": 64,
+ "cols": 9,
+ "rows": 4,
+ "slots": {
+  "base": {
+   "body": {
+    "name": "Body Color",
+    "layers": [
+     {
+      "src": "/sprites/lpc/body/bodies/male/walk.png",
+      "z": 10,
+      "baseRamp": "light"
+     }
+    ]
+   },
+   "head": {
+    "name": "Human Male",
+    "layers": [
+     {
+      "src": "/sprites/lpc/head/heads/human/male/walk.png",
+      "z": 100,
+      "baseRamp": "light"
+     }
+    ]
+   }
+  },
+  "torso": {
+   "rags": {
+    "name": "Sleeveless",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/walk/brown.png",
+      "z": 35
+     }
+    ]
+   },
+   "tunic": {
+    "name": "Longsleeve",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/walk.png",
+      "z": 35
+     }
+    ]
+   },
+   "jerkin": {
+    "name": "Leather",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/armour/leather/male/walk.png",
+      "z": 60
+     }
+    ]
+   },
+   "scale": {
+    "name": "Legion",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/armour/legion/male/walk.png",
+      "z": 60
+     }
+    ]
+   },
+   "chain": {
+    "name": "Chainmail",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/chainmail/male/walk.png",
+      "z": 50
+     }
+    ]
+   },
+   "plate": {
+    "name": "Plate",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
+      "z": 60
+     }
+    ]
+   },
+   "gilded": {
+    "name": "Plate",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
+      "z": 60
+     }
+    ]
+   },
+   "dragonscale": {
+    "name": "Plate",
+    "layers": [
+     {
+      "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
+      "z": 60
+     }
+    ]
+   }
+  },
+  "weapon": {
+   "stick": {
+    "name": "Cane",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/polearm/cane/male/walk/cane.png",
+      "z": 140
+     }
+    ]
+   },
+   "dagger": {
+    "name": "Dagger",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/sword/dagger/walk/dagger.png",
+      "z": 140
+     }
+    ]
+   },
+   "shortsword": {
+    "name": "Arming Sword",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/sword/arming/universal/bg/walk/brass.png",
+      "z": 9
+     },
+     {
+      "src": "/sprites/lpc/weapon/sword/arming/universal/fg/walk/brass.png",
+      "z": 140
+     }
+    ]
+   },
+   "axe": {
+    "name": "Waraxe",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/blunt/waraxe/walk/waraxe.png",
+      "z": 140
+     }
+    ]
+   },
+   "hammer": {
+    "name": "Mace",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/blunt/mace/universal_behind/walk/mace.png",
+      "z": 9
+     },
+     {
+      "src": "/sprites/lpc/weapon/blunt/mace/walk/mace.png",
+      "z": 140
+     }
+    ]
+   },
+   "longsword": {
+    "name": "Longsword",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/sword/longsword/universal_behind/walk/longsword.png",
+      "z": 9
+     },
+     {
+      "src": "/sprites/lpc/weapon/sword/longsword/walk/longsword.png",
+      "z": 140
+     }
+    ]
+   },
+   "flamebrand": {
+    "name": "Glowsword",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/sword/glowsword/universal_behind/walk/blue.png",
+      "z": 9
+     },
+     {
+      "src": "/sprites/lpc/weapon/sword/glowsword/walk/blue.png",
+      "z": 140
+     }
+    ]
+   },
+   "runeblade": {
+    "name": "Katana",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/sword/katana/walk//katana.png",
+      "z": 140
+     },
+     {
+      "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+      "z": 140
+     }
+    ]
+   },
+   "dragonfang": {
+    "name": "Scimitar",
+    "layers": [
+     {
+      "src": "/sprites/lpc/weapon/sword/scimitar/walk//scimitar.png",
+      "z": 140
+     },
+     {
+      "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+      "z": 140
+     }
+    ]
+   }
+  },
+  "head": {
+   "bandana": {
+    "name": "Bandana",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hat/cloth/bandana/adult/walk.png",
+      "z": 120
+     }
+    ]
+   },
+   "cap": {
+    "name": "Leather Cap",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png",
+      "z": 130
+     }
+    ]
+   },
+   "helm": {
+    "name": "Bascinet",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hat/helmet/bascinet/adult/walk.png",
+      "z": 130
+     }
+    ]
+   },
+   "greathelm": {
+    "name": "Greathelm",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hat/helmet/greathelm/male/walk.png",
+      "z": 130
+     }
+    ]
+   },
+   "crown": {
+    "name": "Crown",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hat/formal/crown/adult/walk/steel.png",
+      "z": 130
+     }
+    ]
+   },
+   "dragoncrown": {
+    "name": "Horned helmet",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hat/helmet/horned/adult/walk.png",
+      "z": 130
+     }
+    ]
+   }
+  },
+  "cape": {
+   "tattered": {
+    "name": "Tattered",
+    "layers": [
+     {
+      "src": "/sprites/lpc/cape/tattered/bg/walk.png",
+      "z": 5
+     },
+     {
+      "src": "/sprites/lpc/cape/tattered/fg/walk.png",
+      "z": 85
+     }
+    ]
+   },
+   "traveler": {
+    "name": "Solid",
+    "layers": [
+     {
+      "src": "/sprites/lpc/cape/solid/bg/walk.png",
+      "z": 5
+     },
+     {
+      "src": "/sprites/lpc/cape/solid/fg/walk.png",
+      "z": 85
+     }
+    ]
+   },
+   "heraldic": {
+    "name": "Solid",
+    "layers": [
+     {
+      "src": "/sprites/lpc/cape/solid/bg/walk.png",
+      "z": 5
+     },
+     {
+      "src": "/sprites/lpc/cape/solid/fg/walk.png",
+      "z": 85
+     }
+    ]
+   },
+   "mantle": {
+    "name": "Cape Trim",
+    "layers": [
+     {
+      "src": "/sprites/lpc/cape/trim/walk.png",
+      "z": 90
+     }
+    ]
+   },
+   "starcloak": {
+    "name": "Solid",
+    "layers": [
+     {
+      "src": "/sprites/lpc/cape/solid/bg/walk.png",
+      "z": 5
+     },
+     {
+      "src": "/sprites/lpc/cape/solid/fg/walk.png",
+      "z": 85
+     }
+    ]
+   }
+  },
+  "offhand": {
+   "buckler": {
+    "name": "Round Shield",
+    "layers": [
+     {
+      "src": "/sprites/lpc/shield/round/walk/brown.png",
+      "z": 110
+     }
+    ]
+   },
+   "kite": {
+    "name": "Revised Heater Shield Base",
+    "layers": [
+     {
+      "src": "/sprites/lpc/shield/heater/revised/wood/bg/walk.png",
+      "z": 2
+     },
+     {
+      "src": "/sprites/lpc/shield/heater/revised/wood/fg/walk.png",
+      "z": 110
+     }
+    ]
+   },
+   "tower": {
+    "name": "Heater Shield Base",
+    "layers": [
+     {
+      "src": "/sprites/lpc/shield/heater/original/wood/fg/walk.png",
+      "z": 110
+     }
+    ]
+   },
+   "lantern": {
+    "name": "Spartan Shield",
+    "layers": [
+     {
+      "src": "/sprites/lpc/shield/spartan/bg/walk/spartan.png",
+      "z": 2
+     },
+     {
+      "src": "/sprites/lpc/shield/spartan/fg/walk/spartan.png",
+      "z": 110
+     }
+    ]
+   },
+   "aegis": {
+    "name": "Crusader shield",
+    "layers": [
+     {
+      "src": "/sprites/lpc/shield/crusader/bg/walk/crusader.png",
+      "z": 2
+     },
+     {
+      "src": "/sprites/lpc/shield/crusader/fg/male/walk/crusader.png",
+      "z": 110
+     }
+    ]
+   }
+  },
+  "legs": {
+   "cloth": {
+    "name": "Pants",
+    "layers": [
+     {
+      "src": "/sprites/lpc/legs/pants/male/walk.png",
+      "z": 20
+     }
+    ]
+   },
+   "armour": {
+    "name": "Armour",
+    "layers": [
+     {
+      "src": "/sprites/lpc/legs/armour/plate/male/walk.png",
+      "z": 20
+     }
+    ]
+   }
+  },
+  "feet": {
+   "boots": {
+    "name": "Basic Boots",
+    "layers": [
+     {
+      "src": "/sprites/lpc/feet/boots/basic/male/walk.png",
+      "z": 25
+     }
+    ]
+   },
+   "armour": {
+    "name": "Armour",
+    "layers": [
+     {
+      "src": "/sprites/lpc/feet/armour/plate/male/walk.png",
+      "z": 15
+     }
+    ]
+   }
+  },
+  "hair": {
+   "tousled": {
+    "name": "Messy1",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/messy1/adult/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     }
+    ]
+   },
+   "long": {
+    "name": "Long",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/long/adult/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     }
+    ]
+   },
+   "braided": {
+    "name": "Braid",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/braid/adult/bg/walk.png",
+      "z": 9,
+      "baseRamp": "orange"
+     },
+     {
+      "src": "/sprites/lpc/hair/braid/adult/fg/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     }
+    ]
+   },
+   "ponytail": {
+    "name": "Ponytail",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/ponytail/adult/bg/walk.png",
+      "z": 9
+     },
+     {
+      "src": "/sprites/lpc/hair/ponytail/adult/fg/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     }
+    ]
+   },
+   "curly": {
+    "name": "Curly short",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/curly_short/adult/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     }
+    ]
+   },
+   "buzz": {
+    "name": "Buzzcut",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/buzzcut/adult/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     }
+    ]
+   },
+   "topknot": {
+    "name": "Long Topknot",
+    "layers": [
+     {
+      "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/walk.png",
+      "z": 9,
+      "baseRamp": "orange"
+     },
+     {
+      "src": "/sprites/lpc/hair/parted_side_bangs/adult/walk.png",
+      "z": 120,
+      "baseRamp": "orange"
+     },
+     {
+      "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/walk.png",
+      "z": 145,
+      "baseRamp": "orange"
+     }
+    ]
+   }
+  },
+  "eyes": {
+   "blue": {
+    "name": "Blue",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/blue.png",
+      "z": 101
+     }
+    ]
+   },
+   "brown": {
+    "name": "Brown",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/brown.png",
+      "z": 101
+     }
+    ]
+   },
+   "gray": {
+    "name": "Gray",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/gray.png",
+      "z": 101
+     }
+    ]
+   },
+   "green": {
+    "name": "Green",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/green.png",
+      "z": 101
+     }
+    ]
+   },
+   "orange": {
+    "name": "Orange",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/orange.png",
+      "z": 101
+     }
+    ]
+   },
+   "purple": {
+    "name": "Purple",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/purple.png",
+      "z": 101
+     }
+    ]
+   },
+   "red": {
+    "name": "Red",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/red.png",
+      "z": 101
+     }
+    ]
+   },
+   "yellow": {
+    "name": "Yellow",
+    "layers": [
+     {
+      "src": "/sprites/lpc/eyes/human/adult/default/walk/yellow.png",
+      "z": 101
+     }
+    ]
+   }
+  }
+ },
+ "palettes": {
+  "body": {
+   "light": [
+    "#271920",
+    "#99423c",
+    "#cc8665",
+    "#E4A47C",
+    "#F9D5BA",
+    "#FAECE7"
+   ],
+   "amber": [
+    "#281716",
+    "#9E3E37",
+    "#D28144",
+    "#EA9F54",
+    "#FDD082",
+    "#FBE7A4"
+   ],
+   "olive": [
+    "#271920",
+    "#442725",
+    "#7F4C31",
+    "#AE6B3F",
+    "#D38B59",
+    "#E4A47C"
+   ],
+   "taupe": [
+    "#271920",
+    "#503734",
+    "#785946",
+    "#936849",
+    "#BA8454",
+    "#C7935F"
+   ],
+   "bronze": [
+    "#1A1213",
+    "#442725",
+    "#644133",
+    "#7F4C31",
+    "#AE6B3F",
+    "#D38B59"
+   ],
+   "brown": [
+    "#120E10",
+    "#412B29",
+    "#5F4539",
+    "#76513A",
+    "#9C663E",
+    "#B8773F"
+   ],
+   "black": [
+    "#000000",
+    "#1A1213",
+    "#2E1F1C",
+    "#442725",
+    "#603429",
+    "#7F4C31"
+   ],
+   "blue": [
+    "#16171B",
+    "#46425D",
+    "#586B90",
+    "#748DA4",
+    "#A9C9CA",
+    "#C8E8E8"
+   ],
+   "bright_green": [
+    "#02280E",
+    "#06410E",
+    "#255E1D",
+    "#5B8F11",
+    "#75AE23",
+    "#99D248"
+   ],
+   "dark_green": [
+    "#011708",
+    "#02280E",
+    "#06410E",
+    "#255E1D",
+    "#508A48",
+    "#509E59"
+   ],
+   "fur_black": [
+    "#040510",
+    "#0A0E1B",
+    "#0D1621",
+    "#14212C",
+    "#1B2C36",
+    "#154259"
+   ],
+   "fur_brown": [
+    "#000000",
+    "#1E120E",
+    "#251B19",
+    "#473730",
+    "#624135",
+    "#975B5A"
+   ],
+   "fur_copper": [
+    "#0F0506",
+    "#300500",
+    "#6A1A00",
+    "#9C3B01",
+    "#CC6901",
+    "#FAA301"
+   ],
+   "fur_gold": [
+    "#200808",
+    "#552B15",
+    "#AC5D1F",
+    "#E09E2B",
+    "#FCCF56",
+    "#FFE67D"
+   ],
+   "fur_grey": [
+    "#0F0F11",
+    "#36363F",
+    "#55585F",
+    "#6A6E74",
+    "#909699",
+    "#B8BBBC"
+   ],
+   "fur_tan": [
+    "#222121",
+    "#3A200E",
+    "#663A1A",
+    "#975F43",
+    "#B88751",
+    "#DB8E60"
+   ],
+   "fur_white": [
+    "#17171A",
+    "#36363F",
+    "#484E57",
+    "#8B9498",
+    "#B8BBBC",
+    "#D8DCDC"
+   ],
+   "green": [
+    "#140C09",
+    "#09320B",
+    "#19541D",
+    "#228236",
+    "#39AA4E",
+    "#53BF71"
+   ],
+   "lavender": [
+    "#16171B",
+    "#393B44",
+    "#787C8F",
+    "#A0A5BC",
+    "#C9D0EE",
+    "#FBECE6"
+   ],
+   "pale_green": [
+    "#271920",
+    "#314829",
+    "#456238",
+    "#5F874D",
+    "#86B278",
+    "#ADCCA6"
+   ],
+   "zombie": [
+    "#281820",
+    "#6B5C40",
+    "#928364",
+    "#A79778",
+    "#C5B38F",
+    "#DBCBAB"
+   ],
+   "zombie_green": [
+    "#101925",
+    "#074337",
+    "#4A7A69",
+    "#839F6E",
+    "#D4D887",
+    "#F2F0C4"
+   ]
+  },
+  "hair": {
+   "orange": [
+    "#260D14",
+    "#6A1108",
+    "#A42600",
+    "#BF4000",
+    "#E55600",
+    "#FF8A00"
+   ],
+   "ash": [
+    "#2D061B",
+    "#642442",
+    "#935065",
+    "#C18F8A",
+    "#EDDF95",
+    "#FFF1C1"
+   ],
+   "platinum": [
+    "#1C0E06",
+    "#7D5D5D",
+    "#A87D52",
+    "#C0AB81",
+    "#EDDF95",
+    "#F6F6F3"
+   ],
+   "white": [
+    "#1D1D21",
+    "#484E57",
+    "#8B9498",
+    "#B8BBBC",
+    "#D8DCDC",
+    "#FFFFFF"
+   ],
+   "gray": [
+    "#0E0E0E",
+    "#292929",
+    "#4B4B4B",
+    "#777777",
+    "#AAAAAA",
+    "#D9D9D9"
+   ],
+   "blonde": [
+    "#331313",
+    "#552B15",
+    "#AC5D1F",
+    "#E09E2B",
+    "#FCCF56",
+    "#FFE67D"
+   ],
+   "sandy": [
+    "#1C0E06",
+    "#633E2C",
+    "#99622D",
+    "#BF9D5A",
+    "#EDDC7E",
+    "#F6F6C2"
+   ],
+   "strawberry": [
+    "#300700",
+    "#6A2800",
+    "#9C5900",
+    "#CCA000",
+    "#FAF080",
+    "#F6F6C2"
+   ],
+   "gold": [
+    "#5C0D00",
+    "#902900",
+    "#E47100",
+    "#FFA913",
+    "#FFE453",
+    "#EEFE7E"
+   ],
+   "ginger": [
+    "#300500",
+    "#6A1A00",
+    "#9C3B01",
+    "#CC6901",
+    "#FAA301",
+    "#FFE01E"
+   ],
+   "carrot": [
+    "#5A1500",
+    "#8A2000",
+    "#AC2800",
+    "#EC673E",
+    "#F68764",
+    "#FFB39C"
+   ],
+   "redhead": [
+    "#260D14",
+    "#3E111A",
+    "#73171E",
+    "#9E1F1F",
+    "#C7341B",
+    "#E74716"
+   ],
+   "red": [
+    "#300000",
+    "#870000",
+    "#A40712",
+    "#CB0000",
+    "#E21414",
+    "#F1583A"
+   ],
+   "light_brown": [
+    "#1A0E04",
+    "#301B07",
+    "#60350F",
+    "#7D4513",
+    "#AE682A",
+    "#C88D58"
+   ],
+   "chestnut": [
+    "#200C0D",
+    "#3A130E",
+    "#63200B",
+    "#81310A",
+    "#B6550E",
+    "#D28102"
+   ],
+   "dark_brown": [
+    "#050100",
+    "#160701",
+    "#290E02",
+    "#421603",
+    "#5F1F04",
+    "#792806"
+   ],
+   "dark_gray": [
+    "#000000",
+    "#0E0E0E",
+    "#1B1B1B",
+    "#3B3B3B",
+    "#7C7C7C",
+    "#C1C1C1"
+   ],
+   "black": [
+    "#000000",
+    "#080A0A",
+    "#101414",
+    "#1C2222",
+    "#31313E",
+    "#4A5057"
+   ],
+   "raven": [
+    "#010107",
+    "#040B18",
+    "#061421",
+    "#071F2A",
+    "#0D384D",
+    "#1A5369"
+   ],
+   "rose": [
+    "#30051F",
+    "#6A1E4B",
+    "#9C4373",
+    "#CC789D",
+    "#FABBC6",
+    "#FAE1E5"
+   ],
+   "pink": [
+    "#330410",
+    "#71043A",
+    "#B60A68",
+    "#E941AA",
+    "#E976C4",
+    "#EA95D5"
+   ],
+   "purple": [
+    "#13112D",
+    "#2B225A",
+    "#402E82",
+    "#7141B2",
+    "#A966DD",
+    "#D085ED"
+   ],
+   "violet": [
+    "#1E032E",
+    "#30035C",
+    "#380392",
+    "#3C07D8",
+    "#5662F3",
+    "#5792F2"
+   ],
+   "navy": [
+    "#180716",
+    "#20102B",
+    "#281E41",
+    "#322D6A",
+    "#3C49AD",
+    "#466AC9"
+   ],
+   "blue": [
+    "#000027",
+    "#00005E",
+    "#000091",
+    "#0041B4",
+    "#0074CB",
+    "#1E85EF"
+   ],
+   "green": [
+    "#000400",
+    "#001400",
+    "#002D00",
+    "#005000",
+    "#007C00",
+    "#00A700"
+   ]
+  },
+  "cloth": {
+   "brown": [
+    "#1d131e",
+    "#411E05",
+    "#4B2B13",
+    "#62351C",
+    "#744B30",
+    "#996B4A"
+   ],
+   "leather": [
+    "#2b1c1d",
+    "#311210",
+    "#4B2B13",
+    "#704325",
+    "#75502D",
+    "#9A6F37"
+   ],
+   "walnut": [
+    "#1d0f0e",
+    "#3e2613",
+    "#62351c",
+    "#744b30",
+    "#996b4a",
+    "#a17c50"
+   ],
+   "yellow": [
+    "#301723",
+    "#5F2F25",
+    "#BA5B23",
+    "#D99431",
+    "#F3C03F",
+    "#FFE360"
+   ],
+   "tan": [
+    "#3e2613",
+    "#684415",
+    "#986A20",
+    "#B78C41",
+    "#B7996A",
+    "#CFC587"
+   ],
+   "orange": [
+    "#301723",
+    "#5F1D1B",
+    "#9C3F23",
+    "#D75B1A",
+    "#EF7E19",
+    "#FFA749"
+   ],
+   "rose": [
+    "#1d131e",
+    "#301723",
+    "#562323",
+    "#77372B",
+    "#8A3D28",
+    "#B05F3C"
+   ],
+   "maroon": [
+    "#1d131e",
+    "#400B1F",
+    "#551C22",
+    "#682121",
+    "#832121",
+    "#AE424A"
+   ],
+   "red": [
+    "#1d131e",
+    "#400B1F",
+    "#651117",
+    "#82171C",
+    "#AB1E1E",
+    "#CD2429"
+   ],
+   "pink": [
+    "#1d131e",
+    "#54242E",
+    "#6C3536",
+    "#AE424A",
+    "#C36072",
+    "#E08080"
+   ],
+   "lavender": [
+    "#13112d",
+    "#2B225A",
+    "#402E82",
+    "#7141B2",
+    "#A966DD",
+    "#D085ED"
+   ],
+   "purple": [
+    "#180716",
+    "#13112D",
+    "#261044",
+    "#411357",
+    "#621E78",
+    "#813089"
+   ],
+   "blue": [
+    "#180716",
+    "#281E41",
+    "#322D6A",
+    "#3C49AD",
+    "#466AC9",
+    "#61A0EF"
+   ],
+   "navy": [
+    "#180716",
+    "#20102B",
+    "#281E41",
+    "#322D6A",
+    "#3C49AD",
+    "#466AC9"
+   ],
+   "teal": [
+    "#180716",
+    "#1B2B47",
+    "#0E4E72",
+    "#156C99",
+    "#0098B2",
+    "#00CFDF"
+   ],
+   "bluegray": [
+    "#11150b",
+    "#0B2B28",
+    "#2E403A",
+    "#315B49",
+    "#557E85",
+    "#79979D"
+   ],
+   "forest": [
+    "#09131d",
+    "#07391D",
+    "#0B1F25",
+    "#0B2B28",
+    "#134507",
+    "#1B5502"
+   ],
+   "green": [
+    "#101820",
+    "#192832",
+    "#0B5C2F",
+    "#214437",
+    "#2F8136",
+    "#64A42C"
+   ],
+   "white": [
+    "#281820",
+    "#4D4A5D",
+    "#958080",
+    "#C4B59F",
+    "#E5E6C7",
+    "#FFFFFF"
+   ],
+   "sky": [
+    "#1a0d18",
+    "#313148",
+    "#586B90",
+    "#9FBBCB",
+    "#C6EEFD",
+    "#FFFFFF"
+   ],
+   "slate": [
+    "#1d131e",
+    "#31313E",
+    "#4A5057",
+    "#818B8B",
+    "#B3AFA1",
+    "#E5E6C7"
+   ],
+   "gray": [
+    "#0e0e18",
+    "#201E2B",
+    "#373340",
+    "#585561",
+    "#797580",
+    "#A2A0A4"
+   ],
+   "black": [
+    "#000000",
+    "#101414",
+    "#1C2222",
+    "#22282A",
+    "#2A3034",
+    "#4A5057"
+   ],
+   "charcoal": [
+    "#000000",
+    "#130D14",
+    "#1C2222",
+    "#2A3034",
+    "#4A5057",
+    "#6E7675"
+   ]
+  }
+ }
+}
