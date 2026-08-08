@@ -113,6 +113,12 @@ position would outrank the date it was meant to reflect, so editing a deadline
 wouldn't move the quest. Dragging still moves a quest between categories; it
 just no longer decides where in the list it lands.
 
+Only today and tomorrow are written as words; every other deadline shows as
+`mm/dd` (`mm/dd/yy` when it isn't the current year, since a bare `01/15` seen
+in December reads as three weeks ago rather than eleven months away). Relative
+phrasing like "in 3 days" is deliberately gone — how urgent something is comes
+from the colour instead, so the text can just be the date.
+
 The deadline chip colours by how soon it is, so a board reads at a glance:
 
 | When | Colour |

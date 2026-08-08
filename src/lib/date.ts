@@ -68,13 +68,26 @@ const SHORT = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
 });
 
-const LONG = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
+/**
+ * "08/14", or "08/14/27" when the deadline isn't in the current year.
+ *
+ * The year is only added when it differs, because a bare "01/15" seen in
+ * December reads as three weeks ago rather than eleven months away.
+ */
+function shortDate(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  if (d.getFullYear() === new Date().getFullYear()) return `${mm}/${dd}`;
+  return `${mm}/${dd}/${String(d.getFullYear()).slice(2)}`;
+}
 
-/** "Today · 5:00 PM", "Tomorrow", "3 days overdue", "Mar 14" */
+/**
+ * "Today · 5:00 PM", "Tomorrow · 9:00 AM", "08/14".
+ *
+ * Only today and tomorrow get words — every other deadline is the date, so
+ * scanning a board never means converting "in 3 days" into a real one. How
+ * urgent it is comes from the chip colour instead.
+ */
 export function describeDue(iso: string): string {
   const d = new Date(iso);
   const days = daysAway(iso);
@@ -84,15 +97,8 @@ export function describeDue(iso: string): string {
 
   if (days === 0) return past ? `Today${time} — late` : `Today${time}`;
   if (days === 1) return `Tomorrow${time}`;
-  if (days === -1) return `Yesterday${time}`;
-  if (days < -1) return `${Math.abs(days)} days overdue`;
-  if (days <= 6) return `${days} days${time}`;
-
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return (sameYear ? SHORT : LONG).format(d) + time;
+  return shortDate(d);
 }
-
-const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 
 /** Same idea as describeDue but without the time — for the narrow boxes. */
 export function describeDueShort(iso: string): string {
@@ -102,12 +108,7 @@ export function describeDueShort(iso: string): string {
 
   if (days === 0) return past ? "Today · late" : "Today";
   if (days === 1) return "Tomorrow";
-  if (days === -1) return "Yesterday";
-  if (days < -1) return `${Math.abs(days)}d overdue`;
-  if (days <= 6) return WEEKDAY.format(d);
-
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return (sameYear ? SHORT : LONG).format(d);
+  return shortDate(d);
 }
 
 export function formatStamp(iso: string): string {
