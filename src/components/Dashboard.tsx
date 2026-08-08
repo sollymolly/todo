@@ -410,6 +410,7 @@ function Inner({
             handlers={handlers}
             onInlineAdd={handleInlineAdd}
             onMove={handleMove}
+            onCategoriesChanged={() => startTransition(() => router.refresh())}
           />
 
           {/* ------------------------------------------------ chronicle */}

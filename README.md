@@ -294,7 +294,8 @@ src/components/
   CharacterSprite.tsx      composites LPC layers on canvas, palette recolour;
                            click plays the walk cycle in place
   Scenery.tsx              static tiled countryside, seamless CSS repeat
-  CategoryBoard.tsx        fixed-height boxes, inline add, drag between boxes
+  CategoryBoard.tsx        fixed-height boxes, inline add, add/delete a
+                           category, drag quests between boxes
   QuestRow.tsx             one quest; drag source, portalled ⋯ menu
   Fx.tsx                   particle bursts and floating XP numbers
   Dashboard.tsx            board state, optimistic updates, level-up detection
