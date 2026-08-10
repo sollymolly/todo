@@ -64,16 +64,31 @@ const SKIN_RAMP: Record<string, string> = {
   porcelain: "light", // legacy — same ramp Fair uses, so nothing shifts
 };
 
+/**
+ * Our labels -> LPC hair ramps, chosen so the name matches what renders. LPC's
+ * ramp names are not reliable descriptions of their colour, which is where the
+ * previous mapping went wrong:
+ *
+ *   `platinum` is a tan blonde, not a silver  -> "Silver" looked blonde
+ *   `ash`      is a rosy brown, not a grey    -> "Ash" wasn't grey either
+ *   `ginger`   is orange                      -> "Ember" never looked red
+ *   `violet`   is almost pure blue (hue 255)  -> "Violet" looked blue
+ *
+ * Every ramp here is 6 entries, matching the `orange` ramp the hair sheets are
+ * drawn in. That matters: drawLayer remaps pairwise up to the shorter of the
+ * two, so a target with fewer stops would leave the tail of each strand
+ * stubbornly orange.
+ */
 const HAIR_RAMP: Record<string, string> = {
-  raven: "raven",
-  chestnut: "chestnut",
-  auburn: "redhead",
-  ash: "ash",
-  gold: "gold",
-  silver: "platinum",
-  ember: "ginger",
+  raven: "raven",       // blue-black
+  chestnut: "chestnut", // warm reddish brown
+  auburn: "redhead",    // dark red-brown
+  ash: "gray",          // true neutral grey
+  gold: "gold",         // bright golden blonde
+  silver: "white",      // pale silver
+  ember: "red",         // actually red
   moss: "green",
-  violet: "violet",
+  violet: "purple",     // the purple people expect
 };
 
 function hexToRgb(h: string): [number, number, number] {

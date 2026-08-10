@@ -1,4 +1,4 @@
-# Questline
+# HabitKnight
 
 A personal todo list where finishing things levels up a medieval character.
 Quests are grouped into categories, deadlines are sworn oaths worth real XP, and
@@ -170,6 +170,23 @@ and `quest_penalty`), and are mirrored in `XP` in
 you retune the economy, change both — SQL is the source of truth, and the maths
 lives there so the client can't inflate its own score.
 
+### Ranks, gear, and the level floor
+
+**A level once earned is never lost.** `profiles.level` is a high-water mark and
+XP is floored at *the bottom of that level* rather than at zero, so the worst a
+bad week can do is empty the progress bar for your current rank.
+
+That floor is what keeps gear safe. `saveEquipped` re-checks each item's level
+requirement, so before this a missed deadline could drop you under a threshold
+and silently strip armour you had already earned. The gate now reads the stored
+level, never one re-derived from current XP.
+
+Because XP can't fall below the floor, `level_for_xp(xp)` and `profiles.level`
+always agree, so every derived display stays honest without a second source of
+truth. The rank curve lives in a `ranks` table so the database can work out a
+level on its own — those numbers mirror `RANKS` in
+[`src/lib/game.ts`](src/lib/game.ts), so change both.
+
 ### Retention, and why the metrics are counters
 
 Completed quests are **deleted after 7 days** (`FINISHED_RETENTION_DAYS`), by
@@ -280,6 +297,15 @@ ranks, add gear, or change what unlocks when.
 Five equipment slots (armour, weapon, headgear, cloak, off-hand) unlock by
 level. Appearance — body, skin, hair style, hair colour, eye colour — is always
 free.
+
+LPC's palette *names* are not reliable descriptions of their colour, which
+caught out four hair colours: `platinum` is a tan blonde (so "Silver" looked
+blonde), `ash` is a rosy brown (so "Ash" wasn't grey), `ginger` is orange (so
+"Ember" was never red) and `violet` is very nearly blue. `HAIR_RAMP` in
+`CharacterSprite` now maps each label to a ramp that actually looks like it, and
+every swatch hex is sampled from that ramp. All nine targets are 6 stops long,
+matching the `orange` ramp the sheets are drawn in — a shorter target would
+leave the tail of each strand stubbornly orange.
 
 Each of the six skin tones maps to a **different** LPC body ramp. There were
 seven until "Porcelain" and "Fair" were found to resolve to the same `light`

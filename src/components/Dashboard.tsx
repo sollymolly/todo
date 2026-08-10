@@ -153,6 +153,8 @@ function Inner({
   /* ------------------------------------------------------------- helpers */
 
   function applyXp(newXp: number) {
+    // XP is floored at the current level's threshold server-side, so a level
+    // can only ever go up — this just notices when it does.
     const before = levelFor(xp);
     const after = levelFor(newXp);
     setXp(newXp);
@@ -287,7 +289,7 @@ function Inner({
       <header className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-wide text-mud-900 drop-shadow-sm sm:text-3xl">
-            Questline
+            HabitKnight
           </h1>
           <p className="text-xs font-semibold text-mud-600">
             {openCount > 0

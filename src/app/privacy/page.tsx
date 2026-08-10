@@ -2,8 +2,8 @@ import Link from "next/link";
 import { PRIVACY_EFFECTIVE, PRIVACY_VERSION } from "@/lib/policy";
 
 export const metadata = {
-  title: "Privacy — Questline",
-  description: "What Questline stores, what it can read, and what it cannot.",
+  title: "Privacy — HabitKnight",
+  description: "What HabitKnight stores, what it can read, and what it cannot.",
 };
 
 /* A plain page, deliberately public: a privacy policy nobody can read without

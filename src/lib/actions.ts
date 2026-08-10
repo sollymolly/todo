@@ -15,7 +15,6 @@ import {
   SKINS,
   SLOTS,
   findItem,
-  levelFor,
 } from "@/lib/game";
 import { normalizeTodo } from "@/lib/types";
 import type { Appearance, Equipped, XpResult } from "@/lib/types";
@@ -289,12 +288,14 @@ export async function saveEquipped(equipped: Equipped) {
   const userId = await requireUserId();
 
   const rows = (await sql`
-    select xp, equipped from profiles where id = ${userId}::uuid
-  `) as { xp: number; equipped: Equipped }[];
+    select level, equipped from profiles where id = ${userId}::uuid
+  `) as { level: number; equipped: Equipped }[];
 
   if (rows.length === 0) throw new Error("Profile not found");
 
-  const level = levelFor(rows[0].xp);
+  // The stored high-water level, not one re-derived from current XP. Deriving
+  // it was what let a missed deadline silently unequip earned armour.
+  const level = rows[0].level ?? 1;
   const clean = { ...rows[0].equipped } as Equipped;
 
   for (const { slot } of SLOTS) {

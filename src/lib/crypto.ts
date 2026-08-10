@@ -29,6 +29,13 @@
    -------------------------------------------------------------------------- */
 
 const PBKDF2_ITERATIONS = 310_000;
+
+/* ⚠ These two strings are cryptographic salts, not branding. The app was once
+   called Questline and they still say so — deliberately. Renaming
+   AUTH_SALT_PREFIX changes every derived credential, so nobody could sign in
+   again; renaming KEY_SALT_PREFIX changes the key that unwraps the private
+   key, which would make every message ever sent permanently unreadable. Same
+   goes for the HKDF salt and the sessionStorage key further down. Leave them. */
 const AUTH_SALT_PREFIX = "questline-auth|";
 const KEY_SALT_PREFIX = "questline-key|";
 

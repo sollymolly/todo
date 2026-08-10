@@ -157,7 +157,9 @@ function Box({
         onMove(id, category?.id ?? null);
       }}
       className={`panel flex flex-col overflow-hidden rounded-2xl transition ${
-        overdue > 0 ? "border-red-300" : ""
+        // Loud enough to find at a glance across a full board: a stronger
+        // border plus a soft red halo, rather than a hairline tint.
+        overdue > 0 ? "border-red-400 ring-2 ring-red-300/70" : ""
       } ${over ? "scale-[1.01] border-grass-500 ring-2 ring-grass-400" : ""}`}
     >
       {/* --------------------------------------------------------- header */}

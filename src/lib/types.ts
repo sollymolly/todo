@@ -19,6 +19,12 @@ export type Profile = {
   id: string;
   display_name: string;
   xp: number;
+  /**
+   * High-water level. Never decreases, and gear is gated on this rather than on
+   * a level re-derived from XP — otherwise a missed deadline could take armour
+   * away. XP is floored at this level's threshold, so the two always agree.
+   */
+  level: number;
   appearance: Appearance;
   equipped: Equipped;
   /** Week key of the last changelog entry shown. Null means never. */

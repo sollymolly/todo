@@ -38,7 +38,8 @@ export default function CharacterStudio({
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const level = levelFor(profile.xp);
+  // Earned levels are permanent, so the wardrobe gate follows the stored one.
+  const level = profile.level ?? levelFor(profile.xp);
   const p = progressFor(profile.xp);
 
   function setLook(patch: Partial<Appearance>) {

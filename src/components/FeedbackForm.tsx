@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { submitFeedback, type FeedbackNote } from "@/lib/feedback-actions";
+import {
+  resolveFeedback,
+  submitFeedback,
+  type FeedbackNote,
+} from "@/lib/feedback-actions";
 import { formatStamp } from "@/lib/date";
 
 const MAX = 4000;
@@ -20,6 +24,22 @@ export default function FeedbackForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // Optimistic: the note leaves the list on click. A failure puts it back and
+  // says why, which beats a row that sits there looking unclicked.
+  const [resolved, setResolved] = useState<string[]>([]);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
+  const open = notes.filter((n) => !resolved.includes(n.id));
+
+  async function resolve(id: string) {
+    setResolveError(null);
+    setResolved((r) => [...r, id]);
+    const res = await resolveFeedback(id);
+    if (!res.ok) {
+      setResolved((r) => r.filter((x) => x !== id));
+      setResolveError(res.error);
+    }
+  }
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -124,16 +144,24 @@ export default function FeedbackForm({
       {isOwner && (
         <section className="mt-6">
           <h2 className="mb-2 font-display text-sm font-bold tracking-wide text-mud-800 drop-shadow-sm">
-            Inbox ({notes.length})
+            Inbox ({open.length})
           </h2>
 
-          {notes.length === 0 ? (
+          {resolveError && (
+            <p className="mb-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-800">
+              {resolveError}
+            </p>
+          )}
+
+          {open.length === 0 ? (
             <div className="panel rounded-2xl px-5 py-8 text-center">
-              <p className="text-sm text-mud-500">Nothing yet.</p>
+              <p className="text-sm text-mud-500">
+                {notes.length === 0 ? "Nothing yet." : "All caught up."}
+              </p>
             </div>
           ) : (
             <ul className="space-y-2">
-              {notes.map((n) => (
+              {open.map((n) => (
                 <li key={n.id} className="panel rounded-2xl p-4">
                   <div className="mb-1.5 flex items-baseline justify-between gap-2">
                     <p className="text-xs font-bold text-mud-700">
@@ -148,9 +176,18 @@ export default function FeedbackForm({
                         <span className="text-mud-400">Anonymous</span>
                       )}
                     </p>
-                    <p className="shrink-0 text-[10px] text-mud-400">
-                      {formatStamp(n.created_at)}
-                    </p>
+                    <span className="flex shrink-0 items-baseline gap-2">
+                      <p className="text-[10px] text-mud-400">
+                        {formatStamp(n.created_at)}
+                      </p>
+                      <button
+                        onClick={() => resolve(n.id)}
+                        title="Delete this note — there is no archive"
+                        className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-mud-400 transition hover:bg-grass-100 hover:text-grass-700"
+                      >
+                        Resolved
+                      </button>
+                    </span>
                   </div>
                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-mud-800">
                     {n.body}

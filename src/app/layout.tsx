@@ -14,7 +14,7 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Questline",
+  title: "HabitKnight",
   description: "A todo list that levels you up.",
 };
 

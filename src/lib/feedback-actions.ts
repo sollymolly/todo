@@ -122,6 +122,24 @@ export async function listFeedback(): Promise<FeedbackNote[]> {
   }));
 }
 
+/**
+ * Mark a note resolved by deleting it. Owner only, and irreversible — there is
+ * no archive, so the inbox stays a list of things still to deal with.
+ */
+export async function resolveFeedback(id: string): Promise<FeedbackResult> {
+  if (!(await amOwner()))
+    return { ok: false, error: "Not allowed." };
+
+  try {
+    await sql`delete from feedback where id = ${id}::uuid`;
+    revalidatePath("/feedback");
+    return { ok: true };
+  } catch (e) {
+    console.error("[feedback] resolve", e);
+    return { ok: false, error: "Could not remove that." };
+  }
+}
+
 /* ========================================================================== */
 /* Weekly updates                                                             */
 /* ========================================================================== */

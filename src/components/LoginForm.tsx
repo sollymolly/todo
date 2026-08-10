@@ -138,7 +138,7 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
 
         <div className="panel rounded-2xl p-7">
           <h1 className="font-display text-3xl font-bold tracking-wide text-mud-900">
-            Questline
+            HabitKnight
           </h1>
           <p className="mt-1 text-sm font-medium text-mud-600">{heading}</p>
 

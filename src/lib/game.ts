@@ -211,7 +211,17 @@ export const SKINS: { id: string; label: string; hex: string; shade: string }[] 
   { id: "ebony", label: "Ebony", hex: "#442725", shade: "#2e1f1c" },
 ];
 
-/** Each hair colour carries three tones so strands can be shaded, not flat. */
+/**
+ * Each hair colour carries three tones so strands can be shaded, not flat, and
+ * all three are lifted straight from the LPC ramp the sprite is recoloured to
+ * (indices 3/2/4) — so the swatch is the hair you actually get.
+ *
+ * Four of these used to point at ramps that didn't match their names: "Silver"
+ * resolved to LPC's `platinum`, which is a tan blonde, and "Ash" to its `ash`,
+ * which is rosy brown — hence a grey that looked blonde. "Ember" was `ginger`
+ * (orange) and "Violet" was `violet`, which is very nearly blue. See
+ * HAIR_RAMP in CharacterSprite for the corrected mapping.
+ */
 export const HAIR_COLORS: {
   id: string;
   label: string;
@@ -219,15 +229,15 @@ export const HAIR_COLORS: {
   shade: string;
   light: string;
 }[] = [
-  { id: "raven",    label: "Raven",    hex: "#2b2430", shade: "#15111a", light: "#4d4257" },
-  { id: "chestnut", label: "Chestnut", hex: "#6b4226", shade: "#402616", light: "#96603a" },
-  { id: "auburn",   label: "Auburn",   hex: "#8f3b1f", shade: "#5c2210", light: "#bd5730" },
-  { id: "ash",      label: "Ash",      hex: "#8a8378", shade: "#5e5951", light: "#b0a99e" },
-  { id: "gold",     label: "Gold",     hex: "#d9a441", shade: "#a37422", light: "#f5d489" },
-  { id: "silver",   label: "Silver",   hex: "#cfd4dc", shade: "#98a0ab", light: "#f2f5f9" },
-  { id: "ember",    label: "Ember",    hex: "#c2410c", shade: "#8a2c08", light: "#ee7224" },
-  { id: "moss",     label: "Moss",     hex: "#4d7c4a", shade: "#325233", light: "#72a46d" },
-  { id: "violet",   label: "Violet",   hex: "#7c5cbf", shade: "#523a86", light: "#a689e0" },
+  { id: "raven",    label: "Raven",    hex: "#071f2a", shade: "#061421", light: "#0d384d" },
+  { id: "chestnut", label: "Chestnut", hex: "#81310a", shade: "#63200b", light: "#b6550e" },
+  { id: "auburn",   label: "Auburn",   hex: "#9e1f1f", shade: "#73171e", light: "#c7341b" },
+  { id: "ash",      label: "Ash",      hex: "#777777", shade: "#4b4b4b", light: "#aaaaaa" },
+  { id: "gold",     label: "Gold",     hex: "#ffa913", shade: "#e47100", light: "#ffe453" },
+  { id: "silver",   label: "Silver",   hex: "#b8bbbc", shade: "#8b9498", light: "#d8dcdc" },
+  { id: "ember",    label: "Ember",    hex: "#cb0000", shade: "#a40712", light: "#e21414" },
+  { id: "moss",     label: "Moss",     hex: "#005000", shade: "#002d00", light: "#007c00" },
+  { id: "violet",   label: "Violet",   hex: "#7141b2", shade: "#402e82", light: "#a966dd" },
 ];
 
 export const HAIR_STYLES: { id: string; label: string }[] = [
