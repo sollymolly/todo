@@ -4,19 +4,19 @@ import { colorOf } from "@/lib/game";
 import type { Category, Todo } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
-   How often a promise in each area gets broken.
+   How often a promise in each area gets kept.
 
-   The number is the share of *deadlines* that were missed, and finishing
-   something late still counts as missed — the deadline went by, and no amount
-   of catching up later changes that. So the figure can't be improved by
-   completing an overdue quest; only by meeting the next one on time.
+   The number is the share of *deadlines* met — finished on time over everything
+   that came due. Finishing late does not count towards it: the deadline went by,
+   and no amount of catching up later changes that. So the figure can't be
+   improved by completing an overdue quest; only by meeting the next one on time.
 
    Quests with no deadline are left out of both sides. There was nothing to
-   miss, so counting them would dilute the number towards zero and make a
-   neglected area look healthy.
+   keep, so counting them would flatter every area equally and make a neglected
+   one look healthy.
 
-   Lower is better here, and worst is listed first: the point is to surface the
-   area being neglected, not to sort it alphabetically and bury it.
+   Higher is better here, but the weakest is still listed first: the point is to
+   surface the area being neglected, not to sort it alphabetically and bury it.
    -------------------------------------------------------------------------- */
 
 type Row = {
@@ -26,7 +26,7 @@ type Row = {
   onTime: number;
   late: number;
   failed: number;
-  /** Percent of deadlines missed, or null when none have resolved yet. */
+  /** Percent of deadlines met, or null when none have resolved yet. */
   rate: number | null;
 };
 
@@ -54,7 +54,7 @@ function build(categories: Category[], todos: Todo[]): Row[] {
       onTime,
       late,
       failed,
-      rate: resolved > 0 ? Math.round(((late + failed) / resolved) * 100) : null,
+      rate: resolved > 0 ? Math.round((onTime / resolved) * 100) : null,
     };
   });
 
@@ -63,13 +63,14 @@ function build(categories: Category[], todos: Todo[]): Row[] {
     if (a.rate === null && b.rate === null) return a.name.localeCompare(b.name);
     if (a.rate === null) return 1;
     if (b.rate === null) return -1;
-    return b.rate - a.rate || b.failed - a.failed;
+    // Ascending: the lowest hit rate is the one worth seeing first.
+    return a.rate - b.rate || b.failed - a.failed;
   });
 }
 
-/** Inverted against the old scale: this bar measures failure, so full is bad. */
+/** This bar measures delivery, so a full bar is a good one. */
 const BAR = (rate: number) =>
-  rate >= 50 ? "bg-red-500" : rate >= 20 ? "bg-amber-400" : "bg-grass-500";
+  rate >= 80 ? "bg-grass-500" : rate >= 50 ? "bg-amber-400" : "bg-red-500";
 
 export default function CategoryStrength({
   categories,
@@ -87,7 +88,7 @@ export default function CategoryStrength({
         Strengths
       </h2>
       <p className="mt-0.5 text-[11px] leading-relaxed text-mud-500">
-        Share of deadlines missed. Finishing late still counts as missed.
+        Share of deadlines met. Finishing late doesn&apos;t count.
       </p>
 
       <ul className="mt-3 space-y-2.5">
@@ -104,7 +105,7 @@ export default function CategoryStrength({
                   {r.name}
                 </span>
                 <span className="shrink-0 font-mono text-[11px] font-bold tabular-nums text-mud-600">
-                  {r.rate === null ? "—" : `${r.rate}% missed`}
+                  {r.rate === null ? "—" : `${r.rate}% on time`}
                 </span>
               </div>
 
@@ -120,7 +121,7 @@ export default function CategoryStrength({
               <p className="mt-1 text-[10px] text-mud-400">
                 {r.rate === null
                   ? "no deadlines resolved yet"
-                  : `${missed} of ${r.onTime + missed} missed${
+                  : `${r.onTime} of ${r.onTime + missed} on time${
                       r.late > 0 ? ` · ${r.late} finished late` : ""
                     }`}
               </p>
