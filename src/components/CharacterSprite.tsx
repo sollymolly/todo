@@ -41,14 +41,27 @@ const BASE_BODY_RAMP = "light";
 const BASE_HAIR_RAMP = "orange";
 
 /* Our catalogue ids -> LPC palette names. */
+/**
+ * One distinct LPC ramp per tone, ordered light to dark by the mid-tone
+ * luminance of each ramp: light 179, amber 173, olive 122, taupe 113,
+ * brown 89, black 47.
+ *
+ * `bronze` deliberately resolves to LPC's *taupe* rather than its `bronze`
+ * ramp: that one's mid-tone (#7F4C31) sits a single luminance step from
+ * `brown` (#76513A), so the two read as the same colour on a 64px sprite —
+ * exactly the duplicate this mapping exists to avoid.
+ *
+ * `porcelain` is retired but kept here: a profile saved before the change
+ * still renders correctly until its owner next touches the Armoury.
+ */
 const SKIN_RAMP: Record<string, string> = {
-  porcelain: "light",
   fair: "light",
-  olive: "olive",
   tan: "amber",
-  bronze: "bronze",
+  olive: "olive",
+  bronze: "taupe",
   deep: "brown",
   ebony: "black",
+  porcelain: "light", // legacy — same ramp Fair uses, so nothing shifts
 };
 
 const HAIR_RAMP: Record<string, string> = {

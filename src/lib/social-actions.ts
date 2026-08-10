@@ -170,6 +170,37 @@ export async function sendFriendRequest(targetId: string): Promise<ActionResult>
   return { ok: true };
 }
 
+/**
+ * Withdraw a request you sent.
+ *
+ * The row is *deleted* rather than marked declined, which matters: a
+ * withdrawal is not a refusal. Leaving a 'declined' row behind would trip the
+ * guard in sendFriendRequest — the one that stops a rejected person re-asking —
+ * and permanently block you from ever inviting them again. Deleting it puts
+ * both people back where they started.
+ *
+ * Scoped to requests where you are the requester and the status is still
+ * pending, so this can't cancel someone else's invitation, decline one sent to
+ * you (that's respondToRequest), or quietly dissolve an accepted friendship.
+ */
+export async function cancelRequest(friendshipId: string): Promise<ActionResult> {
+  const me = await requireUserId();
+
+  const rows = (await sql`
+    delete from friendships
+     where id = ${friendshipId}::uuid
+       and requester_id = ${me}::uuid
+       and status = 'pending'
+    returning id
+  `) as { id: string }[];
+
+  if (rows.length === 0)
+    return { ok: false, error: "That request is no longer pending." };
+
+  bump();
+  return { ok: true };
+}
+
 export async function respondToRequest(friendshipId: string, accept: boolean) {
   const me = await requireUserId();
   // Only the addressee may answer.

@@ -192,14 +192,23 @@ export function unlockedAtLevel(level: number): Item[] {
    Appearance — always free, never level-gated.
    ========================================================================== */
 
+/**
+ * Six tones, each mapped to a *different* LPC body ramp — see SKIN_RAMP in
+ * CharacterSprite. There used to be seven, but "Porcelain" and "Fair" both
+ * resolved to the `light` ramp and so rendered identically: two swatches, one
+ * face. Porcelain is gone and its profiles moved to Fair, which is a no-op on
+ * screen because that is what they were already drawing.
+ *
+ * `hex` and `shade` are lifted from the ramps themselves rather than picked by
+ * eye, so a swatch is the colour you actually get.
+ */
 export const SKINS: { id: string; label: string; hex: string; shade: string }[] = [
-  { id: "porcelain", label: "Porcelain", hex: "#f8ddc8", shade: "#e6bd9e" },
-  { id: "fair", label: "Fair", hex: "#f1c9a5", shade: "#d9a377" },
-  { id: "olive", label: "Olive", hex: "#dcae82", shade: "#bd8a5c" },
-  { id: "tan", label: "Tan", hex: "#c68a5f", shade: "#a36a43" },
-  { id: "bronze", label: "Bronze", hex: "#a5673f", shade: "#834e2c" },
-  { id: "deep", label: "Deep", hex: "#7a4a2b", shade: "#5c351d" },
-  { id: "ebony", label: "Ebony", hex: "#563122", shade: "#3d2117" },
+  { id: "fair", label: "Fair", hex: "#e4a47c", shade: "#cc8665" },
+  { id: "tan", label: "Tan", hex: "#ea9f54", shade: "#d28144" },
+  { id: "olive", label: "Olive", hex: "#ae6b3f", shade: "#7f4c31" },
+  { id: "bronze", label: "Bronze", hex: "#936849", shade: "#785946" },
+  { id: "deep", label: "Deep", hex: "#76513a", shade: "#5f4539" },
+  { id: "ebony", label: "Ebony", hex: "#442725", shade: "#2e1f1c" },
 ];
 
 /** Each hair colour carries three tones so strands can be shaded, not flat. */

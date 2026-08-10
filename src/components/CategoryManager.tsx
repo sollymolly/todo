@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { COLOR_KEYS, colorOf } from "@/lib/game";
 import { addCategory, deleteCategory, updateCategory } from "@/lib/actions";
@@ -149,7 +149,49 @@ function CategoryRow({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(cat.name);
-  const c = colorOf(cat.color);
+
+  // The picker used to read `cat.color` straight from the server prop, so the
+  // ring only moved once the action had round-tripped and router.refresh() had
+  // re-rendered — a visible lag during which the old swatch stayed selected and
+  // the new one showed nothing. Local state moves it on click instead.
+  const [color, setColor] = useState(cat.color);
+  const [syncedColor, setSyncedColor] = useState(cat.color);
+  if (cat.color !== syncedColor) {
+    // The server is still authoritative: if it lands on something else (or
+    // another tab changed it), adopt that.
+    setSyncedColor(cat.color);
+    setColor(cat.color);
+  }
+
+  const c = colorOf(color);
+
+  /* Browsing colours means clicking several in a row, and each click used to be
+     its own server action plus a router.refresh() of the board behind the modal.
+     Only the colour you settle on needs persisting, so the write is debounced —
+     and flushed on unmount, otherwise closing the panel quickly would drop it. */
+  const pending = useRef<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (pending.current !== null) {
+      const next = pending.current;
+      pending.current = null;
+      onSave({ color: next });
+    }
+  }, [onSave]);
+
+  useEffect(() => flush, [flush]);
+
+  function pickColor(next: string) {
+    setColor(next);
+    pending.current = next;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 400);
+  }
 
   return (
     <li className="rounded-xl border border-mud-200 bg-white/70">
@@ -166,7 +208,10 @@ function CategoryRow({
           {count} open
         </span>
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            if (open) flush();
+            setOpen((v) => !v);
+          }}
           className="rounded-lg px-2 py-1 text-xs text-mud-500 transition hover:bg-mud-100 hover:text-mud-900"
         >
           {open ? "▲" : "▼"}
@@ -199,7 +244,7 @@ function CategoryRow({
 
       {open && (
         <div className="border-t border-mud-200 px-2 pb-2">
-          <ColorPicker value={cat.color} onChange={(v) => onSave({ color: v })} />
+          <ColorPicker value={color} onChange={pickColor} />
         </div>
       )}
     </li>
@@ -221,10 +266,11 @@ function ColorPicker({
           type="button"
           onClick={() => onChange(k)}
           aria-label={k}
+          aria-pressed={value === k}
           className={`size-6 rounded-full transition ${colorOf(k).dot} ${
             value === k
               ? "ring-2 ring-mud-800 ring-offset-2 ring-offset-mud-50"
-              : "opacity-55 hover:opacity-100"
+              : "ring-1 ring-inset ring-black/10 hover:scale-110"
           }`}
         />
       ))}

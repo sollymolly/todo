@@ -14,7 +14,7 @@ import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import UpdatesModal from "@/components/UpdatesModal";
 import { FxProvider, useFx } from "@/components/Fx";
-import { FINISHED_RETENTION_DAYS, levelFor, XP } from "@/lib/game";
+import { levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
 import {
   abandonTodo,
@@ -465,10 +465,6 @@ function Inner({
                 Chronicle
                 <span className="font-sans text-xs font-semibold text-mud-500">
                   ({chronicle.length})
-                </span>
-                <span className="ml-auto font-sans text-[10px] font-normal text-mud-400">
-                  last {FINISHED_RETENTION_DAYS} days · {stats.done} completed
-                  all-time
                 </span>
               </button>
 

@@ -71,17 +71,13 @@ export default function CategoryStrength({
   const rows = build(categories, todos);
   if (rows.length === 0) return null;
 
-  const weakest = rows.find((r) => r.rate !== null && r.rate < 50);
-
   return (
     <div className="panel rounded-2xl p-5">
       <h2 className="font-display text-sm font-bold tracking-wide text-mud-800">
         Strengths
       </h2>
       <p className="mt-0.5 text-[11px] leading-relaxed text-mud-500">
-        {weakest
-          ? `${weakest.name} is where oaths break most. Worth some attention.`
-          : "How often you deliver once a quest has an outcome."}
+        How often you deliver once a quest has an outcome.
       </p>
 
       <ul className="mt-3 space-y-2.5">

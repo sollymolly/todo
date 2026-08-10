@@ -8,6 +8,7 @@ import CharacterSprite from "@/components/CharacterSprite";
 import Scenery from "@/components/Scenery";
 import { colorOf, progressFor } from "@/lib/game";
 import {
+  cancelRequest,
   findPerson,
   listMessages,
   removeFriend,
@@ -232,10 +233,27 @@ export default function Friends({
                 <h2 className="mb-2 font-display text-sm font-bold tracking-wide text-mud-800">
                   Awaiting reply
                 </h2>
-                <ul className="space-y-1 text-xs text-mud-500">
+                <ul className="space-y-1.5">
                   {outgoing.map((r) => (
-                    <li key={r.friendship_id}>
-                      @{r.username} — sent
+                    <li
+                      key={r.friendship_id}
+                      className="flex items-center gap-2 text-xs text-mud-500"
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        @{r.username} — sent
+                      </span>
+                      <button
+                        onClick={async () => {
+                          setError(null);
+                          const res = await cancelRequest(r.friendship_id);
+                          if (!res.ok) return setError(res.error);
+                          refresh();
+                        }}
+                        title="Withdraw this request"
+                        className="shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-semibold text-mud-400 transition hover:bg-red-100 hover:text-red-700"
+                      >
+                        Unsend
+                      </button>
                     </li>
                   ))}
                 </ul>

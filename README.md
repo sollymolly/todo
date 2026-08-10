@@ -280,6 +280,14 @@ ranks, add gear, or change what unlocks when.
 Five equipment slots (armour, weapon, headgear, cloak, off-hand) unlock by
 level. Appearance — body, skin, hair style, hair colour, eye colour — is always
 free.
+
+Each of the six skin tones maps to a **different** LPC body ramp. There were
+seven until "Porcelain" and "Fair" were found to resolve to the same `light`
+ramp — two swatches, one face. `bronze` also points at LPC's *taupe* rather
+than its `bronze` ramp, whose mid-tone sits one luminance step from `brown` and
+so reads identically at 64px. If you add a tone, check it against
+`manifest.palettes.body` first; the ramps are not as distinct as their names
+suggest.
 Equipping is re-checked server-side against your level, so the level gate is
 real rather than cosmetic.
 
