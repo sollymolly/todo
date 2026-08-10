@@ -4,11 +4,12 @@ import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
 import { pruneFinished, sweepOverdue } from "@/lib/actions";
 import { signOut } from "@/lib/auth-actions";
-import { syncHabits } from "@/lib/habit-actions";
+import { listHabits, syncHabits } from "@/lib/habit-actions";
 import { unreadTotal } from "@/lib/social-actions";
 import { latestUpdate, shouldShowUpdate } from "@/lib/updates";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
 import { normalizeTodo } from "@/lib/types";
+import type { Habit } from "@/lib/habits";
 import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,17 @@ export default async function Home() {
     /* steps aren't set up yet */
   }
 
+  // And for migrations 013/014. The habit *instances* are ordinary todos and
+  // already came back with the board above; these are the definitions behind
+  // them — the schedule and the streak, which is the part worth seeing next to
+  // today's quests rather than only on /habits.
+  let habits: Habit[] = [];
+  try {
+    habits = await listHabits();
+  } catch {
+    /* habits aren't set up yet */
+  }
+
   return (
     <Dashboard
       profile={{
@@ -107,6 +119,7 @@ export default async function Home() {
       categories={categories}
       todos={todos}
       steps={steps}
+      habits={habits}
       sweptCount={sweptCount}
       unread={unread}
       // Decided here rather than in the browser so "this week" means one thing

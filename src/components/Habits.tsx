@@ -3,15 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addHabit, deleteHabit, setHabitActive } from "@/lib/habit-actions";
+import HabitList from "@/components/HabitList";
+import { addHabit } from "@/lib/habit-actions";
 import {
   EVERY_DAY,
   WEEKDAYS_ONLY,
   WEEKEND_ONLY,
-  describeDays,
   type Habit,
 } from "@/lib/habits";
-import { colorOf } from "@/lib/game";
 import type { Category } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
@@ -20,6 +19,9 @@ import type { Category } from "@/lib/types";
    Each habit is a definition; the quest you tick lives on the board with
    everything else. This page is for the shape of the commitment — how often,
    in which category, how long the run is — not for doing today's.
+
+   The list itself is HabitList, shared with the dashboard so both places show
+   the same rows; what's unique here is the composer above it.
    -------------------------------------------------------------------------- */
 
 /** Shortcuts that just fill in the day set; "Custom" leaves it to the chips. */
@@ -39,22 +41,6 @@ const DAYS = [
   { n: 6, label: "Sat" },
   { n: 7, label: "Sun" },
 ];
-
-/** "Every day · until 30 Sep" / "Mon, Wed, Fri · 3 of 10" */
-function describe(h: Habit): string {
-  const parts = [describeDays(h.days)];
-  if (h.occurrences_limit)
-    parts.push(`${h.occurrences_made} of ${h.occurrences_limit}`);
-  else if (h.ends_on)
-    parts.push(
-      `until ${new Date(`${h.ends_on}T00:00:00Z`).toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "short",
-        timeZone: "UTC",
-      })}`
-    );
-  return parts.join(" · ");
-}
 
 function sameDays(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((n, i) => n === b[i]);
@@ -101,7 +87,6 @@ export default function Habits({
   }
 
   const active = habits.filter((h) => h.active);
-  const paused = habits.filter((h) => !h.active);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
@@ -287,115 +272,14 @@ export default function Habits({
 
       {/* --------------------------------------------------------- running */}
       {habits.length > 0 && (
-        <ul className="mt-6 space-y-2">
-          {[...active, ...paused].map((h) => {
-            const cat = categories.find((c) => c.id === h.category_id);
-            const col = colorOf(cat?.color ?? "amber");
-            return (
-              <li
-                key={h.id}
-                className={`panel rounded-2xl p-4 ${h.active ? "" : "opacity-60"}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-display text-base font-bold text-mud-900">
-                      {h.title}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-mud-500">
-                      {describe(h)}
-                      {cat && (
-                        <>
-                          {" · "}
-                          <span className={`font-semibold ${col.text}`}>
-                            {cat.name}
-                          </span>
-                        </>
-                      )}
-                      {h.finished ? " · finished" : !h.active ? " · paused" : ""}
-                    </p>
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    <p className="font-mono text-sm font-bold tabular-nums text-mud-800">
-                      {h.streak}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wider text-mud-400">
-                      {h.streak === 1 ? "day" : "days"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  {h.active && !h.finished && h.due_today && (
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
-                        h.done_today
-                          ? "bg-grass-100 text-grass-700 ring-grass-300"
-                          : "bg-amber-100 text-amber-800 ring-amber-300"
-                      }`}
-                    >
-                      {h.done_today ? "done today" : "waiting on the board"}
-                    </span>
-                  )}
-                  {h.best_streak > h.streak && (
-                    <span className="rounded-md bg-mud-100 px-1.5 py-0.5 text-[11px] font-semibold text-mud-500">
-                      best {h.best_streak}
-                    </span>
-                  )}
-
-                  <span className="ml-auto flex gap-1.5">
-                    <button
-                      onClick={async () => {
-                        await setHabitActive(h.id, !h.active);
-                        refresh();
-                      }}
-                      className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-                    >
-                      {h.active ? "Pause" : "Resume"}
-                    </button>
-                    <Remove
-                      onConfirm={async () => {
-                        await deleteHabit(h.id);
-                        refresh();
-                      }}
-                    />
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="mt-6">
+          <HabitList
+            habits={habits}
+            categories={categories}
+            onChanged={refresh}
+          />
+        </div>
       )}
     </main>
-  );
-}
-
-function Remove({ onConfirm }: { onConfirm: () => Promise<void> }) {
-  const [asking, setAsking] = useState(false);
-  if (!asking)
-    return (
-      <button
-        onClick={() => setAsking(true)}
-        className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-red-400 hover:bg-red-50 hover:text-red-700"
-      >
-        Delete
-      </button>
-    );
-  return (
-    <>
-      <button
-        onClick={onConfirm}
-        title="Deletes the habit and any instance still outstanding"
-        className="rounded-lg bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-red-700"
-      >
-        Delete
-      </button>
-      <button
-        onClick={() => setAsking(false)}
-        className="rounded-lg px-2 py-1 text-[11px] font-semibold text-mud-500 hover:text-mud-900"
-      >
-        No
-      </button>
-    </>
   );
 }

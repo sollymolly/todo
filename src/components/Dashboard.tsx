@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import CharacterCard from "@/components/CharacterCard";
+import HabitList from "@/components/HabitList";
 import CategoryBoard, { type InlineDraft } from "@/components/CategoryBoard";
 import Scenery from "@/components/Scenery";
 import CategoryManager from "@/components/CategoryManager";
@@ -28,6 +29,7 @@ import {
   updateTodo,
 } from "@/lib/actions";
 import { addHabit } from "@/lib/habit-actions";
+import type { Habit } from "@/lib/habits";
 import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
 
@@ -36,6 +38,8 @@ export default function Dashboard(props: {
   categories: Category[];
   todos: Todo[];
   steps: Record<string, Subtask[]>;
+  /** The recurring definitions. Today's instances are already in `todos`. */
+  habits: Habit[];
   sweptCount: number;
   unread: number;
   update: Update | null;
@@ -52,6 +56,7 @@ function Inner({
   categories,
   todos: serverTodos,
   steps,
+  habits,
   sweptCount,
   unread,
   update,
@@ -60,6 +65,7 @@ function Inner({
   categories: Category[];
   todos: Todo[];
   steps: Record<string, Subtask[]>;
+  habits: Habit[];
   sweptCount: number;
   unread: number;
   update: Update | null;
@@ -74,6 +80,7 @@ function Inner({
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [managing, setManaging] = useState(false);
   const [showChronicle, setShowChronicle] = useState(false);
+  const [showHabits, setShowHabits] = useState(true);
   const [composer, setComposer] = useState<{
     open: boolean;
     categoryId: string | null;
@@ -114,6 +121,13 @@ function Inner({
     }
     return m;
   }, [todos]);
+
+  // Habits whose instance is on the board and still unticked. Read off the
+  // habit rows rather than the todos, so "due today" means what the schedule
+  // says even when the instance has been moved or renamed.
+  const waitingToday = habits.filter(
+    (h) => h.active && !h.finished && h.due_today && !h.done_today
+  ).length;
 
   const openCount = todos.filter((t) => t.status !== "done").length;
   const overdueCount = todos.filter(
@@ -471,6 +485,68 @@ function Inner({
             onMove={handleMove}
             onCategoriesChanged={() => startTransition(() => router.refresh())}
           />
+
+          {/* --------------------------------------------------- habits */}
+          {/* Below the board, because the board is what gets done today and a
+              habit is the standing commitment behind it. Collapsible for the
+              same reason the chronicle is: forty habits shouldn't push the
+              quests off the screen. */}
+          <div>
+            {/* The toggle and the link are siblings rather than nested: a link
+                inside a button is neither valid nor clickable in peace. */}
+            <div className="flex items-center gap-2 px-1">
+              <button
+                onClick={() => setShowHabits((v) => !v)}
+                aria-expanded={showHabits}
+                className="flex flex-1 items-center gap-2 rounded-lg py-1.5 text-left font-display text-sm font-bold tracking-wide text-mud-800 drop-shadow-sm transition hover:text-grass-700"
+              >
+                <span className={showHabits ? "rotate-90" : ""}>▸</span>
+                Habits
+                {habits.length > 0 && (
+                  <span className="font-sans text-xs font-semibold text-mud-500">
+                    ({habits.length})
+                  </span>
+                )}
+                {waitingToday > 0 && (
+                  <span className="font-sans text-xs font-bold text-amber-700">
+                    · {waitingToday} waiting today
+                  </span>
+                )}
+              </button>
+              <Link
+                href="/habits"
+                className="shrink-0 rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+              >
+                {habits.length > 0 ? "Manage" : "New habit"}
+              </Link>
+            </div>
+
+            <AnimatePresence initial={false}>
+              {showHabits && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden pt-2"
+                >
+                  {habits.length === 0 ? (
+                    <p className="panel rounded-2xl px-4 py-3 text-xs leading-relaxed text-mud-500">
+                      Nothing recurring yet. Add a quest with a repeat and it
+                      becomes a habit — a fresh quest appears on the board each
+                      day it&apos;s due, and the streak is counted here.
+                    </p>
+                  ) : (
+                    <HabitList
+                      habits={habits}
+                      categories={categories}
+                      compact
+                      onChanged={() => startTransition(() => router.refresh())}
+                    />
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* ------------------------------------------------ chronicle */}
           {chronicle.length > 0 && (
