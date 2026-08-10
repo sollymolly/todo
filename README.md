@@ -42,7 +42,7 @@ cp .env.local.example .env.local
 | --- | --- |
 | `DATABASE_URL` | The pooled Neon connection string from step 1 |
 | `SESSION_SECRET` | Signs your session cookie. Generate with `openssl rand -base64 32` |
-| `OWNER_EMAIL` | *Optional.* Whoever every new account is befriended to on sign-up. Defaults to the constant in `src/lib/auth-actions.ts` |
+| `OWNER_EMAIL` | *Optional.* Whoever every new account is befriended to on sign-up, and the only account that can read the feedback inbox. Defaults to the constant in `src/lib/owner.ts` |
 
 Both are server-only and never reach the browser. `.env*` is gitignored.
 

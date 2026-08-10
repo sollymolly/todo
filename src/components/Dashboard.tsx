@@ -385,7 +385,11 @@ function Inner({
             stats={stats}
           />
 
-          <CategoryStrength categories={categories} todos={todos} />
+          {/* Matches the 24px grid gap either side, so the left column reads
+              with the same rhythm as the rest of the board. */}
+          <div className="mt-6">
+            <CategoryStrength categories={categories} todos={todos} />
+          </div>
         </div>
 
         {/* ------------------------------------------------------- right */}
