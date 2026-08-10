@@ -48,7 +48,10 @@ export type Todo = {
 };
 
 export type XpResult = {
+  /** What just moved on the profile — the number worth celebrating. */
   delta: number;
+  /** The quest's running contribution afterwards — what its chip shows. */
+  awarded: number;
   xp: number;
   reason?: string;
 };

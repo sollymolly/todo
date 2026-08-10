@@ -47,14 +47,19 @@ export default function CategoryBoard({
   onMove: (todoId: string, categoryId: string | null) => void;
   onCategoriesChanged: () => void;
 }) {
-  const open = useMemo(() => todos.filter((t) => t.status === "open"), [todos]);
-  const loose = open.filter((t) => !t.category_id);
+  // Everything not finished, so a missed quest stays put and can still be
+  // completed late rather than disappearing into the chronicle.
+  const unfinished = useMemo(
+    () => todos.filter((t) => t.status !== "done"),
+    [todos]
+  );
+  const loose = unfinished.filter((t) => !t.category_id);
 
   const boxes: { key: string; category: Category | null; items: Todo[] }[] = [
     ...categories.map((c) => ({
       key: c.id,
       category: c,
-      items: open.filter((t) => t.category_id === c.id),
+      items: unfinished.filter((t) => t.category_id === c.id),
     })),
     ...(loose.length ? [{ key: "__none", category: null, items: loose }] : []),
   ];

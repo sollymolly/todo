@@ -258,7 +258,7 @@ export async function listFriends(): Promise<FriendSummary[]> {
       c.name,
       c.color,
       (select count(*)::int from todos t
-        where t.category_id = c.id and t.status = 'open') as open
+        where t.category_id = c.id and t.status <> 'done') as open
     from categories c
     where c.user_id = any(${ids}::uuid[])
     order by c.sort_order

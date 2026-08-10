@@ -12,7 +12,7 @@ import QuestForm, { type QuestDraft } from "@/components/QuestForm";
 import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import { FxProvider, useFx } from "@/components/Fx";
-import { levelFor } from "@/lib/game";
+import { levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
 import {
   abandonTodo,
@@ -98,21 +98,24 @@ function Inner({
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const t of todos) {
-      if (t.status !== "open" || !t.category_id) continue;
+      // Missed quests still count as outstanding — they remain completable.
+      if (t.status === "done" || !t.category_id) continue;
       m[t.category_id] = (m[t.category_id] ?? 0) + 1;
     }
     return m;
   }, [todos]);
 
-  const openCount = todos.filter((t) => t.status === "open").length;
+  const openCount = todos.filter((t) => t.status !== "done").length;
   const overdueCount = todos.filter(
-    (t) => t.status === "open" && isOverdue(t.due_date)
+    (t) => t.status !== "done" && isOverdue(t.due_date)
   ).length;
 
+  // Finished quests only. A missed quest hasn't reached its ending yet — it
+  // stays on the board where it can still be completed.
   const chronicle = useMemo(
     () =>
       todos
-        .filter((t) => t.status !== "open")
+        .filter((t) => t.status === "done")
         .sort((a, b) =>
           (b.completed_at ?? b.created_at).localeCompare(
             a.completed_at ?? a.created_at
@@ -170,7 +173,7 @@ function Inner({
       patch(todo.id, {
         status: "done",
         completed_at: new Date().toISOString(),
-        xp_awarded: res.delta,
+        xp_awarded: res.awarded,
       });
       applyXp(res.xp);
     });
@@ -178,7 +181,16 @@ function Inner({
   const handleUncomplete = (todo: Todo) =>
     guard(async () => {
       const res = await uncompleteTodo(todo.id);
-      patch(todo.id, { status: "open", completed_at: null, xp_awarded: 0 });
+      // The server decides where it lands: a quest whose deadline is long past
+      // goes back to missed, not open, so the XP settles in one step.
+      const missedAgain =
+        !!todo.due_date &&
+        new Date(todo.due_date).getTime() < Date.now() - XP.graceHours * 3_600_000;
+      patch(todo.id, {
+        status: missedAgain ? "failed" : "open",
+        completed_at: null,
+        xp_awarded: res.awarded,
+      });
       setXp(res.xp);
     });
 
@@ -186,7 +198,7 @@ function Inner({
     guard(async () => {
       const res = await abandonTodo(todo.id);
       celebrate({ ...origin, xp: res.delta, tone: "bad", label: "oath broken" });
-      patch(todo.id, { status: "failed", xp_awarded: res.delta });
+      patch(todo.id, { status: "failed", xp_awarded: res.awarded });
       applyXp(res.xp);
     });
 

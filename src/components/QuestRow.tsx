@@ -127,7 +127,7 @@ export default function QuestRow({
     <motion.li
       layout
       data-quest-row=""
-      draggable={draggable && todo.status === "open"}
+      draggable={draggable && todo.status !== "done"}
       onDragStart={(ev) => {
         const e = ev as unknown as React.DragEvent;
         e.dataTransfer?.setData("text/quest-id", todo.id);
@@ -141,13 +141,13 @@ export default function QuestRow({
       transition={{ type: "spring", stiffness: 340, damping: 30 }}
       className={`group relative overflow-hidden rounded-xl border bg-white/80 shadow-sm transition hover:bg-white ${
         overdue ? "border-red-300" : "border-mud-200"
-      } ${done ? "opacity-70" : ""} ${failed ? "border-red-300 opacity-70" : ""} ${
+      } ${done ? "opacity-70" : ""} ${failed ? "border-red-300" : ""} ${
         dragging ? "opacity-40" : ""
-      } ${draggable && todo.status === "open" ? "cursor-grab active:cursor-grabbing" : ""}`}
+      } ${draggable && todo.status !== "done" ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
       <span
         className={`absolute inset-y-0 left-0 w-1.5 ${c.dot} ${
-          done || failed ? "opacity-40" : ""
+          done ? "opacity-40" : ""
         }`}
       />
 
@@ -192,9 +192,9 @@ export default function QuestRow({
                 strokeLinejoin="round"
               />
             </motion.svg>
-          ) : failed ? (
-            <span className="text-xs font-bold text-red-600">✕</span>
           ) : (
+            // A missed quest keeps the same hover affordance as an open one:
+            // finishing it late is the point.
             <span className="scale-0 text-xs opacity-0 transition-all group-hover/box:scale-100 group-hover/box:opacity-100">
               ✓
             </span>
@@ -207,15 +207,15 @@ export default function QuestRow({
             <p
               className={`break-words pr-1 font-medium leading-snug ${
                 compact ? "text-[13.5px]" : "text-[15px]"
-              } ${done || failed ? "text-mud-400" : "text-mud-900"}`}
+              } ${done ? "text-mud-400" : "text-mud-900"}`}
             >
               {todo.title}
             </p>
-            {(done || failed || slashing) && (
+            {/* Only a finished quest is struck through. A missed one is still
+                waiting to be done, so it stays legible. */}
+            {(done || slashing) && (
               <motion.span
-                className={`absolute left-0 top-1/2 h-[2px] ${
-                  failed ? "bg-red-400" : "bg-grass-600"
-                }`}
+                className="absolute left-0 top-1/2 h-[2px] bg-grass-600"
                 initial={{ width: 0 }}
                 animate={{ width: "100%" }}
                 transition={{ duration: 0.32, ease: "easeOut" }}
@@ -237,7 +237,7 @@ export default function QuestRow({
             {todo.due_date ? (
               <span
                 className={`rounded-md px-1.5 py-0.5 font-semibold ring-1 ring-inset ${
-                  done || failed
+                  done
                     ? "bg-mud-50 text-mud-400 ring-mud-200"
                     : URGENCY[urgencyOf(todo.due_date)]
                 }`}
@@ -265,8 +265,11 @@ export default function QuestRow({
             )}
 
             {failed && (
-              <span className="rounded-md bg-red-100 px-1.5 py-0.5 font-bold text-red-700 ring-1 ring-inset ring-red-300">
-                {todo.xp_awarded} XP · missed
+              <span
+                className="rounded-md bg-red-100 px-1.5 py-0.5 font-bold text-red-700 ring-1 ring-inset ring-red-300"
+                title="Still completable — finishing it refunds this and pays the late award"
+              >
+                missed{todo.xp_awarded !== 0 ? ` · ${todo.xp_awarded} XP` : ""}
               </span>
             )}
           </div>

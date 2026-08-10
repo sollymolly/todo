@@ -97,11 +97,44 @@ anything, and a quest with one puts XP at risk.
 | Deadline passed without completion | **−15** |
 | Abandoned by hand (deadline quests only) | **−15** |
 
-Anything still open **24 hours** past its deadline is auto-failed on your next
-page load, and a banner tells you how many oaths broke while you were away.
-Completing a failed quest afterwards refunds the penalty and awards it normally
-— redemption is always available. Undoing a completion returns the XP it
-granted. Total XP never drops below zero.
+Anything still open **24 hours** past its deadline is marked **missed** on your
+next page load, and a banner tells you how many oaths broke while you were away.
+A missed quest **stays in its category box** rather than disappearing into the
+chronicle — late is not the same as gone, and finishing it refunds the penalty
+and pays the late award. Total XP never drops below zero.
+
+### XP is reconciled, not accumulated
+
+Each quest's XP contribution is a pure function of its state, and every
+transition moves only `target - already_applied`:
+
+| State | Contributes |
+| --- | --- |
+| done | `quest_xp(due, completed_at)` — +25 / +8 / +5 |
+| missed | −15 if it had a deadline, else 0 |
+| open | 0 |
+
+So **a missed deadline costs 15 once and a completion pays once**, however many
+times the checkbox is toggled. Undoing a completion removes exactly what that
+completion granted and nothing more.
+
+This replaced incremental deltas, which double-charged: undoing a completion
+returned the quest to `open` with its deadline still long past, so the next page
+load swept it and took the −15 again. One quest in the author's database
+accumulated four ledger entries totalling −30 for a single missed deadline.
+Undoing now puts a quest back to **missed** rather than open when its deadline
+has already passed, so the XP settles in one visible step instead of a refund
+followed by a surprise penalty.
+
+`todos.xp_awarded` therefore means *the net XP this quest has moved*, not the
+size of the last change to it — and because the floor at zero means a penalty
+larger than the balance is only partly charged, it records what actually moved
+rather than what was intended. That is what keeps the next transition correct
+instead of refunding XP that was never taken.
+
+All of it funnels through one function, `quest_transition` in
+[`db/schema.sql`](db/schema.sql); `complete_quest`, `uncomplete_quest`,
+`abandon_quest` and `sweep_overdue` are thin wrappers that pick a target state.
 
 It's an honour system — nothing verifies you actually did the thing.
 

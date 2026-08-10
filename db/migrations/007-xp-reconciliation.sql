@@ -1,171 +1,33 @@
 -- ===========================================================================
---  Questline — schema (plain PostgreSQL, tested on Neon)
---  Run once in the Neon SQL Editor, or: psql "$DATABASE_URL" -f db/schema.sql
---  Safe to re-run: everything is idempotent.
--- ===========================================================================
-
-create extension if not exists "pgcrypto";
-create extension if not exists "citext";
-
--- ---------------------------------------------------------------------------
--- users: credentials only. Passwords are scrypt hashes written by the app.
--- ---------------------------------------------------------------------------
-create table if not exists users (
-  id             uuid primary key default gen_random_uuid(),
-  email          citext not null unique,
-  password_hash  text not null,
-  created_at     timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------------
--- profiles: XP and the character's look, one row per user.
--- ---------------------------------------------------------------------------
-create table if not exists profiles (
-  id            uuid primary key references users(id) on delete cascade,
-  display_name  text not null default 'Adventurer',
-  xp            integer not null default 0,
-  appearance    jsonb not null default '{
-                   "body": "male",
-                   "skin": "fair",
-                   "hair": "tousled",
-                   "hairColor": "chestnut",
-                   "eyes": "blue"
-                 }'::jsonb,
-  equipped      jsonb not null default '{
-                   "torso": "rags",
-                   "weapon": "stick",
-                   "head": "none",
-                   "cape": "none",
-                   "offhand": "none"
-                 }'::jsonb,
-  created_at    timestamptz not null default now()
-);
-
--- ---------------------------------------------------------------------------
--- categories: user-defined buckets (Work, Fitness, Music, ...)
--- ---------------------------------------------------------------------------
-create table if not exists categories (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references users(id) on delete cascade,
-  name        text not null,
-  -- Legacy. Categories are identified by name and colour; nothing reads this.
-  icon        text not null default '',
-  color       text not null default 'amber',
-  sort_order  integer not null default 0,
-  created_at  timestamptz not null default now()
-);
-create index if not exists categories_user_idx on categories(user_id, sort_order);
-
--- ---------------------------------------------------------------------------
--- todos ("quests").  status: open | done | failed
--- ---------------------------------------------------------------------------
-create table if not exists todos (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references users(id) on delete cascade,
-  category_id   uuid references categories(id) on delete set null,
-  title         text not null,
-  notes         text,
-  due_date      timestamptz,
-  status        text not null default 'open' check (status in ('open','done','failed')),
-  completed_at  timestamptz,
-  xp_awarded    integer not null default 0,
-  -- Legacy. Quests are ordered by due_date now, so nothing reads this.
-  position      double precision,
-  created_at    timestamptz not null default now()
-);
-create index if not exists todos_user_idx on todos(user_id, status, due_date);
-create index if not exists todos_position_idx on todos(user_id, position);
-
--- ---------------------------------------------------------------------------
--- policy_acceptances: append-only record of agreement to the privacy policy.
--- Answers "who agreed, to which version, when"; the text of each version is
--- in git. Deliberately does not record IP or user agent — see migration 006.
--- ---------------------------------------------------------------------------
-create table if not exists policy_acceptances (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users(id) on delete cascade,
-  version      integer not null,
-  accepted_at  timestamptz not null default now()
-);
-create index if not exists policy_acceptances_user_idx
-  on policy_acceptances(user_id, accepted_at desc);
-create unique index if not exists policy_acceptances_once
-  on policy_acceptances(user_id, version);
-
--- ---------------------------------------------------------------------------
--- rate_limits: fixed-window counters guarding the expensive auth paths.
--- Verifying a password costs ~16 MB and ~100 ms of scrypt, so an unbounded
--- sign-in endpoint is both a password oracle and a memory-exhaustion lever.
--- ---------------------------------------------------------------------------
-create table if not exists rate_limits (
-  bucket        text primary key,
-  window_start  timestamptz not null default now(),
-  hits          integer not null default 0
-);
-create index if not exists rate_limits_window_idx on rate_limits(window_start);
-
--- ---------------------------------------------------------------------------
--- xp_events: append-only ledger so the character's history is auditable
--- ---------------------------------------------------------------------------
-create table if not exists xp_events (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references users(id) on delete cascade,
-  todo_id     uuid references todos(id) on delete set null,
-  delta       integer not null,
-  reason      text not null,
-  created_at  timestamptz not null default now()
-);
-create index if not exists xp_events_user_idx on xp_events(user_id, created_at desc);
-
--- ===========================================================================
--- Bootstrap: give a brand-new user a profile and starter categories.
--- Called by the app immediately after inserting the user row.
--- ===========================================================================
-create or replace function bootstrap_user(p_user uuid, p_name text)
-returns void
-language plpgsql
-as $$
-begin
-  insert into profiles (id, display_name)
-  values (p_user, coalesce(nullif(trim(p_name), ''), 'Adventurer'))
-  on conflict (id) do nothing;
-
-  insert into categories (user_id, name, color, sort_order)
-  select p_user, v.name, v.color, v.ord
-    from (values
-      ('Work',     'amber',   0),
-      ('Fitness',  'rose',    1),
-      ('Music',    'violet',  2),
-      ('Personal', 'emerald', 3)
-    ) as v(name, color, ord)
-   where not exists (select 1 from categories where user_id = p_user);
-end;
-$$;
-
--- ===========================================================================
--- XP economy. All arithmetic lives here so a compromised client cannot
--- inflate its own score, and every mutation is one atomic statement.
+--  Migration 007 — one-time XP per quest, and missed quests stay in the box
 --
--- Every function takes p_user explicitly and filters on it, so a quest id
--- belonging to someone else simply will not match.
+--  Run once in the Neon SQL Editor. Safe to re-run (the backfill is a no-op
+--  the second time, because it only touches rows that disagree).
+--
+--  THE BUG
+--  -------
+--  XP was applied incrementally: each action added or subtracted a delta and
+--  wrote the *last* delta into todos.xp_awarded. Undoing a completion set the
+--  quest back to 'open' with its deadline still in the past, so the next page
+--  load swept it and charged the -15 again. Complete-late then un-complete and
+--  the penalty was paid twice; do it again and it was paid three times. One
+--  quest in this database had four ledger entries summing to -30 for a single
+--  missed deadline.
+--
+--  THE FIX
+--  -------
+--  Stop adding deltas and start reconciling. A quest's XP contribution is a
+--  pure function of its state:
+--
+--      done    ->  quest_xp(due, completed_at)      +25 / +8 / +5
+--      failed  ->  quest_penalty() if it had a deadline, else 0
+--      open    ->  0
+--
+--  Every transition computes `target - already_applied` and moves only the
+--  difference. Applying the same transition twice moves nothing the second
+--  time, so a penalty can only ever be charged once and an award can only ever
+--  be credited once, no matter how often the checkbox is toggled.
 -- ===========================================================================
-
--- Awards for finishing a quest.
---   no due date       → +5   (minimal, per the honour system)
---   due date, on time → +25  (early counts the same as on time)
---   due date, late    → +8   (partial credit for finishing at all)
-create or replace function quest_xp(p_due timestamptz, p_done timestamptz)
-returns integer language sql immutable as $$
-  select case
-    when p_due is null    then 5
-    when p_done <= p_due  then 25
-    else                       8
-  end;
-$$;
-
--- Penalty for a quest that was promised with a deadline and not delivered.
-create or replace function quest_penalty()
-returns integer language sql immutable as $$ select -15; $$;
 
 -- ---------------------------------------------------------------------------
 -- What a quest should be contributing, given its current state.
@@ -373,3 +235,39 @@ begin
   return json_build_object('count', v_count, 'delta', v_total, 'xp', coalesce(v_xp, 0));
 end;
 $$;
+
+-- ===========================================================================
+-- Backfill. Three statements, and the order matters: both of the first two
+-- read the pre-correction ledger, so the correcting events must be written
+-- *after* the balances are adjusted, not before.
+-- ===========================================================================
+
+-- 1. Give back (or take) the difference between what each quest should have
+--    contributed and what it actually did. This is where a doubly-charged
+--    penalty is refunded.
+update profiles p
+   set xp = greatest(0, p.xp + d.total)
+  from (
+    select t.user_id,
+           sum(quest_target_xp(t.status, t.due_date, t.completed_at)
+               - quest_applied_xp(t.id))::integer as total
+      from todos t
+     group by t.user_id
+  ) d
+ where d.user_id = p.id
+   and d.total <> 0;
+
+-- 2. Record the correction, so profiles.xp still equals the sum of the ledger.
+insert into xp_events (user_id, todo_id, delta, reason)
+select t.user_id,
+       t.id,
+       quest_target_xp(t.status, t.due_date, t.completed_at) - quest_applied_xp(t.id),
+       'ledger correction'
+  from todos t
+ where quest_target_xp(t.status, t.due_date, t.completed_at) <> quest_applied_xp(t.id);
+
+-- 3. Restate every quest's contribution under the new meaning of xp_awarded:
+--    the net XP this quest has moved, not the size of the last change to it.
+update todos t
+   set xp_awarded = quest_target_xp(t.status, t.due_date, t.completed_at)
+ where t.xp_awarded <> quest_target_xp(t.status, t.due_date, t.completed_at);
