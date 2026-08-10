@@ -38,6 +38,10 @@ create table if not exists profiles (
                    "cape": "none",
                    "offhand": "none"
                  }'::jsonb,
+  -- Week key (Monday, YYYY-MM-DD, UTC) of the last changelog entry shown.
+  -- Text, not date: a date column comes back through the session timezone and
+  -- makes week comparisons lie. See migration 008.
+  updates_seen  text,
   created_at    timestamptz not null default now()
 );
 
@@ -75,6 +79,32 @@ create table if not exists todos (
 );
 create index if not exists todos_user_idx on todos(user_id, status, due_date);
 create index if not exists todos_position_idx on todos(user_id, position);
+
+-- ---------------------------------------------------------------------------
+-- feedback
+--
+-- `user_id` is nullable, and that nullability *is* the anonymity. When someone
+-- ticks "send anonymously" no identifier is written at all — there is no
+-- `anonymous` flag sitting next to a user id that the reader could simply
+-- ignore. If the column is null, the link genuinely does not exist and cannot
+-- be recovered.
+--
+-- `created_at` is rounded to the hour for anonymous submissions. Full-precision
+-- timestamps are a correlation handle: whoever reads the inbox can also see who
+-- was active, and a to-the-second stamp on a short user list often identifies
+-- the author. The hour is plenty to know when something was said.
+--
+-- Named feedback keeps `on delete set null`, so deleting an account leaves the
+-- feedback but drops the attribution rather than destroying the message.
+-- ---------------------------------------------------------------------------
+create table if not exists feedback (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references users(id) on delete set null,
+  body        text not null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists feedback_created_idx on feedback(created_at desc);
 
 -- ---------------------------------------------------------------------------
 -- policy_acceptances: append-only record of agreement to the privacy policy.
@@ -126,8 +156,12 @@ returns void
 language plpgsql
 as $$
 begin
-  insert into profiles (id, display_name)
-  values (p_user, coalesce(nullif(trim(p_name), ''), 'Adventurer'))
+  insert into profiles (id, display_name, updates_seen)
+  values (
+    p_user,
+    coalesce(nullif(trim(p_name), ''), 'Adventurer'),
+    to_char(date_trunc('week', (now() at time zone 'utc')), 'YYYY-MM-DD')
+  )
   on conflict (id) do nothing;
 
   insert into categories (user_id, name, color, sort_order)

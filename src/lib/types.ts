@@ -21,6 +21,8 @@ export type Profile = {
   xp: number;
   appearance: Appearance;
   equipped: Equipped;
+  /** Week key of the last changelog entry shown. Null means never. */
+  updates_seen: string | null;
   created_at: string;
 };
 

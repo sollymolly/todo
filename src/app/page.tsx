@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
 import { sweepOverdue } from "@/lib/actions";
 import { unreadTotal } from "@/lib/social-actions";
+import { latestUpdate, shouldShowUpdate } from "@/lib/updates";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
 import { normalizeTodo } from "@/lib/types";
 import type { Category, Profile, Todo } from "@/lib/types";
@@ -67,6 +68,19 @@ export default async function Home() {
       todos={todos}
       sweptCount={sweptCount}
       unread={unread}
+      // Decided here rather than in the browser so "this week" means one thing
+      // for everybody and the server and client agree on the first render.
+      //
+      // The `in` check distinguishes "column exists, never seen" (null, so
+      // show it) from "migration 008 hasn't run" (absent). Without it, the
+      // popup would appear and then fail to record the dismissal, reappearing
+      // on every single page load.
+      update={
+        "updates_seen" in profile &&
+        shouldShowUpdate(profile.updates_seen ?? null)
+          ? latestUpdate()
+          : null
+      }
     />
   );
 }

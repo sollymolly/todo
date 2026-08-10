@@ -307,6 +307,53 @@ that trade, it's a `session_version` column on `users` plus a check in
 
 ---
 
+## Feedback and weekly updates
+
+`/feedback` takes a note from anyone signed in, with an **anonymous** option,
+and shows the whole inbox to the owner (matched on `OWNER_EMAIL`) below the
+form. `listFeedback` re-checks ownership next to the query rather than trusting
+the page to have done it — it's the one read in the app that returns other
+people's words.
+
+**The anonymity is real, not a flag.** When someone ticks the box, `user_id` is
+written as null: there is no hidden identifier beside an `anonymous` boolean for
+the reader to ignore. Two details make that hold up:
+
+- Submitting still requires a session, so the rate limiter knows who is asking
+  — the identity authorises the request and is then discarded rather than
+  stored.
+- `created_at` is rounded to the hour for anonymous notes. On a handful of
+  users, a to-the-second timestamp plus knowing who was online is often enough
+  to name the author. The hour is plenty to know when something was said.
+
+Named notes use `on delete set null`, so deleting an account drops the
+attribution but keeps the message.
+
+### The weekly popup
+
+`/updates` is the changelog; the newest entry also appears once as a modal on
+the dashboard, on the first visit of a week in which something shipped.
+
+Add an entry to `UPDATES` in [`src/lib/updates.ts`](src/lib/updates.ts) keyed by
+the **Monday of its week**, and everyone who hasn't seen that entry gets the
+popup once. Two decisions worth knowing:
+
+- **Weeks are Mondays in UTC, computed on the server.** Deriving "this week"
+  from the browser clock would make the popup appear, vanish and reappear for
+  anyone whose Sunday evening is already Monday elsewhere, and would differ
+  between the server render and hydration.
+- **It tracks the latest entry, not the calendar.** Someone away for a month
+  still sees what they missed, once; someone who has read the latest notes
+  isn't shown them again just because a new week began.
+
+`profiles.updates_seen` stores the week key as **text, not `date`** — the driver
+renders a `date` through the session timezone, which turns `2026-08-10` into a
+timestamp hours off and makes week comparisons lie. New accounts are seeded as
+already caught up, since a first-time user has no reason to be handed a list of
+things that changed before they arrived.
+
+---
+
 ## Security
 
 The threat model worth stating plainly: **an attacker who can run JavaScript on

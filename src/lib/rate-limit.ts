@@ -30,6 +30,8 @@ export const LIMITS = {
   /** Exact-match lookup, but still worth capping as a probing tool. */
   findPerson: { limit: 60, windowSeconds: 300 },
   sendMessage: { limit: 120, windowSeconds: 60 },
+  /** Per account. Generous for a real person, tight enough to stop a flood. */
+  feedback: { limit: 10, windowSeconds: 3600 },
 } as const satisfies Record<string, Limit>;
 
 /**

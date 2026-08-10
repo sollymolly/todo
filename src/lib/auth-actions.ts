@@ -7,6 +7,7 @@ import { dummyVerify, hashPassword, verifyPassword } from "@/lib/password";
 import { endSession, requireUserId, startSession } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { PRIVACY_VERSION } from "@/lib/policy";
+import { OWNER_EMAIL } from "@/lib/owner";
 
 /* --------------------------------------------------------------------------
    Under auth_version 2 the browser derives an "auth secret" from the password
@@ -53,10 +54,6 @@ function wellFormedKeys(publicKey: string, wrapped: string): boolean {
  * category names with open counts, their completed-quest total and level, and
  * can open a DM thread with them. Quest titles and notes stay private.
  */
-const OWNER_EMAIL = (
-  process.env.OWNER_EMAIL ?? "solpark0624@gmail.com"
-).trim().toLowerCase();
-
 async function befriendOwner(newUserId: string) {
   try {
     // The owner is stored as the requester so the pair ordering is

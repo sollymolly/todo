@@ -11,6 +11,7 @@ import CategoryManager from "@/components/CategoryManager";
 import QuestForm, { type QuestDraft } from "@/components/QuestForm";
 import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
+import UpdatesModal from "@/components/UpdatesModal";
 import { FxProvider, useFx } from "@/components/Fx";
 import { levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
@@ -26,6 +27,7 @@ import {
 import { signOut } from "@/lib/auth-actions";
 import { forgetPrivateKey } from "@/lib/crypto";
 import type { Category, Profile, Todo } from "@/lib/types";
+import type { Update } from "@/lib/updates";
 
 export default function Dashboard(props: {
   profile: Profile;
@@ -33,6 +35,7 @@ export default function Dashboard(props: {
   todos: Todo[];
   sweptCount: number;
   unread: number;
+  update: Update | null;
 }) {
   return (
     <FxProvider>
@@ -47,12 +50,14 @@ function Inner({
   todos: serverTodos,
   sweptCount,
   unread,
+  update,
 }: {
   profile: Profile;
   categories: Category[];
   todos: Todo[];
   sweptCount: number;
   unread: number;
+  update: Update | null;
 }) {
   const router = useRouter();
   const { celebrate } = useFx();
@@ -302,6 +307,20 @@ function Inner({
             )}
           </Link>
           <Link
+            href="/updates"
+            title="What's new"
+            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+          >
+            What&apos;s new
+          </Link>
+          <Link
+            href="/feedback"
+            title="Send feedback"
+            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+          >
+            Feedback
+          </Link>
+          <Link
             href="/account"
             title="Account"
             className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
@@ -462,6 +481,10 @@ function Inner({
           )}
         </div>
       </div>
+
+      {/* The changelog sits above the board but below nothing else, so it is
+          the first thing seen on the first visit of the week. */}
+      {update && <UpdatesModal update={update} />}
 
       {/* ------------------------------------------------------- overlays */}
       <AnimatePresence>
