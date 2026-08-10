@@ -28,6 +28,7 @@ import {
 } from "@/lib/actions";
 import { signOut } from "@/lib/auth-actions";
 import { forgetPrivateKey } from "@/lib/crypto";
+import { addHabit } from "@/lib/habit-actions";
 import type { Category, Profile, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
 
@@ -162,6 +163,12 @@ function Inner({
     if (after > before) window.setTimeout(() => setLevelUp(after), 650);
   }
 
+  /** Local wall-clock minutes past midnight, for a habit's daily cut-off. */
+  function minutesOfDay(iso: string): number {
+    const d = new Date(iso);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
   function patch(id: string, next: Partial<Todo>) {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...next } : t)));
   }
@@ -221,6 +228,24 @@ function Inner({
     });
 
   const handleAdd = async (draft: QuestDraft) => {
+    if (draft.repeat !== "once") {
+      // A repeating quest is a habit, not a todo. The server creates the
+      // definition and materialises today's instance, so there is nothing
+      // sensible to add optimistically — refresh and let it appear.
+      const res = await addHabit({
+        title: draft.title,
+        cadence: draft.repeat,
+        weekday: draft.weekday,
+        categoryId: draft.categoryId,
+        // Only the time matters to a habit; a repeating thing has no one date.
+        dueMinutes: draft.dueDate ? minutesOfDay(draft.dueDate) : undefined,
+      });
+      if (!res.ok) throw new Error(res.error);
+      setComposer({ open: false, categoryId: null });
+      startTransition(() => router.refresh());
+      return;
+    }
+
     const created = await addTodo({
       title: draft.title,
       notes: draft.notes,

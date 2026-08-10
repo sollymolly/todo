@@ -218,6 +218,16 @@ A habit is a *definition*, not a quest. Each day it's due, one ordinary todo is
 materialised from it — earning the usual XP, sortable by deadline, prunable when
 finished. `/habits` manages the definitions and shows streaks.
 
+Creating one: the quest form has a **Repeat** row directly under Deadline —
+Once / Every day / Weekdays / Weekly. Anything but "Once" creates a habit rather
+than a todo, and the deadline's **time** becomes each occurrence's cut-off while
+its date is ignored, because a repeating thing has no single date. With no time
+set it's the end of the day.
+
+The row is hidden when *editing*. A quest and a habit are different rows, so
+flipping an existing one would leave the original orphaned; an instance that came
+from a habit instead shows a link to the Habits page.
+
 **Materialising on read, not spawning on completion.** "Create tomorrow's copy
 when today's is ticked" breaks the instant someone un-ticks it: you either
 double up or lose the next occurrence. `materialise_habits` instead asks "does

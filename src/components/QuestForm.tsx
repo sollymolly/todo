@@ -1,18 +1,44 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import DuePicker from "@/components/DuePicker";
 import StakeRow from "@/components/StakeRow";
 import { colorOf } from "@/lib/game";
-import { isoToLocalInput, localInputToIso } from "@/lib/date";
+import { isoToLocalInput, localInputToIso, fromLocalInput } from "@/lib/date";
 import type { Category, Todo } from "@/lib/types";
+import type { Cadence } from "@/lib/habit-actions";
 
 export type QuestDraft = {
   title: string;
   notes: string;
   dueDate: string | null;
   categoryId: string | null;
+  /**
+   * "once" is an ordinary quest. Anything else means create a habit instead —
+   * the deadline's *time* becomes each occurrence's cut-off and its date is
+   * ignored, since a repeating thing has no single date.
+   */
+  repeat: "once" | Cadence;
+  weekday: number;
 };
+
+const REPEATS: { id: "once" | Cadence; label: string }[] = [
+  { id: "once", label: "Once" },
+  { id: "daily", label: "Every day" },
+  { id: "weekdays", label: "Weekdays" },
+  { id: "weekly", label: "Weekly" },
+];
+
+const DAYS = [
+  { n: 1, label: "Mon" },
+  { n: 2, label: "Tue" },
+  { n: 3, label: "Wed" },
+  { n: 4, label: "Thu" },
+  { n: 5, label: "Fri" },
+  { n: 6, label: "Sat" },
+  { n: 7, label: "Sun" },
+];
 
 export default function QuestForm({
   categories,
@@ -38,6 +64,12 @@ export default function QuestForm({
     initial?.category_id ?? defaultCategoryId ?? null
   );
   const [showNotes, setShowNotes] = useState(!!initial?.notes);
+  const [repeat, setRepeat] = useState<"once" | Cadence>("once");
+  const [weekday, setWeekday] = useState(() => {
+    // ISO day, Monday = 1, so a weekly habit defaults to today.
+    const d = new Date().getDay();
+    return d === 0 ? 7 : d;
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,18 +78,33 @@ export default function QuestForm({
     if (autoFocus) inputRef.current?.focus();
   }, [autoFocus]);
 
+  // Only the time half of the deadline matters to a habit.
+  const dueTime = (() => {
+    const d = fromLocalInput(due);
+    if (!d) return null;
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  })();
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await onSubmit({ title, notes, dueDate: localInputToIso(due), categoryId });
+      await onSubmit({
+        title,
+        notes,
+        dueDate: localInputToIso(due),
+        categoryId,
+        repeat,
+        weekday,
+      });
       if (!initial) {
         setTitle("");
         setNotes("");
         setDue("");
         setShowNotes(false);
+        setRepeat("once");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -114,7 +161,76 @@ export default function QuestForm({
         <DuePicker value={due} onChange={setDue} />
       </div>
 
-      <StakeRow hasDeadline={!!due} />
+      {/* ---------------------------------------------------------- repeat */}
+      {initial ? (
+        // An existing quest can't be turned into a habit in place: they are
+        // different rows, and converting would leave this one orphaned. The
+        // instances of a habit are edited on the Habits page instead.
+        initial.habit_id && (
+          <p className="text-[11px] text-mud-500">
+            This one repeats.{" "}
+            <Link
+              href="/habits"
+              className="font-semibold underline underline-offset-2 transition hover:text-grass-700"
+            >
+              Manage it in Habits
+            </Link>
+            .
+          </p>
+        )
+      ) : (
+        <div>
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-mud-500">
+            Repeat
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {REPEATS.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setRepeat(r.id)}
+                className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${
+                  repeat === r.id
+                    ? "border-grass-600 bg-grass-600 text-white"
+                    : "border-mud-200 bg-white/60 text-mud-600 hover:border-mud-400 hover:bg-white"
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          {repeat === "weekly" && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {DAYS.map((d) => (
+                <button
+                  key={d.n}
+                  type="button"
+                  onClick={() => setWeekday(d.n)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+                    weekday === d.n
+                      ? "bg-mud-800 text-mud-50"
+                      : "bg-white/70 text-mud-500 hover:bg-white"
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {repeat !== "once" && (
+            <p className="mt-2 text-[11px] leading-relaxed text-mud-500">
+              A fresh quest appears each time it&apos;s due, worth the usual XP.
+              {dueTime
+                ? ` Due at ${dueTime} each time — the date above is ignored.`
+                : " Due at the end of the day; set a time above to change that."}
+            </p>
+          )}
+        </div>
+      )}
+
+      <StakeRow hasDeadline={!!due || repeat !== "once"} />
 
       {showNotes ? (
         <textarea
