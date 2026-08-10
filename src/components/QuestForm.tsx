@@ -7,7 +7,7 @@ import StakeRow from "@/components/StakeRow";
 import { colorOf } from "@/lib/game";
 import { isoToLocalInput, localInputToIso, fromLocalInput } from "@/lib/date";
 import type { Category, Todo } from "@/lib/types";
-import type { Cadence } from "@/lib/habit-actions";
+import { EVERY_DAY, WEEKDAYS_ONLY } from "@/lib/habits";
 
 export type QuestDraft = {
   title: string;
@@ -15,19 +15,21 @@ export type QuestDraft = {
   dueDate: string | null;
   categoryId: string | null;
   /**
-   * "once" is an ordinary quest. Anything else means create a habit instead —
-   * the deadline's *time* becomes each occurrence's cut-off and its date is
-   * ignored, since a repeating thing has no single date.
+   * Null means an ordinary quest. A set of ISO weekdays means create a habit
+   * instead — the deadline's *time* becomes each occurrence's cut-off and its
+   * date is ignored, since a repeating thing has no single date.
    */
-  repeat: "once" | Cadence;
-  weekday: number;
+  repeatDays: number[] | null;
+  /** Optional stopping conditions, ignored when repeatDays is null. */
+  endsOn: string | null;
+  occurrencesLimit: number | null;
 };
 
-const REPEATS: { id: "once" | Cadence; label: string }[] = [
-  { id: "once", label: "Once" },
-  { id: "daily", label: "Every day" },
-  { id: "weekdays", label: "Weekdays" },
-  { id: "weekly", label: "Weekly" },
+const REPEATS: { id: string; label: string; days: number[] | null }[] = [
+  { id: "once", label: "Once", days: null },
+  { id: "daily", label: "Every day", days: EVERY_DAY },
+  { id: "weekdays", label: "Weekdays", days: WEEKDAYS_ONLY },
+  { id: "custom", label: "Custom", days: [] },
 ];
 
 const DAYS = [
@@ -64,12 +66,19 @@ export default function QuestForm({
     initial?.category_id ?? defaultCategoryId ?? null
   );
   const [showNotes, setShowNotes] = useState(!!initial?.notes);
-  const [repeat, setRepeat] = useState<"once" | Cadence>("once");
-  const [weekday, setWeekday] = useState(() => {
-    // ISO day, Monday = 1, so a weekly habit defaults to today.
+  const [repeat, setRepeat] = useState("once");
+  const [days, setDays] = useState<number[]>(() => {
+    // ISO day, Monday = 1, so a custom habit starts on today.
     const d = new Date().getDay();
-    return d === 0 ? 7 : d;
+    return [d === 0 ? 7 : d];
   });
+  const [stop, setStop] = useState<"never" | "on" | "after">("never");
+  const [endsOn, setEndsOn] = useState("");
+  const [times, setTimes] = useState("10");
+
+  const chosen = REPEATS.find((r) => r.id === repeat);
+  const repeatDays =
+    repeat === "once" ? null : repeat === "custom" ? days : chosen?.days ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,8 +105,9 @@ export default function QuestForm({
         notes,
         dueDate: localInputToIso(due),
         categoryId,
-        repeat,
-        weekday,
+        repeatDays,
+        endsOn: stop === "on" ? endsOn || null : null,
+        occurrencesLimit: stop === "after" ? Number(times) || null : null,
       });
       if (!initial) {
         setTitle("");
@@ -105,6 +115,7 @@ export default function QuestForm({
         setDue("");
         setShowNotes(false);
         setRepeat("once");
+        setStop("never");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -200,15 +211,21 @@ export default function QuestForm({
             ))}
           </div>
 
-          {repeat === "weekly" && (
+          {repeat === "custom" && (
             <div className="mt-2 flex flex-wrap gap-1">
               {DAYS.map((d) => (
                 <button
                   key={d.n}
                   type="button"
-                  onClick={() => setWeekday(d.n)}
+                  onClick={() =>
+                    setDays((cur) =>
+                      cur.includes(d.n)
+                        ? cur.filter((n) => n !== d.n)
+                        : [...cur, d.n].sort((a, b) => a - b)
+                    )
+                  }
                   className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
-                    weekday === d.n
+                    days.includes(d.n)
                       ? "bg-mud-800 text-mud-50"
                       : "bg-white/70 text-mud-500 hover:bg-white"
                   }`}
@@ -217,6 +234,54 @@ export default function QuestForm({
                 </button>
               ))}
             </div>
+          )}
+
+          {repeat !== "once" && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-mud-500">Ends</span>
+              {([
+                ["never", "Never"],
+                ["on", "On a date"],
+                ["after", "After N"],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setStop(id)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+                    stop === id
+                      ? "bg-mud-800 text-mud-50"
+                      : "bg-white/70 text-mud-500 hover:bg-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              {stop === "on" && (
+                <input
+                  type="date"
+                  value={endsOn}
+                  onChange={(e) => setEndsOn(e.target.value)}
+                  className="field rounded-lg px-2 py-1 text-xs"
+                />
+              )}
+              {stop === "after" && (
+                <input
+                  type="number"
+                  min={1}
+                  max={3650}
+                  value={times}
+                  onChange={(e) => setTimes(e.target.value)}
+                  className="field w-20 rounded-lg px-2 py-1 text-xs"
+                />
+              )}
+            </div>
+          )}
+
+          {repeat !== "once" && repeatDays?.length === 0 && (
+            <p className="mt-2 text-[11px] font-semibold text-red-700">
+              Pick at least one day.
+            </p>
           )}
 
           {repeat !== "once" && (
@@ -260,7 +325,7 @@ export default function QuestForm({
       <div className="flex gap-2 pt-0.5">
         <button
           type="submit"
-          disabled={busy || !title.trim()}
+          disabled={busy || !title.trim() || repeatDays?.length === 0}
           className="rounded-xl bg-grass-600 px-5 py-2.5 font-display text-sm font-bold tracking-wide text-white shadow-md shadow-grass-700/30 transition hover:bg-grass-500 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-mud-300 disabled:shadow-none"
         >
           {busy ? "…" : submitLabel}

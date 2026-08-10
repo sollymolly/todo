@@ -13,6 +13,16 @@ import type { Appearance, BodyType, Equipped, Slot } from "./types";
  */
 export const FINISHED_RETENTION_DAYS = 7;
 
+/**
+ * How many steps one quest may hold. Enough for a real checklist, and low
+ * enough that a quest can't be used as unbounded storage. Mirrored in
+ * add_subtask() — change both.
+ *
+ * It lives here rather than in subtask-actions.ts because that module is
+ * `"use server"`, and such a module may only export async functions.
+ */
+export const MAX_STEPS = 20;
+
 export const XP = {
   noDeadline: 5,
   onTime: 25,

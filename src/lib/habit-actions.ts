@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
+import { EVERY_DAY, type Habit } from "@/lib/habits";
+
+export type { Habit };
 
 /* --------------------------------------------------------------------------
    Habits: the recurring definitions, and the reconcile that keeps today's
@@ -13,30 +16,17 @@ import { requireUserId } from "@/lib/session";
    define, list, and materialise.
    -------------------------------------------------------------------------- */
 
-export type Cadence = "daily" | "weekdays" | "weekly";
-
-export type Habit = {
-  id: string;
-  title: string;
-  notes: string | null;
-  category_id: string | null;
-  cadence: Cadence;
-  weekday: number;
-  due_minutes: number;
-  streak: number;
-  best_streak: number;
-  last_done_on: string | null;
-  active: boolean;
-  /** Whether today's instance is already ticked off. */
-  done_today: boolean;
-  /** Whether an instance exists for today at all (it may not be due). */
-  due_today: boolean;
-};
-
 export type HabitResult = { ok: true } | { ok: false; error: string };
 
-const CADENCES: Cadence[] = ["daily", "weekdays", "weekly"];
 const MAX_HABITS = 40;
+
+/** Only real ISO weekdays, deduped and sorted; at least one. */
+function cleanDays(days: number[]): number[] | null {
+  const d = [...new Set(days.map((n) => Math.trunc(n)))]
+    .filter((n) => n >= 1 && n <= 7)
+    .sort((a, b) => a - b);
+  return d.length ? d : null;
+}
 
 /**
  * Creates any missing instances for today and breaks streaks that lapsed.
@@ -62,7 +52,13 @@ export async function listHabits(): Promise<Habit[]> {
   const rows = (await sql`
     select h.*,
            coalesce(t.status = 'done', false) as done_today,
-           (t.id is not null)                 as due_today
+           (t.id is not null)                 as due_today,
+           habit_over(
+             h.ends_on, h.occurrences_limit, h.occurrences_made,
+             (now() at time zone coalesce(
+               (select timezone from profiles where id = ${userId}::uuid), 'UTC'
+             ))::date
+           ) as finished
       from habits h
       left join todos t
         on t.habit_id = h.id
@@ -81,13 +77,16 @@ export async function listHabits(): Promise<Habit[]> {
     title: r.title,
     notes: r.notes,
     category_id: r.category_id,
-    cadence: r.cadence,
-    weekday: r.weekday,
+    days: (r.days ?? EVERY_DAY) as number[],
     due_minutes: r.due_minutes,
     streak: r.streak,
     best_streak: r.best_streak,
     last_done_on: r.last_done_on ? String(r.last_done_on).slice(0, 10) : null,
     active: r.active,
+    ends_on: r.ends_on ? String(r.ends_on).slice(0, 10) : null,
+    occurrences_limit: r.occurrences_limit,
+    occurrences_made: r.occurrences_made,
+    finished: r.finished,
     done_today: r.done_today,
     due_today: r.due_today,
   }));
@@ -95,23 +94,37 @@ export async function listHabits(): Promise<Habit[]> {
 
 export async function addHabit(input: {
   title: string;
-  cadence: Cadence;
-  weekday?: number;
+  /** ISO weekdays it runs on, Monday = 1. */
+  days: number[];
   categoryId?: string | null;
   dueMinutes?: number;
+  /** Last date an occurrence may appear, YYYY-MM-DD. */
+  endsOn?: string | null;
+  /** Total number of occurrences before it stops. */
+  occurrencesLimit?: number | null;
 }): Promise<HabitResult> {
   const userId = await requireUserId();
 
   const title = input.title.trim();
   if (!title) return { ok: false, error: "Give the habit a name." };
-  if (!CADENCES.includes(input.cadence))
-    return { ok: false, error: "Pick how often it repeats." };
 
-  const weekday = Math.min(7, Math.max(1, Math.trunc(input.weekday ?? 1)));
+  const days = cleanDays(input.days ?? []);
+  if (!days) return { ok: false, error: "Pick at least one day." };
+
   const dueMinutes = Math.min(
     1439,
     Math.max(0, Math.trunc(input.dueMinutes ?? 1439))
   );
+
+  const endsOn =
+    input.endsOn && /^\d{4}-\d{2}-\d{2}$/.test(input.endsOn) ? input.endsOn : null;
+
+  // A limit of zero would create a habit that never appears, which reads as a
+  // bug rather than a choice.
+  const limit =
+    input.occurrencesLimit && input.occurrencesLimit > 0
+      ? Math.min(3650, Math.trunc(input.occurrencesLimit))
+      : null;
 
   try {
     const count = (await sql`
@@ -123,16 +136,18 @@ export async function addHabit(input: {
     // Same ownership check the quest actions use: a category id from the client
     // is only accepted if it belongs to the caller.
     await sql`
-      insert into habits (user_id, title, cadence, weekday, due_minutes, category_id)
+      insert into habits
+        (user_id, title, days, due_minutes, category_id, ends_on, occurrences_limit)
       values (
         ${userId}::uuid,
         ${title.slice(0, 200)},
-        ${input.cadence},
-        ${weekday},
+        ${days}::integer[],
         ${dueMinutes},
         (select id from categories
           where id = ${input.categoryId || null}::uuid
-            and user_id = ${userId}::uuid)
+            and user_id = ${userId}::uuid),
+        ${endsOn}::date,
+        ${limit}
       )
     `;
 

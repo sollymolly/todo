@@ -67,6 +67,19 @@ export type Todo = {
   created_at: string;
 };
 
+/**
+ * A step inside a quest. Deliberately not a quest itself: no deadline, no
+ * status, no XP. Splitting a quest into five steps must not pay five times for
+ * the same work, so the award stays on the parent and steps only show progress.
+ */
+export type Subtask = {
+  id: string;
+  todo_id: string;
+  title: string;
+  done: boolean;
+  position: number;
+};
+
 export type XpResult = {
   /** What just moved on the profile — the number worth celebrating. */
   delta: number;

@@ -14,6 +14,7 @@ import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import UpdatesModal from "@/components/UpdatesModal";
 import TimezoneSync from "@/components/TimezoneSync";
+import HeaderMenu from "@/components/HeaderMenu";
 import { FxProvider, useFx } from "@/components/Fx";
 import { levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
@@ -26,16 +27,15 @@ import {
   uncompleteTodo,
   updateTodo,
 } from "@/lib/actions";
-import { signOut } from "@/lib/auth-actions";
-import { forgetPrivateKey } from "@/lib/crypto";
 import { addHabit } from "@/lib/habit-actions";
-import type { Category, Profile, Todo } from "@/lib/types";
+import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
 
 export default function Dashboard(props: {
   profile: Profile;
   categories: Category[];
   todos: Todo[];
+  steps: Record<string, Subtask[]>;
   sweptCount: number;
   unread: number;
   update: Update | null;
@@ -51,6 +51,7 @@ function Inner({
   profile,
   categories,
   todos: serverTodos,
+  steps,
   sweptCount,
   unread,
   update,
@@ -58,6 +59,7 @@ function Inner({
   profile: Profile;
   categories: Category[];
   todos: Todo[];
+  steps: Record<string, Subtask[]>;
   sweptCount: number;
   unread: number;
   update: Update | null;
@@ -228,17 +230,18 @@ function Inner({
     });
 
   const handleAdd = async (draft: QuestDraft) => {
-    if (draft.repeat !== "once") {
+    if (draft.repeatDays) {
       // A repeating quest is a habit, not a todo. The server creates the
       // definition and materialises today's instance, so there is nothing
       // sensible to add optimistically — refresh and let it appear.
       const res = await addHabit({
         title: draft.title,
-        cadence: draft.repeat,
-        weekday: draft.weekday,
+        days: draft.repeatDays,
         categoryId: draft.categoryId,
         // Only the time matters to a habit; a repeating thing has no one date.
         dueMinutes: draft.dueDate ? minutesOfDay(draft.dueDate) : undefined,
+        endsOn: draft.endsOn,
+        occurrencesLimit: draft.occurrencesLimit,
       });
       if (!res.ok) throw new Error(res.error);
       setComposer({ open: false, categoryId: null });
@@ -304,6 +307,9 @@ function Inner({
     onAbandon: handleAbandon,
     onDelete: handleDelete,
     onEdit: (t: Todo) => setEditing(t),
+    // Steps live on the server, not in `todos`, so a write there needs a
+    // refresh to reach the progress chip.
+    onStepsChanged: () => startTransition(() => router.refresh()),
   };
 
   /* ---------------------------------------------------------------- view */
@@ -343,41 +349,13 @@ function Inner({
               </span>
             )}
           </Link>
-          <Link
-            href="/friends"
-            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-          >
-            Companions
-          </Link>
-          <Link
-            href="/updates"
-            title="What's new"
-            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-          >
-            What&apos;s new
-          </Link>
-          <Link
-            href="/feedback"
-            title="Send feedback"
-            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-          >
-            Feedback
-          </Link>
-          <Link
-            href="/account"
-            title="Account"
-            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-          >
-            Account
-          </Link>
-          <form action={signOut}>
-            <button
-              onClick={() => forgetPrivateKey()}
-              className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-700"
-            >
-              Sign out
-            </button>
-          </form>
+
+          {/* Companions, What's new, Feedback, Account and Sign out all live in
+              here. Six competing buttons made none of them findable. */}
+          <HeaderMenu
+            name={profile.display_name}
+            hasUnseenUpdate={!!update}
+          />
         </div>
       </header>
 
@@ -487,6 +465,7 @@ function Inner({
           <CategoryBoard
             categories={categories}
             todos={todos}
+            steps={steps}
             handlers={handlers}
             onInlineAdd={handleInlineAdd}
             onMove={handleMove}
@@ -520,6 +499,7 @@ function Inner({
                         key={t.id}
                         todo={t}
                         category={categories.find((c) => c.id === t.category_id)}
+                        steps={steps[t.id] ?? []}
                         {...handlers}
                       />
                     ))}

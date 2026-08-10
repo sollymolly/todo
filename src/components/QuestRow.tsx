@@ -12,7 +12,8 @@ import {
   urgencyOf,
   type Urgency,
 } from "@/lib/date";
-import type { Category, Todo } from "@/lib/types";
+import SubtaskList from "@/components/SubtaskList";
+import type { Category, Subtask, Todo } from "@/lib/types";
 
 const MENU_W = 190;
 
@@ -29,6 +30,7 @@ const URGENCY: Record<Urgency, string> = {
 export default function QuestRow({
   todo,
   category,
+  steps = [],
   compact = false,
   showCategory = true,
   onComplete,
@@ -36,10 +38,14 @@ export default function QuestRow({
   onAbandon,
   onDelete,
   onEdit,
+  onStepsChanged,
+  onStepsToggle,
   draggable = false,
 }: {
   todo: Todo;
   category?: Category;
+  /** This quest's checklist, already filtered to it. */
+  steps?: Subtask[];
   /** Denser padding and type, for the narrow category boxes. */
   compact?: boolean;
   showCategory?: boolean;
@@ -48,11 +54,19 @@ export default function QuestRow({
   onAbandon: (todo: Todo, origin: { x: number; y: number }) => void;
   onDelete: (todo: Todo) => void;
   onEdit: (todo: Todo) => void;
+  onStepsChanged?: () => void;
+  /** Lets a fixed-height container grow while this checklist is open. */
+  onStepsToggle?: (open: boolean) => void;
   draggable?: boolean;
 }) {
   const [slashing, setSlashing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [menuAt, setMenuAt] = useState<{ left: number; top: number } | null>(null);
+  // The category boxes only fit about three rows before they scroll, so steps
+  // start collapsed there — the n/m chip is the glanceable part, and opening it
+  // is one click. Roomier layouts show them straight away.
+  const [showSteps, setShowSteps] = useState(!compact && steps.length > 0);
+  const rowRef = useRef<HTMLLIElement>(null);
   const boxRef = useRef<HTMLButtonElement>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -61,6 +75,8 @@ export default function QuestRow({
   const failed = todo.status === "failed";
   const overdue = todo.status === "open" && isOverdue(todo.due_date);
   const c = colorOf(category?.color ?? "amber");
+
+  const stepsDone = steps.filter((s) => s.done).length;
 
   /* The boxes scroll and clip their contents, so the menu is positioned in a
      portal against the viewport instead of inside the row. */
@@ -116,6 +132,20 @@ export default function QuestRow({
       : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   }
 
+  /* An open checklist is several times the height of the row it hangs off, so
+     inside a category box the steps can open below the fold. The container
+     hears about it in the same commit, so by the time the frame lands the box
+     has already grown and "nearest" has only the genuine overflow left to
+     scroll away. */
+  function toggleSteps(open: boolean) {
+    setShowSteps(open);
+    onStepsToggle?.(open);
+    if (!open) return;
+    requestAnimationFrame(() =>
+      rowRef.current?.scrollIntoView({ block: "nearest" })
+    );
+  }
+
   function handleCheck() {
     if (done) return onUncomplete(todo);
     setSlashing(true);
@@ -125,6 +155,7 @@ export default function QuestRow({
 
   return (
     <motion.li
+      ref={rowRef}
       layout
       data-quest-row=""
       draggable={draggable && todo.status !== "done"}
@@ -272,6 +303,25 @@ export default function QuestRow({
                 missed{todo.xp_awarded !== 0 ? ` · ${todo.xp_awarded} XP` : ""}
               </span>
             )}
+
+            {/* Steps carry no XP of their own, so this reads as progress rather
+                than as a score. */}
+            {steps.length > 0 && (
+              <button
+                onClick={() => toggleSteps(!showSteps)}
+                aria-expanded={showSteps}
+                className={`rounded-md px-1.5 py-0.5 font-semibold ring-1 ring-inset transition ${
+                  stepsDone === steps.length
+                    ? "bg-grass-100 text-grass-700 ring-grass-300"
+                    : "bg-mud-50 text-mud-500 ring-mud-200 hover:bg-mud-100"
+                }`}
+              >
+                {stepsDone}/{steps.length} steps
+                <span aria-hidden className="ml-1 opacity-60">
+                  {showSteps ? "▴" : "▾"}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -285,6 +335,29 @@ export default function QuestRow({
           ⋯
         </button>
       </div>
+
+      {/* A finished quest's steps are history — they stay visible if they were
+          open, but there is nothing left to add. */}
+      {/* Fades in, but leaves on the spot: no AnimatePresence, no exit.
+          Wrapping this in one left the checklist stranded — the exit tween ran
+          to opacity 0 and the unmount never followed it, so a collapsed quest
+          went on holding the full height of an invisible list. The row's own
+          `layout` animation already absorbs the height either way, which is
+          what made the exit worth so little in the first place. */}
+      {showSteps && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
+        >
+          <SubtaskList
+            todoId={todo.id}
+            steps={steps}
+            compact={compact}
+            onChanged={onStepsChanged}
+          />
+        </motion.div>
+      )}
 
       {typeof document !== "undefined" &&
         createPortal(
@@ -314,6 +387,16 @@ export default function QuestRow({
                     }}
                   >
                     Edit quest
+                  </MenuItem>
+                )}
+                {!done && (
+                  <MenuItem
+                    onClick={() => {
+                      setMenuAt(null);
+                      toggleSteps(true);
+                    }}
+                  >
+                    {steps.length ? "Show steps" : "Break into steps"}
                   </MenuItem>
                 )}
                 {done && (

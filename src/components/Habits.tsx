@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { addHabit, deleteHabit, setHabitActive } from "@/lib/habit-actions";
 import {
-  addHabit,
-  deleteHabit,
-  setHabitActive,
-  type Cadence,
+  EVERY_DAY,
+  WEEKDAYS_ONLY,
+  WEEKEND_ONLY,
+  describeDays,
   type Habit,
-} from "@/lib/habit-actions";
+} from "@/lib/habits";
 import { colorOf } from "@/lib/game";
 import type { Category } from "@/lib/types";
 
@@ -21,10 +22,12 @@ import type { Category } from "@/lib/types";
    in which category, how long the run is — not for doing today's.
    -------------------------------------------------------------------------- */
 
-const CADENCES: { id: Cadence; label: string; hint: string }[] = [
-  { id: "daily", label: "Every day", hint: "appears every morning" },
-  { id: "weekdays", label: "Weekdays", hint: "Monday to Friday" },
-  { id: "weekly", label: "Once a week", hint: "on a day you choose" },
+/** Shortcuts that just fill in the day set; "Custom" leaves it to the chips. */
+const PRESETS: { label: string; days: number[] | null }[] = [
+  { label: "Every day", days: EVERY_DAY },
+  { label: "Weekdays", days: WEEKDAYS_ONLY },
+  { label: "Weekends", days: WEEKEND_ONLY },
+  { label: "Custom", days: null },
 ];
 
 const DAYS = [
@@ -37,10 +40,24 @@ const DAYS = [
   { n: 7, label: "Sun" },
 ];
 
+/** "Every day · until 30 Sep" / "Mon, Wed, Fri · 3 of 10" */
 function describe(h: Habit): string {
-  if (h.cadence === "daily") return "Every day";
-  if (h.cadence === "weekdays") return "Weekdays";
-  return `Every ${DAYS.find((d) => d.n === h.weekday)?.label ?? "Mon"}`;
+  const parts = [describeDays(h.days)];
+  if (h.occurrences_limit)
+    parts.push(`${h.occurrences_made} of ${h.occurrences_limit}`);
+  else if (h.ends_on)
+    parts.push(
+      `until ${new Date(`${h.ends_on}T00:00:00Z`).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        timeZone: "UTC",
+      })}`
+    );
+  return parts.join(" · ");
+}
+
+function sameDays(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((n, i) => n === b[i]);
 }
 
 export default function Habits({
@@ -54,8 +71,11 @@ export default function Habits({
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [cadence, setCadence] = useState<Cadence>("daily");
-  const [weekday, setWeekday] = useState(1);
+  const [days, setDays] = useState<number[]>(EVERY_DAY);
+  const [custom, setCustom] = useState(false);
+  const [stop, setStop] = useState<"never" | "on" | "after">("never");
+  const [endsOn, setEndsOn] = useState("");
+  const [times, setTimes] = useState("10");
   const [categoryId, setCategoryId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,9 +89,10 @@ export default function Habits({
     setError(null);
     const res = await addHabit({
       title,
-      cadence,
-      weekday,
+      days,
       categoryId: categoryId || null,
+      endsOn: stop === "on" ? endsOn || null : null,
+      occurrencesLimit: stop === "after" ? Number(times) || null : null,
     });
     setBusy(false);
     if (!res.ok) return setError(res.error);
@@ -118,40 +139,113 @@ export default function Habits({
           />
 
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {CADENCES.map((c) => (
+            {PRESETS.map((p) => {
+              const on = p.days
+                ? !custom && sameDays(days, p.days)
+                : custom;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    if (p.days) {
+                      setCustom(false);
+                      setDays(p.days);
+                    } else {
+                      setCustom(true);
+                    }
+                  }}
+                  className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${
+                    on
+                      ? "border-grass-600 bg-grass-600 text-white"
+                      : "border-mud-200 bg-white/70 text-mud-600 hover:border-mud-400"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {custom && (
+            <div className="mt-2">
+              <div className="flex flex-wrap gap-1">
+                {DAYS.map((d) => (
+                  <button
+                    key={d.n}
+                    type="button"
+                    onClick={() =>
+                      setDays((cur) =>
+                        cur.includes(d.n)
+                          ? cur.filter((n) => n !== d.n)
+                          : [...cur, d.n].sort((a, b) => a - b)
+                      )
+                    }
+                    className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+                      days.includes(d.n)
+                        ? "bg-mud-800 text-mud-50"
+                        : "bg-white/70 text-mud-500 hover:bg-white"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              {days.length === 0 && (
+                <p className="mt-1 text-[11px] font-semibold text-red-700">
+                  Pick at least one day.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ------------------------------------------------------- ending */}
+          <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-mud-500">
+            Ends
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {([
+              ["never", "Never"],
+              ["on", "On a date"],
+              ["after", "After N times"],
+            ] as const).map(([id, label]) => (
               <button
-                key={c.id}
+                key={id}
                 type="button"
-                onClick={() => setCadence(c.id)}
-                title={c.hint}
+                onClick={() => setStop(id)}
                 className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${
-                  cadence === c.id
+                  stop === id
                     ? "border-grass-600 bg-grass-600 text-white"
                     : "border-mud-200 bg-white/70 text-mud-600 hover:border-mud-400"
                 }`}
               >
-                {c.label}
+                {label}
               </button>
             ))}
           </div>
 
-          {cadence === "weekly" && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {DAYS.map((d) => (
-                <button
-                  key={d.n}
-                  type="button"
-                  onClick={() => setWeekday(d.n)}
-                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
-                    weekday === d.n
-                      ? "bg-mud-800 text-mud-50"
-                      : "bg-white/70 text-mud-500 hover:bg-white"
-                  }`}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
+          {stop === "on" && (
+            <input
+              type="date"
+              value={endsOn}
+              onChange={(e) => setEndsOn(e.target.value)}
+              className="field mt-2 w-full rounded-lg px-3 py-2 text-sm"
+            />
+          )}
+          {stop === "after" && (
+            <label className="mt-2 flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={times}
+                onChange={(e) => setTimes(e.target.value)}
+                className="field w-24 rounded-lg px-3 py-2 text-sm"
+              />
+              <span className="text-xs text-mud-500">
+                occurrences, then it stops
+              </span>
+            </label>
           )}
 
           {categories.length > 0 && (
@@ -177,7 +271,7 @@ export default function Habits({
 
           <button
             type="submit"
-            disabled={busy || !title.trim()}
+            disabled={busy || !title.trim() || days.length === 0}
             className="mt-3 w-full rounded-xl bg-grass-600 px-4 py-2.5 font-display text-sm font-bold tracking-wide text-white transition hover:bg-grass-500 disabled:bg-mud-300"
           >
             {busy ? "Adding…" : "Add habit"}
@@ -217,7 +311,7 @@ export default function Habits({
                           </span>
                         </>
                       )}
-                      {!h.active && " · paused"}
+                      {h.finished ? " · finished" : !h.active ? " · paused" : ""}
                     </p>
                   </div>
 
@@ -232,7 +326,7 @@ export default function Habits({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  {h.active && h.due_today && (
+                  {h.active && !h.finished && h.due_today && (
                     <span
                       className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
                         h.done_today

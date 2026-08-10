@@ -1,4 +1,3 @@
-// test
 import type { Metadata, Viewport } from "next";
 import { Cinzel, Nunito } from "next/font/google";
 import "./globals.css";

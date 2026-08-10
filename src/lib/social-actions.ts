@@ -31,6 +31,10 @@ export type FriendSummary = PublicProfile & {
   completed: number;
   categories: { name: string; color: string; open: number }[];
   unread: number;
+  /** Quests they finished today, in *their* timezone. */
+  done_today: number;
+  /** Their current best habit streak, or 0. */
+  streak: number;
 };
 
 export type PendingRequest = {
@@ -268,6 +272,16 @@ export async function listFriends(): Promise<FriendSummary[]> {
       -- are deleted after a week, so the live count alone would shrink.
       (p.archived_done + (select count(*)::int from todos t
         where t.user_id = u.id and t.status = 'done')) as completed,
+      -- "Today" is measured in *their* timezone, not the viewer's: seeing a
+      -- friend's count reset at your midnight rather than theirs would be
+      -- quietly wrong for anyone in another country.
+      (select count(*)::int from todos t
+        where t.user_id = u.id and t.status = 'done'
+          and t.completed_at is not null
+          and (t.completed_at at time zone coalesce(p.timezone, 'UTC'))::date
+              = (now() at time zone coalesce(p.timezone, 'UTC'))::date) as done_today,
+      coalesce((select max(h.streak)::int from habits h
+        where h.user_id = u.id and h.active), 0) as streak,
       (select count(*)::int from messages m
         where m.sender_id = u.id and m.recipient_id = ${me}::uuid
           and m.read_at is null) as unread
@@ -278,7 +292,9 @@ export async function listFriends(): Promise<FriendSummary[]> {
     join profiles p on p.id = u.id
     where f.status = 'accepted'
       and (f.requester_id = ${me}::uuid or f.addressee_id = ${me}::uuid)
-    order by p.xp desc
+    -- Busiest today first: the list is more interesting when it reflects
+    -- what people are actually doing rather than a static XP ranking.
+    order by done_today desc, p.xp desc
   `) as (Omit<FriendSummary, "categories"> & Record<string, unknown>)[];
 
   if (rows.length === 0) return [];

@@ -345,6 +345,31 @@ function FriendCard({
           <p className="text-[11px] text-mud-500">
             {friend.completed} quest{friend.completed === 1 ? "" : "s"} completed
           </p>
+
+          {/* Today's activity, the bit that makes the list feel alive. Counted
+              in their timezone, so it turns over at their midnight not yours. */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
+                friend.done_today > 0
+                  ? "bg-grass-100 text-grass-700 ring-grass-300"
+                  : "bg-mud-50 text-mud-400 ring-mud-200"
+              }`}
+              title="Quests they finished today"
+            >
+              {friend.done_today > 0
+                ? `${friend.done_today} today`
+                : "nothing yet today"}
+            </span>
+            {friend.streak > 0 && (
+              <span
+                className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800 ring-1 ring-inset ring-amber-300"
+                title="Their longest running habit streak"
+              >
+                {friend.streak}-day streak
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

@@ -7,15 +7,23 @@ import DuePicker from "@/components/DuePicker";
 import { COLOR_KEYS, colorOf } from "@/lib/game";
 import { byDeadline, isOverdue, localInputToIso } from "@/lib/date";
 import { addCategory, deleteCategory } from "@/lib/actions";
-import type { Category, Todo } from "@/lib/types";
+import type { Category, Subtask, Todo } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
    One box per category. Every box is the same height — tall enough for three
    quests — whether or not it's full, so the board reads as a tidy grid. Past
    three, the list scrolls inside the box rather than growing it.
+
+   The one exception is an open checklist. A quest with its steps showing is
+   several times the height of the row it replaces, and holding the box at its
+   resting height left the steps to fight over a three-row window with the
+   quests around them. So a box with steps open grows to fit, up to EXPANDED_H,
+   and drops back the moment they close. The grid is `items-start` so that
+   growth stays local to the one box rather than stretching its whole row.
    -------------------------------------------------------------------------- */
 
 const LIST_H = 234; // ~3 compact rows
+const EXPANDED_H = 468; // twice that, the ceiling while a checklist is open
 const HEADER_H = 45; // the box header, so the add tile matches a box exactly
 
 type RowHandlers = {
@@ -24,6 +32,7 @@ type RowHandlers = {
   onAbandon: (todo: Todo, origin: { x: number; y: number }) => void;
   onDelete: (todo: Todo) => void;
   onEdit: (todo: Todo) => void;
+  onStepsChanged: () => void;
 };
 
 export type InlineDraft = {
@@ -35,6 +44,7 @@ export type InlineDraft = {
 export default function CategoryBoard({
   categories,
   todos,
+  steps,
   handlers,
   onInlineAdd,
   onMove,
@@ -42,6 +52,8 @@ export default function CategoryBoard({
 }: {
   categories: Category[];
   todos: Todo[];
+  /** Every quest's checklist, keyed by quest id. */
+  steps: Record<string, Subtask[]>;
   handlers: RowHandlers;
   onInlineAdd: (draft: InlineDraft) => Promise<void>;
   onMove: (todoId: string, categoryId: string | null) => void;
@@ -69,12 +81,13 @@ export default function CategoryBoard({
   const nextColor = COLOR_KEYS[categories.length % COLOR_KEYS.length];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {boxes.map((box) => (
         <Box
           key={box.key}
           category={box.category}
           items={box.items}
+          steps={steps}
           handlers={handlers}
           onInlineAdd={onInlineAdd}
           onMove={onMove}
@@ -89,6 +102,7 @@ export default function CategoryBoard({
 function Box({
   category,
   items,
+  steps,
   handlers,
   onInlineAdd,
   onMove,
@@ -96,6 +110,7 @@ function Box({
 }: {
   category: Category | null;
   items: Todo[];
+  steps: Record<string, Subtask[]>;
   handlers: RowHandlers;
   onInlineAdd: (draft: InlineDraft) => Promise<void>;
   onMove: (todoId: string, categoryId: string | null) => void;
@@ -106,6 +121,7 @@ function Box({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openSteps, setOpenSteps] = useState<ReadonlySet<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const c = colorOf(category?.color ?? "amber");
 
@@ -113,6 +129,20 @@ function Box({
   // has to land in the right place the moment its deadline is edited, and a
   // stored position would silently outrank the date it was meant to reflect.
   const sorted = [...items].sort(byDeadline);
+
+  // Read against the quests actually on show, so a quest that leaves the box
+  // while its steps are open — completed, deleted, dragged elsewhere — can't
+  // leave the box standing tall with nothing expanded in it.
+  const grown = sorted.some((t) => openSteps.has(t.id));
+
+  function setStepsOpen(todoId: string, open: boolean) {
+    setOpenSteps((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(todoId);
+      else next.delete(todoId);
+      return next;
+    });
+  }
 
   const overdue = items.filter((t) => isOverdue(t.due_date)).length;
 
@@ -244,7 +274,11 @@ function Box({
       <div
         ref={listRef}
         className="overflow-y-auto overscroll-contain p-2"
-        style={{ height: LIST_H }}
+        style={
+          grown
+            ? { minHeight: LIST_H, maxHeight: EXPANDED_H }
+            : { height: LIST_H }
+        }
       >
         {error && (
           <p className="mb-2 rounded-lg bg-red-100 px-2 py-1.5 text-[11px] font-semibold text-red-800">
@@ -280,9 +314,11 @@ function Box({
                   key={t.id}
                   todo={t}
                   category={category ?? undefined}
+                  steps={steps[t.id] ?? []}
                   compact
                   draggable
                   showCategory={false}
+                  onStepsToggle={(open) => setStepsOpen(t.id, open)}
                   {...handlers}
                 />
               ))}
