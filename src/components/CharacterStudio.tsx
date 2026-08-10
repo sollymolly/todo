@@ -13,13 +13,17 @@ import {
   HAIR_STYLES,
   SKINS,
   SLOTS,
+  dyesFor,
+  findItem,
+  isDyeSlot,
   itemsForSlot,
   levelFor,
   progressFor,
+  resolveDye,
   type Item,
 } from "@/lib/game";
 import { saveAppearance, saveDisplayName, saveEquipped } from "@/lib/actions";
-import type { Appearance, Equipped, Profile, Slot } from "@/lib/types";
+import type { Appearance, DyeSlot, Equipped, Profile, Slot } from "@/lib/types";
 
 type Tab = "look" | Slot;
 
@@ -60,7 +64,14 @@ export default function CharacterStudio({
       window.setTimeout(() => setFlash(null), 2200);
       return;
     }
-    const next = { ...equipped, [slot]: item.id };
+    save({ ...equipped, [slot]: item.id });
+  }
+
+  function dye(slot: DyeSlot, id: string) {
+    save({ ...equipped, dyes: { ...equipped.dyes, [slot]: id } });
+  }
+
+  function save(next: Equipped) {
     setEquipped(next);
     startSaving(async () => {
       try {
@@ -113,7 +124,7 @@ export default function CharacterStudio({
           {/* ---------------------------------------------------- preview */}
           <div className="panel rounded-2xl p-5 lg:sticky lg:top-6">
             <motion.div
-              key={Object.values(equipped).join("-")}
+              key={JSON.stringify(equipped)}
               initial={{ scale: 0.96, opacity: 0.6 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 22 }}
@@ -259,51 +270,61 @@ export default function CharacterStudio({
                 </Group>
               </div>
             ) : (
-              <Group
-                title={SLOTS.find((s) => s.slot === tab)?.label ?? ""}
-              >
-                <ul className="grid gap-1.5 sm:grid-cols-2">
-                  {itemsForSlot(tab).map((item) => {
-                    const locked = item.level > level;
-                    const on = equipped[tab] === item.id;
-                    return (
-                      <li key={`${tab}-${item.id}`}>
-                        <button
-                          onClick={() => equip(tab, item)}
-                          className={`flex w-full items-start gap-2.5 rounded-xl border-2 px-3 py-2 text-left transition ${
-                            on
-                              ? "border-grass-500 bg-grass-50"
-                              : locked
-                                ? "cursor-not-allowed border-mud-200 bg-mud-50 opacity-60"
-                                : "border-mud-200 bg-white/70 hover:border-mud-400 hover:bg-white"
-                          }`}
-                        >
-                          <span className="mt-0.5 text-sm">
-                            {locked ? "✕" : on ? "✓" : "·"}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-baseline justify-between gap-2">
-                              <span
-                                className={`truncate text-sm font-bold ${
-                                  on ? "text-grass-700" : "text-mud-900"
-                                }`}
-                              >
-                                {item.name}
+              <div className="space-y-4">
+                <Group
+                  title={SLOTS.find((s) => s.slot === tab)?.label ?? ""}
+                >
+                  <ul className="grid gap-1.5 sm:grid-cols-2">
+                    {itemsForSlot(tab).map((item) => {
+                      const locked = item.level > level;
+                      const on = equipped[tab] === item.id;
+                      return (
+                        <li key={`${tab}-${item.id}`}>
+                          <button
+                            onClick={() => equip(tab, item)}
+                            className={`flex w-full items-start gap-2.5 rounded-xl border-2 px-3 py-2 text-left transition ${
+                              on
+                                ? "border-grass-500 bg-grass-50"
+                                : locked
+                                  ? "cursor-not-allowed border-mud-200 bg-mud-50 opacity-60"
+                                  : "border-mud-200 bg-white/70 hover:border-mud-400 hover:bg-white"
+                            }`}
+                          >
+                            <span className="mt-0.5 text-sm">
+                              {locked ? "✕" : on ? "✓" : "·"}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-baseline justify-between gap-2">
+                                <span
+                                  className={`truncate text-sm font-bold ${
+                                    on ? "text-grass-700" : "text-mud-900"
+                                  }`}
+                                >
+                                  {item.name}
+                                </span>
+                                <span className="shrink-0 font-mono text-[10px] font-bold text-mud-400">
+                                  Lv {item.level}
+                                </span>
                               </span>
-                              <span className="shrink-0 font-mono text-[10px] font-bold text-mud-400">
-                                Lv {item.level}
+                              <span className="mt-0.5 block text-[11.5px] leading-snug text-mud-500">
+                                {item.blurb}
                               </span>
                             </span>
-                            <span className="mt-0.5 block text-[11.5px] leading-snug text-mud-500">
-                              {item.blurb}
-                            </span>
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </Group>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Group>
+
+                {isDyeSlot(tab) && (
+                  <DyeGroup
+                    slot={tab}
+                    equipped={equipped}
+                    onPick={(id) => dye(tab, id)}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -334,6 +355,51 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * The colours the equipped piece can wear. Which swatches appear follows the
+ * art, not the slot: a linen tunic is offered cloth dyes and a steel helm the
+ * metal finishes, because a palette swap can only move a sheet within the ramp
+ * family it was painted in. Empty slots have nothing to dye, and say so rather
+ * than showing a dead row.
+ */
+function DyeGroup({
+  slot,
+  equipped,
+  onPick,
+}: {
+  slot: DyeSlot;
+  equipped: Equipped;
+  onPick: (id: string) => void;
+}) {
+  const worn = findItem(slot, equipped[slot]);
+  const swatches = dyesFor(worn);
+  const current = resolveDye(worn, equipped.dyes?.[slot]);
+
+  return (
+    <Group title={worn?.dye?.kind === "metal" ? "Finish" : "Dye"}>
+      {swatches.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {swatches.map((d) => (
+            <Swatch
+              key={d.id}
+              hex={d.hex}
+              label={d.label}
+              on={current === d.id}
+              onClick={() => onPick(d.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11.5px] leading-snug text-mud-500">
+          {worn && worn.id !== "none"
+            ? `${worn.name} is painted in colours that can't be swapped.`
+            : "Nothing to dye — this slot is empty."}
+        </p>
+      )}
+    </Group>
   );
 }
 

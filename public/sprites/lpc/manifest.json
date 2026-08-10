@@ -50,13 +50,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/walk/brown.png",
-       "z": 35
+       "z": 35,
+       "dyeKind": "cloth",
+       "baseRamp": "brown"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/walk/brown.png",
-       "z": 35
+       "z": 35,
+       "dyeKind": "cloth",
+       "baseRamp": "brown"
       }
      ]
     }
@@ -67,13 +71,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/walk.png",
-       "z": 35
+       "z": 35,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/walk.png",
-       "z": 35
+       "z": 35,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -84,13 +92,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/armour/leather/male/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "cloth",
+       "baseRamp": "leather"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/armour/leather/female/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "cloth",
+       "baseRamp": "leather"
       }
      ]
     }
@@ -101,13 +113,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/armour/legion/male/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/armour/legion/female/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -118,13 +134,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/chainmail/male/walk.png",
-       "z": 50
+       "z": 50,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/chainmail/female/walk.png",
-       "z": 50
+       "z": 50,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -135,13 +155,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/armour/plate/female/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -152,13 +176,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/armour/plate/female/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -169,13 +197,17 @@
      "male": [
       {
        "src": "/sprites/lpc/torso/armour/plate/male/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/torso/armour/plate/female/walk.png",
-       "z": 60
+       "z": 60,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -391,13 +423,17 @@
      "male": [
       {
        "src": "/sprites/lpc/hat/cloth/bandana/adult/walk.png",
-       "z": 120
+       "z": 120,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/hat/cloth/bandana/adult/walk.png",
-       "z": 120
+       "z": 120,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -408,13 +444,17 @@
      "male": [
       {
        "src": "/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "cloth",
+       "baseRamp": "gray"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "cloth",
+       "baseRamp": "gray"
       }
      ]
     }
@@ -425,13 +465,17 @@
      "male": [
       {
        "src": "/sprites/lpc/hat/helmet/bascinet/adult/walk.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/hat/helmet/bascinet/adult/walk.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -442,13 +486,17 @@
      "male": [
       {
        "src": "/sprites/lpc/hat/helmet/greathelm/male/walk.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/hat/helmet/greathelm/female/walk.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -459,13 +507,17 @@
      "male": [
       {
        "src": "/sprites/lpc/hat/formal/crown/adult/walk/steel.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/hat/formal/crown/adult/walk/steel.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -476,13 +528,17 @@
      "male": [
       {
        "src": "/sprites/lpc/hat/helmet/horned/adult/walk.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/hat/helmet/horned/adult/walk.png",
-       "z": 130
+       "z": 130,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -495,21 +551,29 @@
      "male": [
       {
        "src": "/sprites/lpc/cape/tattered/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/tattered/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/cape/tattered/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/tattered/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -520,21 +584,29 @@
      "male": [
       {
        "src": "/sprites/lpc/cape/solid/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/solid/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/cape/solid/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/solid/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -545,21 +617,29 @@
      "male": [
       {
        "src": "/sprites/lpc/cape/solid/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/solid/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/cape/solid/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/solid/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -570,13 +650,17 @@
      "male": [
       {
        "src": "/sprites/lpc/cape/trim/walk.png",
-       "z": 90
+       "z": 90,
+       "dyeKind": "cloth",
+       "baseRamp": "brown"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/cape/trim/walk.png",
-       "z": 90
+       "z": 90,
+       "dyeKind": "cloth",
+       "baseRamp": "brown"
       }
      ]
     }
@@ -587,21 +671,29 @@
      "male": [
       {
        "src": "/sprites/lpc/cape/solid/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/solid/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/cape/solid/bg/walk.png",
-       "z": 5
+       "z": 5,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       },
       {
        "src": "/sprites/lpc/cape/solid/fg/walk.png",
-       "z": 85
+       "z": 85,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -725,13 +817,17 @@
      "male": [
       {
        "src": "/sprites/lpc/legs/pants/male/walk.png",
-       "z": 20
+       "z": 20,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/legs/pants/thin/walk.png",
-       "z": 20
+       "z": 20,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -742,13 +838,17 @@
      "male": [
       {
        "src": "/sprites/lpc/legs/armour/plate/male/walk.png",
-       "z": 20
+       "z": 20,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/legs/armour/plate/thin/walk.png",
-       "z": 20
+       "z": 20,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -761,13 +861,17 @@
      "male": [
       {
        "src": "/sprites/lpc/feet/boots/basic/male/walk.png",
-       "z": 25
+       "z": 25,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/feet/boots/basic/thin/walk.png",
-       "z": 25
+       "z": 25,
+       "dyeKind": "cloth",
+       "baseRamp": "white"
       }
      ]
     }
@@ -778,13 +882,17 @@
      "male": [
       {
        "src": "/sprites/lpc/feet/armour/plate/male/walk.png",
-       "z": 15
+       "z": 15,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ],
      "female": [
       {
        "src": "/sprites/lpc/feet/armour/plate/thin/walk.png",
-       "z": 15
+       "z": 15,
+       "dyeKind": "metal",
+       "baseRamp": "steel"
       }
      ]
     }
@@ -1683,6 +1791,106 @@
     "#2A3034",
     "#4A5057",
     "#6E7675"
+   ]
+  },
+  "metal": {
+   "ceramic": [
+    "#181009",
+    "#32251A",
+    "#594435",
+    "#7D604D",
+    "#BA9069",
+    "#FBE3B0"
+   ],
+   "brass": [
+    "#1A1213",
+    "#61482C",
+    "#836332",
+    "#AF8A35",
+    "#FDD082",
+    "#FDF5CC"
+   ],
+   "copper": [
+    "#691503",
+    "#7B2008",
+    "#973C23",
+    "#9D5427",
+    "#EC855C",
+    "#FFC95A"
+   ],
+   "bronze": [
+    "#4F2313",
+    "#6D4A00",
+    "#966600",
+    "#BF8200",
+    "#E7A820",
+    "#FBE3B0"
+   ],
+   "iron": [
+    "#000000",
+    "#1B192B",
+    "#29253A",
+    "#343043",
+    "#484152",
+    "#726B7E"
+   ],
+   "steel": [
+    "#1D131E",
+    "#4D4A5D",
+    "#726B7E",
+    "#867E7F",
+    "#C4B59F",
+    "#FFFFFF"
+   ],
+   "silver": [
+    "#1D131E",
+    "#31313E",
+    "#4A5057",
+    "#818B8B",
+    "#D6E1D3",
+    "#FFFFFF"
+   ],
+   "gold": [
+    "#2E2533",
+    "#6D4A00",
+    "#966600",
+    "#DC6F35",
+    "#FFC95A",
+    "#FFFF61"
+   ]
+  },
+  "wood": {
+   "maple": [
+    "#2b1c1d",
+    "#3e2613",
+    "#694733",
+    "#ae764b",
+    "#c39753",
+    "#d7bd76"
+   ],
+   "oak": [
+    "#2b1c1d",
+    "#51221e",
+    "#613025",
+    "#8f5030",
+    "#aa8550",
+    "#c39753"
+   ],
+   "walnut": [
+    "#2b1c1d",
+    "#43181c",
+    "#5b3026",
+    "#723e2a",
+    "#865e40",
+    "#926c42"
+   ],
+   "mahogany": [
+    "#1d131e",
+    "#43181c",
+    "#51221e",
+    "#682121",
+    "#803526",
+    "#8f4426"
    ]
   }
  }

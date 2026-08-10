@@ -1,4 +1,4 @@
-import type { Appearance, BodyType, Equipped, Slot } from "./types";
+import type { Appearance, BodyType, DyeSlot, Equipped, Slot } from "./types";
 
 /* ==========================================================================
    XP economy — these mirror the SQL functions in db/schema.sql.
@@ -123,6 +123,18 @@ export type Item = {
   name: string;
   level: number;
   blurb: string;
+  /**
+   * Which palette family this item's art may be recoloured within, and the dye
+   * it wears when its owner hasn't chosen one. Absent means the item cannot be
+   * dyed — an empty slot, or a sheet painted in several ramps at once.
+   *
+   * The family is not a style choice: it is which ramp the shipped pixels are
+   * actually drawn in, detected per sheet by scripts/fetch-lpc.py and recorded
+   * in the manifest. Steel plate is therefore offered metal finishes and a
+   * linen tunic cloth colours, because that is what a palette swap of each can
+   * honestly produce.
+   */
+  dye?: { kind: DyeKind; default?: string };
 };
 
 export const SLOTS: { slot: Slot; label: string }[] = [
@@ -135,14 +147,14 @@ export const SLOTS: { slot: Slot; label: string }[] = [
 
 export const ITEMS: Item[] = [
   // ---- torso -------------------------------------------------------------
-  { id: "rags", slot: "torso", name: "Rags", level: 1, blurb: "Barely cloth. Everyone starts here." },
-  { id: "tunic", slot: "torso", name: "Linen Tunic", level: 2, blurb: "Clean, if unremarkable." },
-  { id: "jerkin", slot: "torso", name: "Leather Jerkin", level: 4, blurb: "Boiled hide. Stops a knife, mostly." },
-  { id: "scale", slot: "torso", name: "Scale Mail", level: 6, blurb: "Overlapping plates, jingles when you walk." },
-  { id: "chain", slot: "torso", name: "Chainmail", level: 8, blurb: "Ten thousand rings, hand-riveted." },
-  { id: "plate", slot: "torso", name: "Knight's Plate", level: 11, blurb: "You clank now. It suits you." },
-  { id: "gilded", slot: "torso", name: "Gilded Plate", level: 15, blurb: "Gold-chased steel, fit for a court." },
-  { id: "dragonscale", slot: "torso", name: "Dragonscale", level: 19, blurb: "Still warm." },
+  { id: "rags", slot: "torso", name: "Rags", level: 1, blurb: "Barely cloth. Everyone starts here.", dye: { kind: "cloth", default: "brown" } },
+  { id: "tunic", slot: "torso", name: "Linen Tunic", level: 2, blurb: "Clean, if unremarkable.", dye: { kind: "cloth", default: "white" } },
+  { id: "jerkin", slot: "torso", name: "Leather Jerkin", level: 4, blurb: "Boiled hide. Stops a knife, mostly.", dye: { kind: "cloth", default: "leather" } },
+  { id: "scale", slot: "torso", name: "Scale Mail", level: 6, blurb: "Overlapping plates, jingles when you walk.", dye: { kind: "metal", default: "steel" } },
+  { id: "chain", slot: "torso", name: "Chainmail", level: 8, blurb: "Ten thousand rings, hand-riveted.", dye: { kind: "metal", default: "steel" } },
+  { id: "plate", slot: "torso", name: "Knight's Plate", level: 11, blurb: "You clank now. It suits you.", dye: { kind: "metal", default: "steel" } },
+  { id: "gilded", slot: "torso", name: "Gilded Plate", level: 15, blurb: "Gold-chased steel, fit for a court.", dye: { kind: "metal", default: "gold" } },
+  { id: "dragonscale", slot: "torso", name: "Dragonscale", level: 19, blurb: "Still warm.", dye: { kind: "metal", default: "copper" } },
 
   // ---- weapon ------------------------------------------------------------
   { id: "stick", slot: "weapon", name: "Pointy Stick", level: 1, blurb: "Technically a weapon." },
@@ -157,20 +169,20 @@ export const ITEMS: Item[] = [
 
   // ---- head --------------------------------------------------------------
   { id: "none", slot: "head", name: "Bare-headed", level: 1, blurb: "Wind in the hair." },
-  { id: "bandana", slot: "head", name: "Bandana", level: 3, blurb: "Keeps sweat out of your eyes." },
-  { id: "cap", slot: "head", name: "Leather Cap", level: 5, blurb: "Modest, practical." },
-  { id: "helm", slot: "head", name: "Iron Helm", level: 8, blurb: "Dented in all the right places." },
-  { id: "greathelm", slot: "head", name: "Great Helm", level: 12, blurb: "You see the world through a slit." },
-  { id: "crown", slot: "head", name: "Winged Crown", level: 16, blurb: "People stand up when you enter." },
-  { id: "dragoncrown", slot: "head", name: "Dragon Crown", level: 20, blurb: "Horns. Earned ones." },
+  { id: "bandana", slot: "head", name: "Bandana", level: 3, blurb: "Keeps sweat out of your eyes.", dye: { kind: "cloth", default: "red" } },
+  { id: "cap", slot: "head", name: "Leather Cap", level: 5, blurb: "Modest, practical.", dye: { kind: "cloth", default: "brown" } },
+  { id: "helm", slot: "head", name: "Iron Helm", level: 8, blurb: "Dented in all the right places.", dye: { kind: "metal", default: "steel" } },
+  { id: "greathelm", slot: "head", name: "Great Helm", level: 12, blurb: "You see the world through a slit.", dye: { kind: "metal", default: "steel" } },
+  { id: "crown", slot: "head", name: "Winged Crown", level: 16, blurb: "People stand up when you enter.", dye: { kind: "metal", default: "gold" } },
+  { id: "dragoncrown", slot: "head", name: "Dragon Crown", level: 20, blurb: "Horns. Earned ones.", dye: { kind: "metal", default: "bronze" } },
 
   // ---- cape --------------------------------------------------------------
   { id: "none", slot: "cape", name: "No Cloak", level: 1, blurb: "Nothing to catch the wind." },
-  { id: "tattered", slot: "cape", name: "Tattered Cloak", level: 4, blurb: "More hole than cloth." },
-  { id: "traveler", slot: "cape", name: "Traveller's Cloak", level: 6, blurb: "Waxed wool. Sheds rain." },
-  { id: "heraldic", slot: "cape", name: "Heraldic Cape", level: 10, blurb: "Your own colours at last." },
-  { id: "mantle", slot: "cape", name: "Royal Mantle", level: 14, blurb: "Ermine-trimmed, absurdly heavy." },
-  { id: "starcloak", slot: "cape", name: "Starcloak", level: 18, blurb: "It holds a small night sky." },
+  { id: "tattered", slot: "cape", name: "Tattered Cloak", level: 4, blurb: "More hole than cloth.", dye: { kind: "cloth", default: "gray" } },
+  { id: "traveler", slot: "cape", name: "Traveller's Cloak", level: 6, blurb: "Waxed wool. Sheds rain.", dye: { kind: "cloth", default: "brown" } },
+  { id: "heraldic", slot: "cape", name: "Heraldic Cape", level: 10, blurb: "Your own colours at last.", dye: { kind: "cloth", default: "red" } },
+  { id: "mantle", slot: "cape", name: "Royal Mantle", level: 14, blurb: "Ermine-trimmed, absurdly heavy.", dye: { kind: "cloth", default: "maroon" } },
+  { id: "starcloak", slot: "cape", name: "Starcloak", level: 18, blurb: "It holds a small night sky.", dye: { kind: "cloth", default: "navy" } },
 
   // ---- offhand -----------------------------------------------------------
   { id: "none", slot: "offhand", name: "Empty Hand", level: 1, blurb: "Free to gesture." },
@@ -196,6 +208,99 @@ export function isUnlocked(item: Item, xp: number): boolean {
 /** Items that became available on this exact level — used by the level-up card. */
 export function unlockedAtLevel(level: number): Item[] {
   return ITEMS.filter((i) => i.level === level);
+}
+
+/* ==========================================================================
+   Dyes — free, never level-gated. Earning the armour is the achievement;
+   choosing its colour is not.
+   ========================================================================== */
+
+/**
+ * The two palette families gear is painted in. LPC ships a ramp per colour,
+ * six stops dark-to-light, and recolouring means remapping those six exactly —
+ * so a dyed sprite keeps its shading instead of being tinted flat.
+ *
+ * Cloth and metal are kept apart because the ramps are built differently:
+ * metal ones carry a specular near-white that fabric ramps don't. Dyeing plate
+ * with a cloth ramp technically works and looks like painted tin.
+ */
+export type DyeKind = "cloth" | "metal";
+
+export type Dye = { id: string; label: string; hex: string };
+
+/**
+ * Ids are LPC ramp names — they index straight into the manifest palettes, so
+ * a swatch cannot drift from the colour it produces. `hex` is the ramp's
+ * second-lightest stop, which is the colour that dominates a lit surface;
+ * taking it from the art rather than picking it by eye is what keeps the
+ * swatch honest.
+ *
+ * Labels are ours. LPC's names describe pigments, not what a player sees, and
+ * the wardrobe already reads as a fantasy shop.
+ */
+export const DYES: Record<DyeKind, Dye[]> = {
+  cloth: [
+    { id: "brown",    label: "Umber",    hex: "#744B30" },
+    { id: "leather",  label: "Leather",  hex: "#75502D" },
+    { id: "tan",      label: "Sand",     hex: "#B7996A" },
+    { id: "yellow",   label: "Ochre",    hex: "#F3C03F" },
+    { id: "orange",   label: "Rust",     hex: "#EF7E19" },
+    { id: "red",      label: "Crimson",  hex: "#AB1E1E" },
+    { id: "maroon",   label: "Wine",     hex: "#832121" },
+    { id: "pink",     label: "Rose",     hex: "#C36072" },
+    { id: "lavender", label: "Lilac",    hex: "#A966DD" },
+    { id: "purple",   label: "Royal",    hex: "#621E78" },
+    { id: "navy",     label: "Midnight", hex: "#3C49AD" },
+    { id: "blue",     label: "Azure",    hex: "#466AC9" },
+    { id: "teal",     label: "Teal",     hex: "#0098B2" },
+    { id: "forest",   label: "Forest",   hex: "#134507" },
+    { id: "green",    label: "Moss",     hex: "#2F8136" },
+    { id: "white",    label: "Bone",     hex: "#E5E6C7" },
+    { id: "gray",     label: "Ash",      hex: "#797580" },
+    { id: "charcoal", label: "Charcoal", hex: "#4A5057" },
+  ],
+  metal: [
+    { id: "iron",    label: "Iron",   hex: "#484152" },
+    { id: "steel",   label: "Steel",  hex: "#C4B59F" },
+    { id: "silver",  label: "Silver", hex: "#D6E1D3" },
+    { id: "gold",    label: "Gold",   hex: "#FFC95A" },
+    { id: "brass",   label: "Brass",  hex: "#FDD082" },
+    { id: "bronze",  label: "Bronze", hex: "#E7A820" },
+    { id: "copper",  label: "Copper", hex: "#EC855C" },
+    { id: "ceramic", label: "Clay",   hex: "#BA9069" },
+  ],
+};
+
+/** Armour, headgear and cloaks. Ordered as the Armoury shows them. */
+export const DYE_SLOTS: DyeSlot[] = ["torso", "head", "cape"];
+
+export function isDyeSlot(slot: Slot): slot is DyeSlot {
+  return (DYE_SLOTS as Slot[]).includes(slot);
+}
+
+/** The swatches an item offers; empty when its art can't be recoloured. */
+export function dyesFor(item: Item | undefined): Dye[] {
+  return item?.dye ? DYES[item.dye.kind] : [];
+}
+
+/**
+ * The dye an item is actually drawn in: the owner's pick if that item can wear
+ * it, else the item's own default, else null for "as the art ships".
+ *
+ * A pick from the wrong family is not an error — it is what a slot holds after
+ * you dye a tunic crimson and then put plate on over it. The stored pick is
+ * kept rather than overwritten, so taking the plate off again brings the
+ * crimson tunic back.
+ */
+export function resolveDye(item: Item | undefined, chosen?: string | null): string | null {
+  if (!item?.dye) return null;
+  if (chosen && DYES[item.dye.kind].some((d) => d.id === chosen)) return chosen;
+  return item.dye.default ?? null;
+}
+
+/** As resolveDye, for a slot of a whole loadout. */
+export function dyeForSlot(equipped: Equipped, slot: DyeSlot): string | null {
+  return resolveDye(findItem(slot, equipped[slot]), equipped.dyes?.[slot]);
 }
 
 /* ==========================================================================
@@ -309,6 +414,7 @@ export const DEFAULT_EQUIPPED: Equipped = {
   head: "none",
   cape: "none",
   offhand: "none",
+  dyes: {},
 };
 
 /* ==========================================================================

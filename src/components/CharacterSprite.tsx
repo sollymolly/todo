@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import manifest from "../../public/sprites/lpc/manifest.json";
-import { DEFAULT_BODY, DEFAULT_EYES } from "@/lib/game";
-import type { Appearance, BodyType, Equipped } from "@/lib/types";
+import {
+  DEFAULT_BODY,
+  DEFAULT_EYES,
+  DYE_SLOTS,
+  dyeForSlot,
+  findItem,
+  type DyeKind,
+} from "@/lib/game";
+import type { Appearance, BodyType, DyeSlot, Equipped } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
    Draws the character by compositing LPC sprite layers onto a canvas.
@@ -25,7 +32,22 @@ const WALK_FRAMES = [1, 2, 3, 4, 5, 6, 7, 8];
 const CROP_TOP = 7;
 const VIEW_H = FRAME - CROP_TOP;
 
-type Layer = { src: string; z: number; baseRamp?: string };
+type Layer = {
+  src: string;
+  z: number;
+  baseRamp?: string;
+  /**
+   * Present on gear the fetch script found to be painted in a single cloth or
+   * metal ramp. That pair — the family and the ramp within it — is everything
+   * needed to dye the sheet: remap `palettes[dyeKind][baseRamp]` to the ramp
+   * the wearer picked.
+   */
+  dyeKind?: string;
+};
+
+/** A dye as the renderer needs it: a palette family plus a ramp within it. */
+type AppliedDye = { kind: DyeKind; id: string };
+
 /** Every item ships one layer list per body type — gear doesn't line up across them. */
 type SlotTable = Record<string, { name: string; bodies: Record<string, Layer[]> }>;
 
@@ -101,7 +123,7 @@ function hexToRgb(h: string): [number, number, number] {
 }
 
 /** Nearest available ramp name, so an unknown id still renders. */
-function ramp(kind: "body" | "hair", want: string, fallback: string): string[] {
+function ramp(kind: string, want: string, fallback: string): string[] {
   const table = PALETTES?.[kind] ?? {};
   return table[want] ?? table[fallback] ?? [];
 }
@@ -200,6 +222,7 @@ export default function CharacterSprite({
     equipped.head,
     equipped.cape,
     equipped.offhand,
+    DYE_SLOTS.map((s) => dyeForSlot(equipped, s) ?? "-").join(","),
     frame,
   ].join("|");
 
@@ -218,10 +241,18 @@ export default function CharacterSprite({
       // Build the draw list, sorted by the z-order LPC ships with.
       const jobs: { layer: Layer; recolor?: { from: string[]; to: string[] } }[] = [];
 
+      /** The dye on a slot, as a family plus a ramp within it. */
+      const dyeOf = (slot: DyeSlot): AppliedDye | null => {
+        const item = findItem(slot, equipped[slot]);
+        const id = dyeForSlot(equipped, slot);
+        return item?.dye && id ? { kind: item.dye.kind, id } : null;
+      };
+
       const push = (
         slot: string,
         id: string | undefined,
-        tint?: { kind: "body" | "hair"; to: string[]; fallback: string }
+        tint?: { kind: "body" | "hair"; to: string[]; fallback: string },
+        dye?: AppliedDye | null
       ) => {
         if (!id || id === "none") return;
         const item = SLOTS[slot]?.[id];
@@ -234,6 +265,14 @@ export default function CharacterSprite({
             // would be remapping colours that aren't there.
             const from = ramp(tint.kind, layer.baseRamp ?? tint.fallback, tint.fallback);
             if (from.length) recolor = { from, to: tint.to };
+          } else if (dye && layer.dyeKind && layer.baseRamp) {
+            // Same swap, one family over: gear declares which ramp it ships in
+            // and the dye names the ramp to land on. A layer the fetch script
+            // couldn't pin to a single ramp carries no dyeKind and is left
+            // alone, which is why buckles and trim survive a dye job.
+            const from = PALETTES[layer.dyeKind]?.[layer.baseRamp] ?? [];
+            const to = PALETTES[dye.kind]?.[dye.id] ?? [];
+            if (from.length && to.length) recolor = { from, to };
           }
           jobs.push({ layer, recolor });
         }
@@ -243,6 +282,8 @@ export default function CharacterSprite({
       const heavy = new Set(["chain", "plate", "gilded", "dragonscale"]);
       const armoured = heavy.has(equipped.torso);
 
+      const torsoDye = dyeOf("torso");
+
       const skin = { kind: "body" as const, to: skinTo, fallback: BASE_BODY_RAMP };
       push("base", "body", skin);
       push("base", "head", skin);
@@ -250,16 +291,20 @@ export default function CharacterSprite({
       // each colour is its own sheet, so a palette swap would fight the art.
       // Values saved before eyes had art aren't colours, hence the fallback.
       push("eyes", SLOTS.eyes?.[appearance.eyes] ? appearance.eyes : DEFAULT_EYES);
-      push("cape", equipped.cape);
-      push("legs", armoured ? "armour" : "cloth");
-      push("feet", armoured ? "armour" : "boots");
-      push("torso", equipped.torso);
+      push("cape", equipped.cape, undefined, dyeOf("cape"));
+      // The greaves and sabatons are part of the suit, not a separate garment,
+      // so they take the armour's dye — gilded plate would look odd above bare
+      // steel shins. Cloth legs keep their own colour: the torso dye is the
+      // shirt's, and dyeing the trousers to match makes a jumpsuit.
+      push("legs", armoured ? "armour" : "cloth", undefined, armoured ? torsoDye : null);
+      push("feet", armoured ? "armour" : "boots", undefined, armoured ? torsoDye : null);
+      push("torso", equipped.torso, undefined, torsoDye);
       push("hair", appearance.hair, {
         kind: "hair",
         to: hairTo,
         fallback: BASE_HAIR_RAMP,
       });
-      push("head", equipped.head);
+      push("head", equipped.head, undefined, dyeOf("head"));
       push("offhand", equipped.offhand);
       push("weapon", equipped.weapon);
 

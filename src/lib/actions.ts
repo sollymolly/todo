@@ -8,16 +8,18 @@ import {
   BODY_TYPES,
   DEFAULT_BODY,
   DEFAULT_EYES,
+  DYE_SLOTS,
   EYE_COLORS,
   FINISHED_RETENTION_DAYS,
   HAIR_COLORS,
   HAIR_STYLES,
   SKINS,
   SLOTS,
+  dyesFor,
   findItem,
 } from "@/lib/game";
 import { normalizeTodo } from "@/lib/types";
-import type { Appearance, Equipped, XpResult } from "@/lib/types";
+import type { Appearance, DyeSlot, Equipped, XpResult } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
    Every write goes through here, and every statement is scoped by user_id —
@@ -333,6 +335,20 @@ export async function saveEquipped(equipped: Equipped) {
     const item = findItem(slot, equipped[slot]);
     if (item && item.level <= level) clean[slot] = item.id;
   }
+
+  // Dyes have nothing to gate them on — the armour was the achievement — but
+  // one still has to name a colour the item being saved can actually wear, so
+  // a hand-rolled request can't store a ramp that has no art behind it.
+  // Unrecognised picks leave the slot's stored dye alone rather than clearing
+  // it: swapping a dyed tunic for plate and back should bring the colour back.
+  const dyes: Partial<Record<DyeSlot, string>> = { ...clean.dyes };
+  for (const slot of DYE_SLOTS) {
+    const want = equipped.dyes?.[slot];
+    if (want && dyesFor(findItem(slot, clean[slot])).some((d) => d.id === want)) {
+      dyes[slot] = want;
+    }
+  }
+  clean.dyes = dyes;
 
   await sql`
     update profiles set equipped = ${JSON.stringify(clean)}::jsonb

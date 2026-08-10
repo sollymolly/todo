@@ -2,6 +2,13 @@ export type QuestStatus = "open" | "done" | "failed";
 
 export type Slot = "torso" | "weapon" | "head" | "cape" | "offhand";
 
+/**
+ * Slots whose art can be recoloured. Weapons and shields are left out on
+ * purpose: their sheets are painted in several ramps at once (blade, grip,
+ * boss), so a palette swap tints the leather along with the steel.
+ */
+export type DyeSlot = Extract<Slot, "torso" | "head" | "cape">;
+
 /** Which LPC body the sprite is drawn on. Gear is fetched per body. */
 export type BodyType = "male" | "female";
 
@@ -13,7 +20,15 @@ export type Appearance = {
   eyes: string;
 };
 
-export type Equipped = Record<Slot, string>;
+export type Equipped = Record<Slot, string> & {
+  /**
+   * Chosen colour per dyeable slot, as an LPC ramp name. Optional throughout:
+   * profiles written before dyes existed have none, and a slot with no entry
+   * falls back to the item's own default. Kept beside the gear rather than in
+   * `appearance` because a dye belongs to what you're wearing, not to you.
+   */
+  dyes?: Partial<Record<DyeSlot, string>>;
+};
 
 export type Profile = {
   id: string;

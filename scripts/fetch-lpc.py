@@ -151,6 +151,12 @@ HAIR = {
     "topknot": "hair/braids/hair_topknot_long",
 }
 
+# Slots the Armoury lets you dye, plus the palette families a dye may come
+# from. Legs and feet are in here because heavy armour drags matching greaves
+# and sabatons along with it — they take the torso's dye so the suit matches.
+DYEABLE_SLOTS = {"torso", "head", "cape", "legs", "feet"}
+DYE_KINDS = ("cloth", "metal", "wood")
+
 # Preferred colour variant per slot, first match wins.
 PREFER = {
     "torso": ["brown", "tan", "walnut", "leather", "steel", "silver", "gray", "grey"],
@@ -330,6 +336,33 @@ def detect_ramp(blob, palettes):
     return best if best_hits >= 3 else None
 
 
+def detect_dye(blob, palettes):
+    """
+    Same idea as detect_ramp, but across the three *gear* palettes at once, so
+    a sheet reports both which ramp it is drawn in and which family that ramp
+    belongs to. The family is what decides the swatches the Armoury offers:
+    steel plate gets metal finishes, a linen tunic gets cloth colours.
+
+    Every ULPC ramp is six stops dark-to-light, so a sheet drawn in one is
+    recoloured by remapping those six exactly — the same swap the upstream
+    generator does, which is why the shading survives it.
+
+    The threshold is higher than detect_ramp's three: mail and plate share
+    three greys with the `cloth/white` ramp, so a looser test would call plate
+    a fabric and offer it pink.
+    """
+    cols = {c.upper() for c in png_colors(blob)}
+    if not cols:
+        return None
+    best = None
+    for kind in DYE_KINDS:
+        for name, ramp in palettes.get(kind, {}).items():
+            hits = len(cols & {c.upper() for c in ramp})
+            if hits >= 4 and (best is None or hits > best[0]):
+                best = (hits, kind, name)
+    return (best[1], best[2]) if best else None
+
+
 def credits_of(defn):
     rows = []
     for c in defn.get("credits", []):
@@ -367,6 +400,8 @@ def main():
         ("body", "palette_definitions/body/body_ulpc.json"),
         ("hair", "palette_definitions/hair/hair_ulpc.json"),
         ("cloth", "palette_definitions/cloth/cloth_ulpc.json"),
+        ("metal", "palette_definitions/metal/metal_ulpc.json"),
+        ("wood", "palette_definitions/wood/wood_ulpc.json"),
     ]:
         raw = get(f"{RAW}/{path}")
         if raw:
@@ -412,6 +447,10 @@ def main():
                         )
                         if ramp_name:
                             entry["baseRamp"] = ramp_name
+                    elif slot in DYEABLE_SLOTS:
+                        found = detect_dye(blob, manifest.get("palettes", {}))
+                        if found:
+                            entry["dyeKind"], entry["baseRamp"] = found
                     entries.append(entry)
 
                 bodies[body] = sorted(entries, key=lambda e: e["z"])

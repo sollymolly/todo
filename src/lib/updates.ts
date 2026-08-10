@@ -50,6 +50,8 @@ export const UPDATES: Update[] = [
       "A missed quest now stays in its category box instead of vanishing into the chronicle. Late is not the same as gone — finish it and you get the late award, and the penalty you already paid is refunded.",
       "Fixed a real XP bug: completing a late quest and then un-completing it charged the missed-deadline penalty a second time, and again on every repeat. A deadline now costs XP once and a completion pays once, however often you toggle it.",
       "Choose your character's build — masculine or feminine — in the Armoury. Every piece of armour and clothing was redrawn for both.",
+      "Dye your armour, headgear and cloak. Each tab in the Armoury now has a colour row: cloth takes seventeen dyes, steel takes eight finishes from iron to gold, and heavy armour dyes its greaves and boots to match. Dyes cost nothing and are not level-gated — earning the piece was the achievement.",
+      "Three cloaks that were quietly the same picture — the traveller's, the heraldic and the starcloak — now arrive in their own colours, as does gilded plate, which is finally gold.",
       "Eye colour replaces the old eye 'styles', which had no artwork behind them and never changed anything.",
       "Quests now sort by deadline, soonest first, with undated ones at the bottom. The deadline chip is red for today and tomorrow, amber for two to four days, green beyond that.",
       "Add and remove categories straight from the board, and change your password from the new Account page without losing a single message.",

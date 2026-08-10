@@ -31,12 +31,16 @@ create table if not exists profiles (
                    "hairColor": "chestnut",
                    "eyes": "blue"
                  }'::jsonb,
+  -- Gear ids, plus the chosen dye per dyeable slot. An absent or unrecognised
+  -- dye falls back to the item's own default, so `dyes` may be empty and rows
+  -- written before dyes existed need no backfill. See migration 016.
   equipped      jsonb not null default '{
                    "torso": "rags",
                    "weapon": "stick",
                    "head": "none",
                    "cape": "none",
-                   "offhand": "none"
+                   "offhand": "none",
+                   "dyes": {}
                  }'::jsonb,
   -- Week key (Monday, YYYY-MM-DD, UTC) of the last changelog entry shown.
   -- Text, not date: a date column comes back through the session timezone and
