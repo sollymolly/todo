@@ -30,6 +30,32 @@ function bump() {
   revalidatePath("/character");
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolves a category id, or null if it isn't one of the caller's.
+ *
+ * Scoping the *quest* by user_id was never enough on its own: `category_id`
+ * was written straight through from the client, so anyone could file their own
+ * quest under a stranger's category id. Nothing of theirs became readable, but
+ * the friends-list open-counts tally by category_id alone, so it let one
+ * account inflate the numbers other people see on someone else's profile.
+ *
+ * The regex guard matters too — a non-UUID string would reach `::uuid` and
+ * come back as a Postgres cast error, which is a needless error-message oracle.
+ */
+async function ownCategory(
+  userId: string,
+  categoryId?: string | null
+): Promise<string | null> {
+  if (!categoryId || !UUID.test(categoryId)) return null;
+  const rows = (await sql`
+    select id from categories
+     where id = ${categoryId}::uuid and user_id = ${userId}::uuid
+  `) as { id: string }[];
+  return rows[0]?.id ?? null;
+}
+
 /* ========================================================================== */
 /* Quests                                                                     */
 /* ========================================================================== */
@@ -46,6 +72,7 @@ export async function addTodo(input: {
   if (!title) throw new Error("A quest needs a name");
 
   const notes = input.notes?.trim() ? input.notes.trim().slice(0, 2000) : null;
+  const categoryId = await ownCategory(userId, input.categoryId);
 
   // Returns the created row so the client can show it immediately.
   const rows = (await sql`
@@ -55,7 +82,7 @@ export async function addTodo(input: {
       ${title.slice(0, 200)},
       ${notes},
       ${input.dueDate || null}::timestamptz,
-      ${input.categoryId || null}::uuid
+      ${categoryId}::uuid
     )
     returning *
   `) as Record<string, unknown>[];
@@ -79,13 +106,14 @@ export async function updateTodo(
   if (!title) throw new Error("A quest needs a name");
 
   const notes = next.notes?.trim() ? next.notes.trim().slice(0, 2000) : null;
+  const categoryId = await ownCategory(userId, next.categoryId);
 
   await sql`
     update todos set
       title       = ${title.slice(0, 200)},
       notes       = ${notes},
       due_date    = ${next.dueDate || null}::timestamptz,
-      category_id = ${next.categoryId || null}::uuid
+      category_id = ${categoryId}::uuid
     where id = ${id}::uuid and user_id = ${userId}::uuid
   `;
 
@@ -131,9 +159,10 @@ export async function deleteTodo(id: string) {
  */
 export async function moveTodo(id: string, categoryId: string | null) {
   const userId = await requireUserId();
+  const target = await ownCategory(userId, categoryId);
 
   await sql`
-    update todos set category_id = ${categoryId || null}::uuid
+    update todos set category_id = ${target}::uuid
     where id = ${id}::uuid and user_id = ${userId}::uuid
   `;
 

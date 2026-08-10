@@ -274,6 +274,83 @@ that trade, it's a `session_version` column on `users` plus a check in
 
 ---
 
+## Security
+
+The threat model worth stating plainly: **an attacker who can run JavaScript on
+this origin can read every message on the account.** The unwrapped private key
+lives in `sessionStorage` so navigation doesn't re-prompt for a password, so no
+amount of ECDH survives an XSS. That is why the Content-Security-Policy in
+`src/proxy.ts` is load-bearing rather than decorative — it is nonce-based, and
+a script without the per-request nonce simply never executes.
+
+What is in place:
+
+- **Nonce CSP** with `strict-dynamic`, plus `frame-ancestors 'none'`,
+  `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` and
+  `connect-src 'self'` — the last of which is what stops injected code posting
+  your messages somewhere else. `'unsafe-eval'` is added in development only.
+- **Rate limiting** (`src/lib/rate-limit.ts`) in front of sign-in, sign-up and
+  password change. Verifying a password costs ~16 MB and ~100 ms of scrypt, so
+  an unbounded endpoint is a memory-exhaustion lever as much as a password
+  oracle. The check runs *before* the hash. It fails open, so a database
+  problem can't lock everyone out.
+- **The wrapped private key is never released before authentication.** It now
+  comes back from `signIn` only after the secret verifies.
+- **Sessions** pin the JWT algorithm, issuer and audience, and refuse to sign
+  with a `SESSION_SECRET` shorter than 32 characters.
+- **Sender binding.** Message ciphertext covers `sender -> recipient` as AEAD
+  additional data, so a tampered `sender_id` no longer decrypts.
+- **Safety numbers.** Each thread shows a code derived from both public keys.
+  Compare it out loud: it is the only way to detect a server that hands you the
+  wrong key, which is the one attack E2EE cannot catch by itself.
+- **Errors are generic.** Postgres names tables, columns and constraints in its
+  messages; those now go to the logs, not the client.
+
+### Agreeing to the privacy policy
+
+Sign-up requires ticking a box that starts unchecked, and the submit button
+stays disabled until it is — consent has to be an affirmative act, not a
+pre-ticked default someone scrolls past. The consequential points are printed
+on the form itself rather than hidden behind the link.
+
+Existing accounts are caught by a gate in `src/proxy.ts`. The accepted version
+rides in the signed session cookie as a `pv` claim, so the check costs **no
+database read on any request** and can't be edited around. Anything below the
+current version is redirected to `/consent`; `/privacy` deliberately stays
+public so the policy is readable before agreeing, and before signing in at all.
+
+`PRIVACY_VERSION` in [`src/lib/policy.ts`](src/lib/policy.ts) is the switch.
+Bump it and everyone is asked again, on every device, on their next request.
+Bump it for changes to what is collected, who can see it, or who it is shared
+with — not for typos. Re-prompting people for nothing is how you train them to
+click through without reading.
+
+Two details that make it a record rather than a checkbox:
+
+- **The client sends the version it displayed**, and the server rejects a
+  mismatch. A tab left open across a policy change can't have someone recorded
+  as agreeing to text they were never shown.
+- **`policy_acceptances` is append-only**, one row per user per version.
+  Re-consenting to v2 leaves the v1 row intact, so the history stays readable.
+  It records who, which version, and when — and deliberately *not* IP address
+  or user agent, which would mean collecting a new category of personal data,
+  indefinitely, to prove agreement to a policy about collecting less.
+
+### What is still true
+
+- Sessions are stateless, so changing a password does not sign out other
+  devices, and a stolen cookie stays valid until it expires.
+- Quests, categories and display names are stored in plain text. Only messages
+  are encrypted.
+- Messages sent before sender binding existed are unforgeable but not
+  sender-pinned; that shrinks to nothing as threads age.
+- There is no account-deletion flow in the app yet.
+- Declining consent signs you out; it does not delete the account.
+
+See [`/privacy`](src/app/privacy/page.tsx) for the user-facing version.
+
+---
+
 ## Layout
 
 ```

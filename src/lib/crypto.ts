@@ -284,15 +284,37 @@ async function conversationKey(
 
 export type Sealed = { iv: string; body: string };
 
+/** Who wrote a message and who it was for. Bound into the ciphertext. */
+export type MessageContext = { from: string; to: string };
+
+/**
+ * Additional authenticated data: not encrypted, but covered by the GCM tag, so
+ * changing it makes decryption fail outright.
+ *
+ * Both people in a conversation derive the *same* symmetric key, so the
+ * ciphertext alone says nothing about which of them wrote it — that came
+ * entirely from the `sender_id` column, which the server controls. Anyone able
+ * to write to the database could therefore swap the sender of a message and
+ * make it look like your friend said something you said. Binding the pair here
+ * means such a row no longer decrypts at all.
+ */
+function senderBinding(ctx: MessageContext): Uint8Array<ArrayBuffer> {
+  const bytes = enc.encode(`questline-dm|${ctx.from}>${ctx.to}`);
+  const out = new Uint8Array(new ArrayBuffer(bytes.length));
+  out.set(bytes);
+  return out;
+}
+
 export async function sealMessage(
   myPrivateKey: CryptoKey,
   theirPublicKeyB64: string,
-  plaintext: string
+  plaintext: string,
+  ctx: MessageContext
 ): Promise<Sealed> {
   const key = await conversationKey(myPrivateKey, theirPublicKeyB64);
   const iv = randomBytes(12);
   const body = await subtle().encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv, additionalData: senderBinding(ctx) },
     key,
     enc.encode(plaintext)
   );
@@ -302,13 +324,57 @@ export async function sealMessage(
 export async function openMessage(
   myPrivateKey: CryptoKey,
   theirPublicKeyB64: string,
-  sealed: Sealed
+  sealed: Sealed,
+  ctx: MessageContext
 ): Promise<string> {
   const key = await conversationKey(myPrivateKey, theirPublicKeyB64);
-  const plain = await subtle().decrypt(
-    { name: "AES-GCM", iv: fromB64(sealed.iv) },
-    key,
-    fromB64(sealed.body)
+  const iv = fromB64(sealed.iv);
+  const body = fromB64(sealed.body);
+
+  try {
+    const plain = await subtle().decrypt(
+      { name: "AES-GCM", iv, additionalData: senderBinding(ctx) },
+      key,
+      body
+    );
+    return new TextDecoder().decode(plain);
+  } catch {
+    // Messages written before sender binding existed carry no additional data.
+    // They still can't be forged — only the two keyholders could have produced
+    // a ciphertext that authenticates — but their sender is not pinned. The
+    // exposure shrinks to nothing as old threads age out.
+    const plain = await subtle().decrypt({ name: "AES-GCM", iv }, key, body);
+    return new TextDecoder().decode(plain);
+  }
+}
+
+/* ========================================================================== */
+/* Key verification                                                           */
+/* ========================================================================== */
+
+/**
+ * A short digest of both public keys in a conversation, identical on both
+ * sides. Read it aloud to your friend; if the two match, no key was swapped.
+ *
+ * This closes the one attack end-to-end encryption cannot close on its own.
+ * Friends' public keys are handed out *by this server*, so a malicious or
+ * compromised server can serve you its own key, sit in the middle, and read
+ * everything — and nothing in the ciphertext would look wrong. Comparing the
+ * number over a channel the server doesn't control is the only detection.
+ */
+export async function safetyNumber(
+  publicKeyA: string,
+  publicKeyB: string
+): Promise<string> {
+  // Sorted, so both ends hash the same string regardless of who asks.
+  const [first, second] = [publicKeyA, publicKeyB].sort();
+  const digest = await subtle().digest(
+    "SHA-256",
+    enc.encode(`questline-fingerprint|${first}|${second}`)
   );
-  return new TextDecoder().decode(plain);
+  const bytes = new Uint8Array(digest).slice(0, 10);
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
+  return hex.match(/.{1,4}/g)!.join(" ");
 }

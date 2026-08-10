@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
+import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import type { Appearance, Equipped } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
@@ -65,6 +66,11 @@ export async function findPerson(
   const me = await requireUserId();
   const q = query.trim().toLowerCase();
   if (!q) return { ok: false, error: "Enter a username or email." };
+  if (q.length > 254) return { ok: false, error: "No adventurer by that name." };
+
+  // Exact-match only, so this can't enumerate — but it still confirms whether
+  // a given address is registered, one guess at a time. Capped accordingly.
+  if (await rateLimited("findPerson", me)) return { ok: false, error: TOO_MANY };
 
   try {
     const rows = (await sql`
@@ -325,6 +331,8 @@ export type SealedMessage = {
  */
 const MAX_BODY = 9000;
 
+const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
 /** How many messages one fetch will return. */
 const PAGE = 300;
 
@@ -337,6 +345,14 @@ export async function sendMessage(
 
   if (!iv || !body) return { ok: false, error: "Nothing to send." };
   if (body.length > MAX_BODY) return { ok: false, error: "That message is too long." };
+  // The server can't read these, so it validates what it can: that they are
+  // base64 of a sane size. Without this, `body` is an unbounded blob store.
+  if (iv.length > 32 || !B64.test(iv) || !B64.test(body))
+    return { ok: false, error: "That message could not be encrypted." };
+
+  // One friend flooding the thread is a storage problem as much as a nuisance.
+  if (await rateLimited("sendMessage", me))
+    return { ok: false, error: TOO_MANY };
 
   const ok = (await sql`select are_friends(${me}::uuid, ${friendId}::uuid) as ok`) as {
     ok: boolean;
@@ -445,9 +461,11 @@ export async function unreadTotal(): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
+/** Never hand a raw driver error to the client — it names tables and columns. */
 function msg(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   if (/relation .* does not exist|column .* does not exist|function .* does not exist/i.test(m))
-    return "Run db/migrations/002-social.sql in the Neon SQL Editor first.";
-  return m;
+    return "Run the migrations in db/migrations first.";
+  console.error("[social]", e);
+  return "Something went wrong. Please try again.";
 }

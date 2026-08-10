@@ -341,8 +341,10 @@ function AddCategoryTile({
   }
 
   return (
+    /* A parchment fill of its own: the real boxes get theirs from `panel`, and
+       without one this tile was a faint outline floating on the scenery. */
     <section
-      className="flex flex-col rounded-2xl border-2 border-dashed border-mud-300 transition hover:border-grass-400"
+      className="flex flex-col rounded-2xl border-2 border-dashed border-mud-400 bg-mud-50/70 shadow-[0_10px_22px_-14px_rgba(42,30,19,0.45)] backdrop-blur-[2px] transition hover:border-grass-500 hover:bg-grass-50/80"
       style={{ minHeight: LIST_H + HEADER_H }}
     >
       {adding ? (
@@ -396,9 +398,14 @@ function AddCategoryTile({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex h-full w-full flex-1 items-center justify-center rounded-2xl px-3 text-sm font-semibold text-mud-400 transition hover:bg-grass-50 hover:text-grass-700"
+          className="group/add flex h-full w-full flex-1 flex-col items-center justify-center gap-2 rounded-2xl px-3 text-mud-600 transition hover:text-grass-700"
         >
-          + Add a category
+          <span className="grid size-10 place-items-center rounded-full border-2 border-mud-400 text-2xl leading-none transition group-hover/add:border-grass-500 group-hover/add:bg-white/70">
+            +
+          </span>
+          <span className="font-display text-sm font-bold tracking-wide">
+            Add a category
+          </span>
         </button>
       )}
     </section>

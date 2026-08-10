@@ -19,7 +19,12 @@ import {
   type PendingRequest,
   type SealedMessage,
 } from "@/lib/social-actions";
-import { loadPrivateKey, openMessage, sealMessage } from "@/lib/crypto";
+import {
+  loadPrivateKey,
+  openMessage,
+  safetyNumber,
+  sealMessage,
+} from "@/lib/crypto";
 import { formatStamp } from "@/lib/date";
 
 type Shown = { id: string; mine: boolean; text: string; at: string };
@@ -44,13 +49,14 @@ export default function Friends({
   friends,
   requests,
   meId,
-  hasKeys,
+  myPublicKey,
 }: {
   friends: FriendSummary[];
   requests: PendingRequest[];
   meId: string;
-  hasKeys: boolean;
+  myPublicKey: string | null;
 }) {
+  const hasKeys = !!myPublicKey;
   const router = useRouter();
   // The id rather than the row: a refresh replaces the objects in `friends`,
   // and an open thread should follow the new one (its unread count resets).
@@ -273,6 +279,7 @@ export default function Friends({
               key={open.user_id}
               friend={open}
               meId={meId}
+              myPublicKey={myPublicKey}
               onClose={() => {
                 setOpenId(null);
                 refresh();
@@ -387,10 +394,12 @@ function FriendCard({
 function Thread({
   friend,
   meId,
+  myPublicKey,
   onClose,
 }: {
   friend: FriendSummary;
   meId: string;
+  myPublicKey: string | null;
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<Shown[]>([]);
@@ -402,6 +411,8 @@ function Thread({
   );
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
+  const [showFingerprint, setShowFingerprint] = useState(false);
   const keyRef = useRef<CryptoKey | null>(null);
   // Newest message the server has handed us. The poll asks for what follows it.
   const cursor = useRef<string | null>(null);
@@ -416,7 +427,15 @@ function Thread({
       for (const m of sealed) {
         let text: string;
         try {
-          text = await openMessage(priv, pub, { iv: m.iv, body: m.body });
+          text = await openMessage(
+            priv,
+            pub,
+            { iv: m.iv, body: m.body },
+            // Who the row claims wrote it. A tampered sender fails the tag.
+            m.sender_id === meId
+              ? { from: meId, to: friend.user_id }
+              : { from: friend.user_id, to: meId }
+          );
         } catch {
           text = "Could not decrypt this message.";
         }
@@ -429,7 +448,7 @@ function Thread({
       }
       return out;
     },
-    [pub, meId]
+    [pub, meId, friend.user_id]
   );
 
   useEffect(() => {
@@ -496,6 +515,17 @@ function Thread({
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
+  useEffect(() => {
+    if (!pub || !myPublicKey) return;
+    let alive = true;
+    void safetyNumber(myPublicKey, pub).then((n) => {
+      if (alive) setFingerprint(n);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [pub, myPublicKey]);
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
@@ -505,7 +535,10 @@ function Thread({
     setSending(true);
     setSendError(null);
     try {
-      const sealed = await sealMessage(priv, pub, text);
+      const sealed = await sealMessage(priv, pub, text, {
+        from: meId,
+        to: friend.user_id,
+      });
       const res = await sendMessage(friend.user_id, sealed.iv, sealed.body);
       if (!res.ok) return setSendError(res.error);
       // Not advancing the cursor: a message from them may have landed since the
@@ -549,6 +582,17 @@ function Thread({
             </p>
             <p className="text-[11px] text-mud-500">
               End-to-end encrypted · @{friend.username}
+              {fingerprint && (
+                <>
+                  {" · "}
+                  <button
+                    onClick={() => setShowFingerprint((v) => !v)}
+                    className="underline underline-offset-2 transition hover:text-grass-700"
+                  >
+                    {showFingerprint ? "hide" : "verify"}
+                  </button>
+                </>
+              )}
             </p>
           </div>
           <button
@@ -558,6 +602,21 @@ function Thread({
             ✕
           </button>
         </header>
+
+        {showFingerprint && fingerprint && (
+          <div className="border-b border-mud-200 bg-mud-50 px-4 py-3">
+            <p className="font-mono text-sm font-bold tracking-widest text-mud-900">
+              {fingerprint}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-mud-500">
+              Read this aloud to {friend.display_name}. If their screen shows
+              the same code, no one is in the middle. It only changes if one of
+              you resets your keys — or if this server hands out a key that
+              isn&apos;t theirs, which is the one attack the encryption cannot
+              catch by itself.
+            </p>
+          </div>
+        )}
 
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
           {state === "loading" && (

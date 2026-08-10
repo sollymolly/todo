@@ -24,7 +24,7 @@ export default async function FriendsPage() {
         friends={data.friends}
         requests={data.requests}
         meId={userId}
-        hasKeys={!!data.keys.publicKey}
+        myPublicKey={data.keys.publicKey}
       />
     );
   }

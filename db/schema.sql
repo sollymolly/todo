@@ -77,6 +77,34 @@ create index if not exists todos_user_idx on todos(user_id, status, due_date);
 create index if not exists todos_position_idx on todos(user_id, position);
 
 -- ---------------------------------------------------------------------------
+-- policy_acceptances: append-only record of agreement to the privacy policy.
+-- Answers "who agreed, to which version, when"; the text of each version is
+-- in git. Deliberately does not record IP or user agent — see migration 006.
+-- ---------------------------------------------------------------------------
+create table if not exists policy_acceptances (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references users(id) on delete cascade,
+  version      integer not null,
+  accepted_at  timestamptz not null default now()
+);
+create index if not exists policy_acceptances_user_idx
+  on policy_acceptances(user_id, accepted_at desc);
+create unique index if not exists policy_acceptances_once
+  on policy_acceptances(user_id, version);
+
+-- ---------------------------------------------------------------------------
+-- rate_limits: fixed-window counters guarding the expensive auth paths.
+-- Verifying a password costs ~16 MB and ~100 ms of scrypt, so an unbounded
+-- sign-in endpoint is both a password oracle and a memory-exhaustion lever.
+-- ---------------------------------------------------------------------------
+create table if not exists rate_limits (
+  bucket        text primary key,
+  window_start  timestamptz not null default now(),
+  hits          integer not null default 0
+);
+create index if not exists rate_limits_window_idx on rate_limits(window_start);
+
+-- ---------------------------------------------------------------------------
 -- xp_events: append-only ledger so the character's history is auditable
 -- ---------------------------------------------------------------------------
 create table if not exists xp_events (

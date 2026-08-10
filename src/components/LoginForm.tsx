@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import CharacterSprite from "@/components/CharacterSprite";
-import { probeAccount, signIn, signUp, upgradeAccount } from "@/lib/auth-actions";
+import { signIn, signUp } from "@/lib/auth-actions";
 import {
   createKeyBundle,
   deriveAuthSecret,
@@ -11,6 +12,11 @@ import {
   unwrapPrivateKey,
 } from "@/lib/crypto";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
+import {
+  PRIVACY_EFFECTIVE,
+  PRIVACY_HIGHLIGHTS,
+  PRIVACY_VERSION,
+} from "@/lib/policy";
 
 /* --------------------------------------------------------------------------
    The password never leaves this component. It becomes two derived values in
@@ -18,7 +24,7 @@ import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
    the key that unwraps the private key used for encrypted messages.
    -------------------------------------------------------------------------- */
 
-type Mode = "signin" | "signup" | "upgrade";
+type Mode = "signin" | "signup";
 
 export default function LoginForm({ missingEnv }: { missingEnv: string[] }) {
   return (
@@ -31,7 +37,16 @@ export default function LoginForm({ missingEnv }: { missingEnv: string[] }) {
 function Inner({ missingEnv }: { missingEnv: string[] }) {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/";
+  // `next` is attacker-controllable: /login?next=https://evil.example would
+  // otherwise send someone straight off-site the instant they sign in, from a
+  // page they just typed their password into. Only same-origin paths are
+  // honoured — and "//host" is rejected too, since the browser reads that as a
+  // protocol-relative URL to another origin.
+  const raw = params.get("next") || "/";
+  const next =
+    raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\")
+      ? raw
+      : "/";
 
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -41,6 +56,7 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
 
   const configured = missingEnv.length === 0;
 
@@ -49,6 +65,11 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
     setError(null);
     setNote(null);
     setBusy(true);
+
+    if (mode === "signup" && !agreed) {
+      setBusy(false);
+      return setError("Please read and agree to the privacy policy first.");
+    }
 
     try {
       const authSecret = await deriveAuthSecret(email, password);
@@ -62,44 +83,24 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
           displayName: name,
           publicKey: bundle.publicKey,
           wrappedPrivateKey: bundle.wrappedPrivateKey,
-        });
-        if (!res.ok) return setError(res.error);
-        await rememberPrivateKey(
-          await unwrapPrivateKey(email, password, bundle.wrappedPrivateKey)
-        );
-      } else if (mode === "upgrade") {
-        const bundle = await createKeyBundle(email, password);
-        const res = await upgradeAccount({
-          email,
-          password,
-          authSecret,
-          username,
-          publicKey: bundle.publicKey,
-          wrappedPrivateKey: bundle.wrappedPrivateKey,
+          // The version this form actually rendered, so a stale tab can't be
+          // recorded as agreeing to text it never showed.
+          acceptedPrivacyVersion: PRIVACY_VERSION,
         });
         if (!res.ok) return setError(res.error);
         await rememberPrivateKey(
           await unwrapPrivateKey(email, password, bundle.wrappedPrivateKey)
         );
       } else {
-        const probe = await probeAccount(email);
-        if (!probe.ok) return setError(probe.error);
-
-        if (probe.needsUpgrade) {
-          setMode("upgrade");
-          setNote(
-            "This account predates encrypted messaging. Choose a username and re-enter your password once. After this, your password stops being sent to the server at all."
-          );
-          return;
-        }
-
+        // One call. The wrapped key comes back with the success result, so
+        // nothing about this account is observable before the secret verifies.
         const res = await signIn(email, authSecret);
         if (!res.ok) return setError(res.error);
 
-        if (probe.wrappedPrivateKey) {
+        if (res.wrappedPrivateKey) {
           try {
             await rememberPrivateKey(
-              await unwrapPrivateKey(email, password, probe.wrappedPrivateKey)
+              await unwrapPrivateKey(email, password, res.wrappedPrivateKey)
             );
           } catch {
             // Signed in fine; messages just stay locked for this session.
@@ -117,11 +118,7 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
   }
 
   const heading =
-    mode === "signin"
-      ? "Welcome back, adventurer."
-      : mode === "signup"
-        ? "Roll a new character."
-        : "One-time security upgrade.";
+    mode === "signin" ? "Welcome back, adventurer." : "Roll a new character.";
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-5">
@@ -166,7 +163,7 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
                 </p>
               )}
 
-              {(mode === "signup" || mode === "upgrade") && (
+              {mode === "signup" && (
                 <Field
                   label="Username"
                   value={username}
@@ -207,6 +204,47 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
                 minLength={8}
               />
 
+              {mode === "signup" && (
+                <div className="rounded-xl border border-mud-200 bg-white/60 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-mud-500">
+                    Before you start
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {PRIVACY_HIGHLIGHTS.map((point) => (
+                      <li
+                        key={point}
+                        className="flex gap-1.5 text-[11px] leading-relaxed text-mud-600"
+                      >
+                        <span aria-hidden className="shrink-0 text-mud-400">
+                          •
+                        </span>
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-2.5 flex cursor-pointer items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={agreed}
+                      onChange={(e) => setAgreed(e.target.checked)}
+                      required
+                      className="mt-0.5 size-4 shrink-0 accent-grass-600"
+                    />
+                    <span className="text-xs font-medium text-mud-800">
+                      I agree to the{" "}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="font-semibold underline underline-offset-2 transition hover:text-grass-700"
+                      >
+                        privacy policy
+                      </Link>{" "}
+                      (v{PRIVACY_VERSION}, {PRIVACY_EFFECTIVE}).
+                    </span>
+                  </label>
+                </div>
+              )}
+
               {error && (
                 <p className="rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-300">
                   {error}
@@ -215,38 +253,41 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
 
               <button
                 type="submit"
-                disabled={busy}
+                disabled={busy || (mode === "signup" && !agreed)}
                 className="mt-2 w-full rounded-xl bg-grass-600 px-4 py-3 font-display text-sm font-bold tracking-wide text-white shadow-md shadow-grass-700/30 transition hover:bg-grass-500 active:scale-[0.98] disabled:bg-mud-300"
               >
                 {busy
                   ? "Deriving keys…"
                   : mode === "signin"
                     ? "Enter the realm"
-                    : mode === "signup"
-                      ? "Begin the journey"
-                      : "Upgrade and enter"}
+                    : "Begin the journey"}
               </button>
 
-              {mode !== "upgrade" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode(mode === "signin" ? "signup" : "signin");
-                    setError(null);
-                    setNote(null);
-                  }}
-                  className="w-full pt-1 text-center text-sm font-semibold text-mud-500 underline-offset-4 transition hover:text-grass-700 hover:underline"
-                >
-                  {mode === "signin"
-                    ? "No character yet? Create one"
-                    : "Already have a character? Sign in"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === "signin" ? "signup" : "signin");
+                  setError(null);
+                  setNote(null);
+                  setAgreed(false);
+                }}
+                className="w-full pt-1 text-center text-sm font-semibold text-mud-500 underline-offset-4 transition hover:text-grass-700 hover:underline"
+              >
+                {mode === "signin"
+                  ? "No character yet? Create one"
+                  : "Already have a character? Sign in"}
+              </button>
 
               <p className="pt-1 text-center text-[10px] leading-relaxed text-mud-400">
                 Your password becomes keys in this browser. It is never sent
                 to the server, and neither is anything needed to read your
-                messages.
+                messages.{" "}
+                <Link
+                  href="/privacy"
+                  className="underline underline-offset-2 transition hover:text-grass-700"
+                >
+                  Privacy
+                </Link>
               </p>
             </form>
           )}
