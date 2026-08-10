@@ -42,6 +42,13 @@ export default function PrivacyPage() {
               whoever administers the database.
             </li>
             <li>
+              <B>Completed quests are deleted after 7 days.</B> The title, notes
+              and deadline are removed permanently and cannot be recovered; only
+              the counts survive, so your completed total, on-time rate and
+              per-category strengths stay accurate. Missed quests are kept,
+              because they can still be finished.
+            </li>
+            <li>
               <B>Your character</B> — display name, level, appearance, gear.
             </li>
             <li>
@@ -124,6 +131,7 @@ export default function PrivacyPage() {
 
         <Section title="Deleting your data">
           <p>
+            Completed quests are deleted automatically after 7 days, as above.
             Deleting a quest or a category removes it immediately. Removing a
             companion deletes every message between you. Full account deletion
             is not yet available in the app — ask the administrator, and the

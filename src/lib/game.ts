@@ -6,6 +6,13 @@ import type { Appearance, BodyType, Equipped, Slot } from "./types";
    truth; these values only drive the previews shown in the UI).
    ========================================================================== */
 
+/**
+ * How long a finished quest is kept before it is deleted. Only the counts
+ * survive; the title, notes and deadline do not. Mirrored as the default in
+ * prune_finished() — change both.
+ */
+export const FINISHED_RETENTION_DAYS = 7;
+
 export const XP = {
   noDeadline: 5,
   onTime: 25,

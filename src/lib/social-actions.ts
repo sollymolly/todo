@@ -233,8 +233,10 @@ export async function listFriends(): Promise<FriendSummary[]> {
       p.xp,
       p.appearance,
       p.equipped,
-      (select count(*)::int from todos t
-        where t.user_id = u.id and t.status = 'done') as completed,
+      -- Archived counter plus what is still on their board: finished quests
+      -- are deleted after a week, so the live count alone would shrink.
+      (p.archived_done + (select count(*)::int from todos t
+        where t.user_id = u.id and t.status = 'done')) as completed,
       (select count(*)::int from messages m
         where m.sender_id = u.id and m.recipient_id = ${me}::uuid
           and m.read_at is null) as unread

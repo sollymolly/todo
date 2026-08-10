@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Dashboard from "@/components/Dashboard";
 import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
-import { sweepOverdue } from "@/lib/actions";
+import { pruneFinished, sweepOverdue } from "@/lib/actions";
 import { unreadTotal } from "@/lib/social-actions";
 import { latestUpdate, shouldShowUpdate } from "@/lib/updates";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
@@ -21,8 +21,10 @@ export default async function Home() {
   let todos: Todo[] = [];
 
   try {
-    // Anything past its deadline by more than a day fails before we read.
+    // Anything past its deadline by more than a day fails before we read, and
+    // finished quests past the retention window are cleared out.
     sweptCount = (await sweepOverdue()).count;
+    await pruneFinished();
 
     const [profileRows, categoryRows, todoRows] = await Promise.all([
       sql`select * from profiles where id = ${userId}::uuid`,

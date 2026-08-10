@@ -42,6 +42,12 @@ create table if not exists profiles (
   -- Text, not date: a date column comes back through the session timezone and
   -- makes week comparisons lie. See migration 008.
   updates_seen  text,
+  -- Completed quests are deleted after a week, so their contribution to the
+  -- metrics is folded in here on the way out. Every total the app shows is
+  -- "archived counter + live count". See migration 009.
+  archived_done     integer not null default 0,
+  archived_on_time  integer not null default 0,
+  archived_late     integer not null default 0,
   created_at    timestamptz not null default now()
 );
 
@@ -56,6 +62,8 @@ create table if not exists categories (
   icon        text not null default '',
   color       text not null default 'amber',
   sort_order  integer not null default 0,
+  -- Finished quests pruned from this category, for the strength bar.
+  archived_done integer not null default 0,
   created_at  timestamptz not null default now()
 );
 create index if not exists categories_user_idx on categories(user_id, sort_order);
@@ -405,5 +413,73 @@ begin
 
   select xp into v_xp from profiles where id = p_user;
   return json_build_object('count', v_count, 'delta', v_total, 'xp', coalesce(v_xp, 0));
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- prune_finished — delete completed quests past the retention window, folding
+-- them into the counters on the way out. Returns how many were removed.
+--
+-- Missed quests are deliberately untouched: they are still completable, so they
+-- are not finished, and deleting them would take away the chance to redeem one.
+-- ---------------------------------------------------------------------------
+create or replace function prune_finished(p_user uuid, p_days integer default 7)
+returns integer
+language plpgsql
+as $$
+declare
+  v_pruned integer;
+begin
+  -- One statement, so the delete and every counter move commit together. A
+  -- data-modifying CTE always runs to completion even when nothing reads it,
+  -- which is what lets the two counter updates hang off the same delete.
+  with gone as (
+    delete from todos
+     where user_id = p_user
+       and status  = 'done'
+       and completed_at is not null
+       and completed_at < now() - make_interval(days => p_days)
+    returning category_id, due_date, completed_at
+  ),
+  tally as (
+    select
+      category_id,
+      count(*)::integer as done,
+      count(*) filter (
+        where due_date is not null and completed_at <= due_date
+      )::integer as on_time,
+      count(*) filter (
+        where due_date is not null and completed_at > due_date
+      )::integer as late
+    from gone
+    group by category_id
+  ),
+  totals as (
+    select
+      coalesce(sum(done), 0)::integer    as done,
+      coalesce(sum(on_time), 0)::integer as on_time,
+      coalesce(sum(late), 0)::integer    as late
+    from tally
+  ),
+  bump_categories as (
+    update categories c
+       set archived_done = c.archived_done + t.done
+      from tally t
+     where t.category_id = c.id
+       and c.user_id = p_user
+    returning 1
+  ),
+  bump_profile as (
+    update profiles p
+       set archived_done    = p.archived_done    + (select done    from totals),
+           archived_on_time = p.archived_on_time + (select on_time from totals),
+           archived_late    = p.archived_late    + (select late    from totals)
+     where p.id = p_user
+       and (select done from totals) > 0
+    returning 1
+  )
+  select done into v_pruned from totals;
+
+  return coalesce(v_pruned, 0);
 end;
 $$;

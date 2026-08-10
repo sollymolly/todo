@@ -170,6 +170,46 @@ and `quest_penalty`), and are mirrored in `XP` in
 you retune the economy, change both — SQL is the source of truth, and the maths
 lives there so the client can't inflate its own score.
 
+### Retention, and why the metrics are counters
+
+Completed quests are **deleted after 7 days** (`FINISHED_RETENTION_DAYS`), by
+`prune_finished` on the next page load. Titles, notes and deadlines go
+permanently; the chronicle is a rolling week, not an archive.
+
+Missed quests are never pruned. They are still completable, so they aren't
+finished — deleting one would take away the chance to redeem it.
+
+Every completion metric used to be a `count(*)` over `todos`, which pruning
+would have silently walked back to zero. So each quest is folded into durable
+counters **at the moment it is deleted**:
+
+| Counter | Why it exists |
+| --- | --- |
+| `profiles.archived_done` | the completed total |
+| `profiles.archived_on_time` | the numerator of the on-time rate |
+| `profiles.archived_late` | its denominator — a quest finished after its deadline counts as *missed*, so without this pruning would flatter everyone |
+| `categories.archived_done` | the Strengths bar |
+
+Counting at deletion is what makes it safe: a row can only be deleted once, so
+it can only be counted once. Incrementing on *completion* instead would need the
+same reconciliation the XP economy needed, and would double-count every toggle.
+
+Every total the app shows is therefore **archived counter + live count**, which
+stays correct across pruning. A quest with no `completed_at` is never pruned, so
+an unknown completion time can't cause a silent deletion.
+
+### Strengths
+
+`CategoryStrength` shows completed / (completed + missed) per category, weakest
+first, because sorting alphabetically buries the thing that needs attention. An
+open quest is neither a success nor a failure, so it is shown as a separate
+count rather than guessed into the ratio — a category quietly filling with work
+is still visible. A category with no resolved outcomes shows "—" and sinks to
+the bottom rather than displaying a damning 0%.
+
+Only `archived_done` is kept per category, because the other side of that ratio
+(missed) is never pruned and so is always countable live.
+
 ### Art and licensing
 
 The character is composited at runtime from **Liberated Pixel Cup** sprite

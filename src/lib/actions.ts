@@ -9,6 +9,7 @@ import {
   DEFAULT_BODY,
   DEFAULT_EYES,
   EYE_COLORS,
+  FINISHED_RETENTION_DAYS,
   HAIR_COLORS,
   HAIR_STYLES,
   SKINS,
@@ -167,6 +168,18 @@ export async function moveTodo(id: string, categoryId: string | null) {
   `;
 
   bump();
+}
+
+/**
+ * Deletes completed quests past the retention window, folding their counts into
+ * the durable totals first. Irreversible by design — see migration 009.
+ */
+export async function pruneFinished(): Promise<number> {
+  const userId = await requireUserId();
+  const rows = (await sql`
+    select prune_finished(${userId}::uuid, ${FINISHED_RETENTION_DAYS}::int) as n
+  `) as { n: number }[];
+  return rows[0]?.n ?? 0;
 }
 
 /** Auto-fails quests more than 24h past their deadline. Called on page load. */

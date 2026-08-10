@@ -8,12 +8,13 @@ import CharacterCard from "@/components/CharacterCard";
 import CategoryBoard, { type InlineDraft } from "@/components/CategoryBoard";
 import Scenery from "@/components/Scenery";
 import CategoryManager from "@/components/CategoryManager";
+import CategoryStrength from "@/components/CategoryStrength";
 import QuestForm, { type QuestDraft } from "@/components/QuestForm";
 import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import UpdatesModal from "@/components/UpdatesModal";
 import { FxProvider, useFx } from "@/components/Fx";
-import { levelFor, XP } from "@/lib/game";
+import { FINISHED_RETENTION_DAYS, levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
 import {
   abandonTodo,
@@ -130,10 +131,13 @@ function Inner({
     [todos]
   );
 
+  // Finished quests are deleted after a week, so a plain count over `todos`
+  // would quietly slide back towards zero. Every total is the durable counter
+  // plus whatever is still on the board.
   const stats = useMemo(() => {
-    let done = 0,
-      onTime = 0,
-      missed = 0;
+    let done = profile.archived_done ?? 0;
+    let onTime = profile.archived_on_time ?? 0;
+    let missed = profile.archived_late ?? 0;
     for (const t of todos) {
       if (t.status === "done") {
         done++;
@@ -144,7 +148,7 @@ function Inner({
       }
     }
     return { done, open: openCount, onTime, missed };
-  }, [todos, openCount]);
+  }, [todos, openCount, profile.archived_done, profile.archived_on_time, profile.archived_late]);
 
   /* ------------------------------------------------------------- helpers */
 
@@ -380,6 +384,8 @@ function Inner({
             equipped={profile.equipped}
             stats={stats}
           />
+
+          <CategoryStrength categories={categories} todos={todos} />
         </div>
 
         {/* ------------------------------------------------------- right */}
@@ -455,6 +461,10 @@ function Inner({
                 Chronicle
                 <span className="font-sans text-xs font-semibold text-mud-500">
                   ({chronicle.length})
+                </span>
+                <span className="ml-auto font-sans text-[10px] font-normal text-mud-400">
+                  last {FINISHED_RETENTION_DAYS} days · {stats.done} completed
+                  all-time
                 </span>
               </button>
 

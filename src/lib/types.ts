@@ -23,6 +23,10 @@ export type Profile = {
   equipped: Equipped;
   /** Week key of the last changelog entry shown. Null means never. */
   updates_seen: string | null;
+  /* Quests deleted after the retention window still count here. */
+  archived_done: number;
+  archived_on_time: number;
+  archived_late: number;
   created_at: string;
 };
 
@@ -32,6 +36,8 @@ export type Category = {
   name: string;
   color: string;
   sort_order: number;
+  /** Finished quests pruned from this category — kept so strength survives. */
+  archived_done: number;
   created_at: string;
 };
 
