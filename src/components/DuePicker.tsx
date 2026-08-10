@@ -9,6 +9,8 @@ import {
   WEEKDAYS,
   describeDue,
   fromLocalInput,
+  timeOf,
+  withTimeString,
   monthMatrix,
   presetDue,
   sameDay,
@@ -30,7 +32,16 @@ import {
    -------------------------------------------------------------------------- */
 
 const PANEL_W = 304;
-const PANEL_H = 430;
+/**
+ * The panel's real content height, measured rather than guessed. It was 430
+ * against content of 547, so the bottom 119px — the time chips, the custom time
+ * field and the footer — sat below the clip with no way to reach them, since a
+ * fixed-position element has no page scroll to bring it back.
+ *
+ * Keep this in step if rows are added. `maxHeight` below is the safety net for
+ * viewports too short to show the whole panel; it scrolls internally there.
+ */
+const PANEL_H = 512;
 
 const PRESETS: { key: Preset; label: string }[] = [
   { key: "today", label: "Today" },
@@ -47,7 +58,11 @@ export default function DuePicker({
   onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<{
+    left: number;
+    top: number;
+    maxHeight: number;
+  } | null>(null);
   const selected = fromLocalInput(value);
   const [view, setView] = useState(() => selected ?? new Date());
 
@@ -61,10 +76,27 @@ export default function DuePicker({
     const place = () => {
       const r = triggerRef.current?.getBoundingClientRect();
       if (!r) return;
-      const flip = r.bottom + PANEL_H > window.innerHeight && r.top > PANEL_H;
+
+      /* The panel is fixed-position, so anything hanging off the viewport is
+         simply unreachable — there is no page scroll that would bring it back.
+         That is what hid the time controls: with a hard 430px and no bound,
+         a trigger low on a tall form put the bottom of the panel off-screen.
+
+         So measure both gaps, take the roomier side, and hand the panel a
+         maxHeight to scroll inside when neither side can hold it whole. */
+      const GAP = 8;
+      const below = window.innerHeight - r.bottom - GAP * 2;
+      const above = r.top - GAP * 2;
+      const flip = below < PANEL_H && above > below;
+      const room = Math.max(200, flip ? above : below);
+      const maxHeight = Math.min(PANEL_H, room);
+
       setPos({
         left: Math.max(8, Math.min(r.left, window.innerWidth - PANEL_W - 8)),
-        top: flip ? r.top - PANEL_H - 8 : r.bottom + 8,
+        top: flip
+          ? Math.max(GAP, r.top - maxHeight - GAP)
+          : Math.min(r.bottom + GAP, window.innerHeight - maxHeight - GAP),
+        maxHeight,
       });
     };
 
@@ -118,6 +150,9 @@ export default function DuePicker({
         left: pos?.left ?? 0,
         top: pos?.top ?? 0,
         width: PANEL_W,
+        maxHeight: pos?.maxHeight,
+        display: "flex",
+        flexDirection: "column",
         zIndex: 100,
         // Opaque on purpose — a floating panel must not read through.
         background: "#fdf9f0",
@@ -125,7 +160,7 @@ export default function DuePicker({
       className="rounded-2xl border border-mud-300 p-3 shadow-2xl shadow-mud-900/30"
     >
       {/* --------------------------------------------------------- presets */}
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid shrink-0 grid-cols-2 gap-1.5">
         {PRESETS.map((p) => (
           <button
             key={p.key}
@@ -138,10 +173,10 @@ export default function DuePicker({
         ))}
       </div>
 
-      <div className="my-3 h-px bg-mud-200" />
+      <div className="my-3 h-px shrink-0 bg-mud-200" />
 
       {/* -------------------------------------------------------- calendar */}
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex shrink-0 items-center justify-between">
         <button
           type="button"
           onClick={() => setView((v) => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
@@ -163,6 +198,14 @@ export default function DuePicker({
         </button>
       </div>
 
+      {/* Only the month grid scrolls. The presets, the time controls and the
+          footer stay pinned, so on a short viewport the thing that gets cut is
+          a few rows of dates — reachable by scrolling — rather than the time
+          controls, which previously fell off the bottom entirely. */}
+      <div
+        className="min-h-0 flex-1 overflow-y-auto"
+        style={{ overscrollBehavior: "contain" }}
+      >
       <div className="grid grid-cols-7 gap-0.5 text-center">
         {WEEKDAYS.map((d, i) => (
           <span
@@ -183,7 +226,7 @@ export default function DuePicker({
               key={i}
               type="button"
               onClick={() => onChange(withDate(value, d))}
-              className={`grid aspect-square place-items-center rounded-lg text-xs transition ${
+              className={`grid h-8 place-items-center rounded-lg text-xs transition ${
                 isSelected
                   ? "bg-grass-600 font-bold text-white"
                   : isToday
@@ -198,11 +241,12 @@ export default function DuePicker({
           );
         })}
       </div>
+      </div>
 
-      <div className="my-3 h-px bg-mud-200" />
+      <div className="my-2 h-px shrink-0 bg-mud-200" />
 
       {/* ------------------------------------------------------------ time */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex shrink-0 flex-wrap gap-1.5">
         {TIME_PRESETS.map((t) => {
           const on =
             selected?.getHours() === t.h && selected?.getMinutes() === t.m;
@@ -225,7 +269,22 @@ export default function DuePicker({
         })}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <label className="mt-2 flex shrink-0 items-center gap-2">
+        <span className="text-[11px] font-semibold text-mud-500">At</span>
+        <input
+          type="time"
+          value={timeOf(value)}
+          onChange={(e) => {
+            const next = withTimeString(value, e.target.value);
+            // Null while the field is empty or half-typed; ignoring it keeps a
+            // deadline from being wiped mid-keystroke.
+            if (next) onChange(next);
+          }}
+          className="field min-w-0 flex-1 rounded-lg px-2 py-1 text-xs"
+        />
+      </label>
+
+      <div className="mt-3 flex shrink-0 items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => {

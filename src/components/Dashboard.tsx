@@ -13,6 +13,7 @@ import QuestForm, { type QuestDraft } from "@/components/QuestForm";
 import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import UpdatesModal from "@/components/UpdatesModal";
+import TimezoneSync from "@/components/TimezoneSync";
 import { FxProvider, useFx } from "@/components/Fx";
 import { levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
@@ -291,18 +292,23 @@ function Inner({
           <h1 className="font-display text-2xl font-bold tracking-wide text-mud-900 drop-shadow-sm sm:text-3xl">
             HabitKnight
           </h1>
-          <p className="text-xs font-semibold text-mud-600">
-            {openCount > 0
-              ? `${openCount} quest${openCount === 1 ? " awaits" : "s await"} you.`
-              : "No quests pending. Rest, or find trouble."}
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/habits"
+            title="Recurring habits"
+            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+          >
+            Habits
+          </Link>
+          {/* The badge lives on Messages rather than Companions: an unread
+              count is about conversations, not about the friend list. */}
+          <Link
             href="/friends"
+            title="Your conversations"
             className="relative rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
           >
-            Companions
+            Messages
             {unread > 0 && (
               <span
                 aria-label={`${unread} unread message${unread === 1 ? "" : "s"}`}
@@ -311,6 +317,12 @@ function Inner({
                 {unread > 9 ? "9+" : unread}
               </span>
             )}
+          </Link>
+          <Link
+            href="/friends"
+            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+          >
+            Companions
           </Link>
           <Link
             href="/updates"
@@ -498,6 +510,14 @@ function Inner({
           the first thing seen on the first visit of the week. */}
       {update && <UpdatesModal update={update} />}
 
+      {/* Reports the browser's timezone so habits roll over at the user's
+          midnight. Delete this and src/lib/timezone.ts to drop the feature. */}
+      <TimezoneSync stored={profile.timezone ?? null} />
+
+      {/* Reports the browser's timezone so habits roll over at the user's
+          midnight. Delete this and src/lib/timezone.ts to drop the feature. */}
+      <TimezoneSync stored={profile.timezone ?? null} />
+
       {/* ------------------------------------------------------- overlays */}
       <AnimatePresence>
         {managing && (
@@ -518,7 +538,10 @@ function Inner({
             onClick={() => setEditing(null)}
           >
             <motion.div
-              className="panel w-full max-w-lg rounded-2xl p-6"
+              /* Bounded and scrollable: with a long note plus an open date
+                 picker this panel outgrows a short viewport, and without this
+                 the overflow was simply unreachable. */
+              className="panel max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6"
               initial={{ scale: 0.94, y: 16, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}

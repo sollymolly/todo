@@ -120,20 +120,51 @@ export async function updateTodo(
   bump();
 }
 
+/** The habit this quest belongs to, if any. Null for ordinary quests. */
+async function habitOf(userId: string, todoId: string): Promise<string | null> {
+  try {
+    const rows = (await sql`
+      select habit_id from todos
+       where id = ${todoId}::uuid and user_id = ${userId}::uuid
+    `) as { habit_id: string | null }[];
+    return rows[0]?.habit_id ?? null;
+  } catch {
+    return null; // habits migration not run yet
+  }
+}
+
 export async function completeTodo(id: string): Promise<XpResult> {
   const userId = await requireUserId();
+  const habitId = await habitOf(userId, id);
+
   const rows = (await sql`
     select complete_quest(${userId}::uuid, ${id}::uuid) as result
   `) as { result: XpResult }[];
+
+  // The streak is advanced separately, and is idempotent for the day — so
+  // toggling today's instance can't inflate it.
+  if (habitId) {
+    await sql`select record_habit_completion(${userId}::uuid, ${habitId}::uuid)`;
+    revalidatePath("/habits");
+  }
+
   bump();
   return rows[0].result;
 }
 
 export async function uncompleteTodo(id: string): Promise<XpResult> {
   const userId = await requireUserId();
+  const habitId = await habitOf(userId, id);
+
   const rows = (await sql`
     select uncomplete_quest(${userId}::uuid, ${id}::uuid) as result
   `) as { result: XpResult }[];
+
+  if (habitId) {
+    await sql`select record_habit_uncompletion(${userId}::uuid, ${habitId}::uuid)`;
+    revalidatePath("/habits");
+  }
+
   bump();
   return rows[0].result;
 }

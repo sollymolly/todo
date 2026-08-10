@@ -183,9 +183,9 @@ export default function FeedbackForm({
                       <button
                         onClick={() => resolve(n.id)}
                         title="Delete this note — there is no archive"
-                        className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-mud-400 transition hover:bg-grass-100 hover:text-grass-700"
+                        className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
                       >
-                        Resolved
+                        Resolve
                       </button>
                     </span>
                   </div>

@@ -194,17 +194,28 @@ export function sameDay(a: Date, b: Date): boolean {
   );
 }
 
-/** 42 cells (6 weeks) covering the month `view` falls in, Sunday-first. */
+/**
+ * Up to 42 cells (6 weeks) covering the month `view` falls in, Sunday-first.
+ *
+ * A trailing week made entirely of the next month is dropped. Six rows are
+ * only ever needed for months that genuinely span them, and the fixed sixth row
+ * was costing the picker ~35px of height it could not spare — which is what
+ * pushed the time controls out of reach.
+ */
 export function monthMatrix(view: Date): Date[] {
   const first = new Date(view.getFullYear(), view.getMonth(), 1);
   const start = new Date(first);
   start.setDate(1 - first.getDay());
 
-  return Array.from({ length: 42 }, (_, i) => {
+  const cells = Array.from({ length: 42 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     return d;
   });
+
+  const lastWeek = cells.slice(35);
+  const spills = lastWeek.every((d) => d.getMonth() !== view.getMonth());
+  return spills ? cells.slice(0, 35) : cells;
 }
 
 export const MONTH_YEAR = new Intl.DateTimeFormat(undefined, {
@@ -221,6 +232,26 @@ export const TIME_PRESETS: { label: string; h: number; m: number }[] = [
   { label: "6:00 PM", h: 18, m: 0 },
   { label: "End of day", h: 23, m: 59 },
 ];
+
+/** The time half of a datetime-local value, shaped for <input type="time">. */
+export function timeOf(value: string): string {
+  const d = fromLocalInput(value);
+  return d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "";
+}
+
+/**
+ * Applies an "HH:MM" string to a value, keeping its date. Returns null for
+ * anything malformed — a time input can be momentarily empty or partial while
+ * being typed, and that must not wipe the deadline.
+ */
+export function withTimeString(value: string, hhmm: string): string | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return withTime(value || toLocalInput(new Date()), h, min);
+}
 
 export function withTime(value: string, h: number, m: number): string {
   const base = fromLocalInput(value) ?? new Date();

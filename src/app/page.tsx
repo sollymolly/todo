@@ -3,6 +3,7 @@ import Dashboard from "@/components/Dashboard";
 import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
 import { pruneFinished, sweepOverdue } from "@/lib/actions";
+import { syncHabits } from "@/lib/habit-actions";
 import { unreadTotal } from "@/lib/social-actions";
 import { latestUpdate, shouldShowUpdate } from "@/lib/updates";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
@@ -25,6 +26,11 @@ export default async function Home() {
     // finished quests past the retention window are cleared out.
     sweptCount = (await sweepOverdue()).count;
     await pruneFinished();
+    // Puts today's habit instances on the board. Idempotent, so running it on
+    // every load is safe — see materialise_habits in migration 013.
+    // Puts today's habit instances on the board. Idempotent, so running it on
+    // every load is safe — see materialise_habits in migration 013.
+    await syncHabits();
 
     const [profileRows, categoryRows, todoRows] = await Promise.all([
       sql`select * from profiles where id = ${userId}::uuid`,

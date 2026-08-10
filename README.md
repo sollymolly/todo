@@ -187,6 +187,59 @@ truth. The rank curve lives in a `ranks` table so the database can work out a
 level on its own — those numbers mirror `RANKS` in
 [`src/lib/game.ts`](src/lib/game.ts), so change both.
 
+### The due-date picker
+
+The panel is portalled to `<body>` and `position: fixed`, which means anything
+hanging off the viewport is **unreachable** — there is no page scroll that would
+bring it back. `PANEL_H` was 430 against real content of 547, so the bottom
+119px (the time chips, the custom time field and the footer) was permanently
+clipped, which is what made picking a time impossible.
+
+Two things fix it, and the second is the one that actually holds:
+
+1. The position is clamped to the viewport and the panel is given a
+   `maxHeight`, so it can never be placed partly off-screen.
+2. **Only the month grid scrolls.** The presets, time controls and footer are
+   `shrink-0` in a flex column, so on a short viewport what gets cut is a few
+   rows of dates — which the user can scroll to — rather than the controls.
+
+Sizing alone wasn't enough: on a 665px viewport there simply isn't room for
+503px of content plus the trigger, so anything relying on the panel fitting
+whole would break again the moment a row was added.
+
+Alongside the four preset chips there's an `<input type="time">` for an
+arbitrary deadline. `withTimeString` returns null for a partial or empty value
+so a half-typed time can't wipe the date, and `monthMatrix` now drops a trailing
+week that is entirely next month, which most months don't need.
+
+### Recurring habits
+
+A habit is a *definition*, not a quest. Each day it's due, one ordinary todo is
+materialised from it — earning the usual XP, sortable by deadline, prunable when
+finished. `/habits` manages the definitions and shows streaks.
+
+**Materialising on read, not spawning on completion.** "Create tomorrow's copy
+when today's is ticked" breaks the instant someone un-ticks it: you either
+double up or lose the next occurrence. `materialise_habits` instead asks "does
+today already have one?" and makes it if not — idempotent, so it runs on every
+page load beside `sweepOverdue` and `prune_finished` and survives any amount of
+toggling.
+
+Streaks move through `record_habit_completion` / `record_habit_uncompletion`,
+both keyed on the local date, so ticking twice can't inflate a streak and
+un-ticking rolls it back. `break_stale_streaks` zeroes anything that has gone
+past a due day, walking back to the previous *due* day so a weekend can't break
+a weekdays-only run.
+
+**Timezone, and how to remove it.** "The next day" only means something in a
+place, so `profiles.timezone` holds an IANA name reported by the browser. Every
+read of it goes through `coalesce(timezone, 'UTC')`. To drop the feature: delete
+[`src/lib/timezone.ts`](src/lib/timezone.ts) and `<TimezoneSync />`, then
+`alter table profiles drop column timezone`. Every query stays valid and habits
+roll over at UTC midnight for everyone. It's worth knowing the difference is
+real — while UTC says the 10th, Auckland is already on the 11th, so a UTC-only
+version would put the instance on the wrong day for a third of the world.
+
 ### Retention, and why the metrics are counters
 
 Completed quests are **deleted after 7 days** (`FINISHED_RETENTION_DAYS`), by
@@ -217,15 +270,18 @@ an unknown completion time can't cause a silent deletion.
 
 ### Strengths
 
-`CategoryStrength` shows completed / (completed + missed) per category, weakest
-first, because sorting alphabetically buries the thing that needs attention. An
-open quest is neither a success nor a failure, so it is shown as a separate
-count rather than guessed into the ratio — a category quietly filling with work
-is still visible. A category with no resolved outcomes shows "—" and sinks to
-the bottom rather than displaying a damning 0%.
+`CategoryStrength` shows the share of **deadlines missed** per category, worst
+first, because sorting alphabetically buries the thing that needs attention.
 
-Only `archived_done` is kept per category, because the other side of that ratio
-(missed) is never pruned and so is always countable live.
+Finishing late counts as missed — the deadline went by, and catching up
+afterwards doesn't undo that. So the figure can't be improved by completing an
+overdue quest, only by meeting the next one on time. Quests with no deadline sit
+outside both sides of the ratio: there was nothing to miss, and counting them
+would dilute a neglected area towards a healthy-looking zero.
+
+That needs `archived_on_time` and `archived_late` per category as well as the
+total, since completed quests are deleted after a week and the split would go
+with them.
 
 ### Art and licensing
 

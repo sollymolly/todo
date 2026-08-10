@@ -29,6 +29,8 @@ export type Profile = {
   equipped: Equipped;
   /** Week key of the last changelog entry shown. Null means never. */
   updates_seen: string | null;
+  /** IANA zone reported by the browser; null means fall back to UTC. */
+  timezone: string | null;
   /* Quests deleted after the retention window still count here. */
   archived_done: number;
   archived_on_time: number;
@@ -42,8 +44,10 @@ export type Category = {
   name: string;
   color: string;
   sort_order: number;
-  /** Finished quests pruned from this category — kept so strength survives. */
+  /* Pruned finished quests, kept so the Strengths figure survives retention. */
   archived_done: number;
+  archived_on_time: number;
+  archived_late: number;
   created_at: string;
 };
 
@@ -57,6 +61,8 @@ export type Todo = {
   status: QuestStatus;
   completed_at: string | null;
   xp_awarded: number;
+  /** Set when this quest was materialised from a recurring habit. */
+  habit_id: string | null;
   position: number | null;
   created_at: string;
 };

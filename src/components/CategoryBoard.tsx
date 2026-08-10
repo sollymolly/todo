@@ -159,7 +159,7 @@ function Box({
       className={`panel flex flex-col overflow-hidden rounded-2xl transition ${
         // Loud enough to find at a glance across a full board: a stronger
         // border plus a soft red halo, rather than a hairline tint.
-        overdue > 0 ? "border-red-400 ring-2 ring-red-300/70" : ""
+        overdue > 0 ? "border-red-500 ring-[3px] ring-red-400/80 shadow-[0_0_0_1px_rgba(220,38,38,0.35),0_8px_24px_-8px_rgba(220,38,38,0.5)]" : ""
       } ${over ? "scale-[1.01] border-grass-500 ring-2 ring-grass-400" : ""}`}
     >
       {/* --------------------------------------------------------- header */}
