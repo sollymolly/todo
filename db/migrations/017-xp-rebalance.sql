@@ -1,5 +1,5 @@
 -- ===========================================================================
---  Migration 017 — smaller XP awards, and a rank curve to match
+--  Migration 017 — smaller XP awards, a rank curve to match, and a reset
 --
 --  Run once in the Neon SQL Editor. Safe to re-run.
 --
@@ -22,64 +22,47 @@
 --  A missed deadline now costs one on-time quest rather than most of one, which
 --  is the real point of the change: the penalty stings without wiping out a day.
 --
---  WHY EXISTING BALANCES ARE REWRITTEN
---  -----------------------------------
---  Lowering the curve under characters who banked XP at the old rates would
---  hand out several levels at once, and profiles.level is a ratchet (migration
---  011) — those levels could never be taken back. So every character is moved
---  onto the new curve at the *same rank and the same position within it*: if
---  your bar was two thirds of the way to Knight, it still is. Nobody gains or
---  loses a level here, and no level-up is skipped.
+--  THE RESET
+--  ---------
+--  Every character above level 3 is set back to level 3, at the bottom of it —
+--  50 XP, an empty bar. Ranks earned at the old prices were earned against a
+--  different curve, and this is a deliberate clean slate rather than an attempt
+--  to convert them.
 --
---  todos.xp_awarded — what a quest has contributed, which is what stops a
---  penalty being charged or refunded twice — is restated at the new prices, the
---  same backfill migration 007 ran. Every quest is then worth what a quest of
---  its kind is worth today, so toggling one nets zero rather than farming the
---  gap between the two economies.
+--  This is the one thing here that cannot be undone: profiles.level is a ratchet
+--  (migration 011) precisely so a level can never be lost, and this migration
+--  reaches past that on purpose. There is no record of the old level other than
+--  the xp_events row it writes, so read that before you decide you want it back.
 --
---  The profile rewrite works from a snapshot table whose rows are marked as
---  they are applied, which is what makes re-running this file a no-op — it
---  neither rebases twice nor rolls back XP earned since the first run. The
---  snapshot is also the only record of the old balances; drop it once you are
---  happy:
---    drop table xp_rebalance_017_profiles;
+--  Characters at or below level 3 keep their XP. Some of them still move up a
+--  rank, because the curve came down beneath them — a bar that was nearly full
+--  at the old prices is over the line at the new ones. Nobody ends up above 3.
+--
+--  Gear is left alone. Someone reset from 11 to 3 keeps wearing the plate they
+--  are wearing today: saveEquipped() starts from the stored loadout and only
+--  overwrites a slot when the requested item is within level, so nothing strips
+--  it. They cannot *re*-select it once they switch that slot to something else,
+--  which is the honest consequence of the reset — but their character does not
+--  get undressed by a database migration either.
+--
+--  PAST QUESTS
+--  -----------
+--  A finished quest's xp_awarded is restated at the new prices, so the badge on
+--  a completed quest reads what that quest is worth today (+10, +3 or +5) rather
+--  than what it paid last week.
+--
+--  Anything not finished is zeroed. xp_awarded exists to stop a quest paying or
+--  charging twice, and after the balances above are rewritten no quest has
+--  "already moved" anything — so the baseline has to be nothing. Leaving a
+--  failed quest at -10 would have been worth +13 to whoever completed it late,
+--  refunding a penalty the reset had already wiped; zeroed, it pays the +3 it
+--  should. Finished quests are the exception because they must keep a number to
+--  display, and holding their award means toggling one nets zero rather than
+--  paying out again.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
--- 1. Snapshot, using the OLD curve — this must happen before ranks is touched.
---
---    `pct` is how far through the current rank the character was, 0 to 1. That
---    is the quantity worth preserving; the raw XP is an implementation detail
---    of the old prices. Stored as numeric so the position survives the trip.
---
---    `applied` is what makes step 4 safe to re-run: without it, a second run
---    would overwrite XP the character had earned in the meantime.
--- ---------------------------------------------------------------------------
-create table if not exists xp_rebalance_017_profiles (
-  id      uuid primary key references profiles(id) on delete cascade,
-  old_xp  integer not null,
-  level   integer not null,
-  pct     numeric not null,
-  applied boolean not null default false
-);
-
-insert into xp_rebalance_017_profiles (id, old_xp, level, pct)
-select
-  p.id,
-  p.xp,
-  p.level,
-  case
-    when xp_for_level(p.level + 1) > xp_for_level(p.level)
-      then least(1, greatest(0,
-        (p.xp - xp_for_level(p.level))::numeric
-        / (xp_for_level(p.level + 1) - xp_for_level(p.level))))
-    else 0
-  end
-from profiles p
-on conflict (id) do nothing;
-
--- ---------------------------------------------------------------------------
--- 2. The new awards. Mirrored in XP in src/lib/game.ts — change both.
+-- 1. The new awards. Mirrored in XP in src/lib/game.ts — change both.
 -- ---------------------------------------------------------------------------
 create or replace function quest_xp(p_due timestamptz, p_done timestamptz)
 returns integer language sql immutable as $$
@@ -94,7 +77,7 @@ create or replace function quest_penalty()
 returns integer language sql immutable as $$ select -10; $$;
 
 -- ---------------------------------------------------------------------------
--- 3. The new curve. Same numbers as RANKS in src/lib/game.ts — change both.
+-- 2. The new curve. Same numbers as RANKS in src/lib/game.ts — change both.
 -- ---------------------------------------------------------------------------
 insert into ranks (level, xp) values
   (1, 0), (2, 20), (3, 50), (4, 100), (5, 170),
@@ -128,55 +111,72 @@ language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 4. Move every character onto the new curve, rank and position intact.
+-- 3. Back to level 3.
 --
---    Clamped one XP below the next threshold so rounding cannot promote
---    someone who had not actually finished the rank — a level-up belongs to a
---    completed quest, with the card that goes with it, not to a migration.
--- ---------------------------------------------------------------------------
-do $$
-begin
-  update profiles p set xp = greatest(
-    xp_for_level(s.level),
-    least(
-      xp_for_level(s.level + 1) - 1,
-      xp_for_level(s.level)
-        + round(s.pct * (xp_for_level(s.level + 1) - xp_for_level(s.level)))::integer
-    )
-  )
-  from xp_rebalance_017_profiles s
-  where s.id = p.id and not s.applied;
-
-  -- The ledger is append-only, so the rebase is recorded rather than hidden.
-  -- todo_id is null because no single quest caused it.
-  insert into xp_events (user_id, todo_id, delta, reason)
-  select p.id, null::uuid, p.xp - s.old_xp, 'xp rebalance'
-    from profiles p
-    join xp_rebalance_017_profiles s on s.id = p.id
-   where not s.applied and p.xp <> s.old_xp;
-
-  update xp_rebalance_017_profiles set applied = true where not applied;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- 5. Restate every quest's contribution at the new prices — the same backfill
---    migration 007 ran, and idempotent for the same reason: it compares each
---    row against what the current functions say it should be.
+--    Both the stored level and the level the new curve derives from their XP
+--    are checked: a character sitting on 3050 XP would read as level 20 on the
+--    new curve whatever its level column says, so clamping one without the
+--    other would leave the two disagreeing — the exact split migration 011
+--    exists to prevent.
 --
---    Doing this by rule rather than by scaling is what keeps a toggle honest.
---    A quest with no deadline is worth +5 today and was worth +5 before, so its
---    contribution must stay 5; had it been scaled with the rest, un-completing
---    it would have taken back less than completing it paid, forever.
+--    One statement, so the ledger sees the balances as they were: every CTE
+--    here reads the same snapshot, which is what lets `before` hold the old XP
+--    while the update is already rewriting it. Re-running finds nothing above
+--    level 3 and writes nothing.
+-- ---------------------------------------------------------------------------
+with before as (
+  select id, xp as old_xp, level as old_level
+    from profiles
+   where greatest(level, level_for_xp(xp)) > 3
+),
+reset as (
+  update profiles p
+     set level = 3,
+         xp    = xp_for_level(3)
+    from before b
+   where b.id = p.id
+  returning p.id, p.xp as new_xp
+)
+insert into xp_events (user_id, todo_id, delta, reason)
+select r.id, null::uuid, r.new_xp - b.old_xp,
+       'reset to level 3 (was ' || b.old_level || ', ' || b.old_xp || ' XP)'
+  from reset r
+  join before b on b.id = r.id
+ where r.new_xp <> b.old_xp;
+
+-- ---------------------------------------------------------------------------
+-- 4. Everyone else: line the level column up with the curve it is now read
+--    against. This only ever raises it — the characters whose XP outran level 3
+--    were all caught above — and greatest() keeps the ratchet honest for any row
+--    whose stored level was somehow ahead of its XP.
+-- ---------------------------------------------------------------------------
+update profiles set level = greatest(level, level_for_xp(xp))
+ where level <> greatest(level, level_for_xp(xp));
+
+-- XP never sits below the floor of the earned level; that is what makes
+-- level_for_xp(xp) and profiles.level agree everywhere else in the app.
+update profiles set xp = xp_for_level(level) where xp < xp_for_level(level);
+
+-- ---------------------------------------------------------------------------
+-- 5. Re-price past quests: finished ones at today's award, everything else
+--    back to a clean nothing. Idempotent because it compares each row against
+--    what the rule says it should hold.
 -- ---------------------------------------------------------------------------
 update todos t
-   set xp_awarded = quest_target_xp(t.status, t.due_date, t.completed_at)
- where t.xp_awarded <> quest_target_xp(t.status, t.due_date, t.completed_at);
+   set xp_awarded = case
+         when t.status = 'done'
+           then quest_target_xp(t.status, t.due_date, t.completed_at)
+         else 0
+       end
+ where t.xp_awarded <> case
+         when t.status = 'done'
+           then quest_target_xp(t.status, t.due_date, t.completed_at)
+         else 0
+       end;
 
 -- ---------------------------------------------------------------------------
--- 6. Belt and braces: the invariant migration 011 relies on is that XP never
---    sits below the floor of the earned level. Anything that slipped through
---    (a profile created between the snapshot and now, say) is lifted.
+-- 6. An earlier draft of this migration converted balances onto the new curve
+--    instead of resetting them, and kept a snapshot table to do it. The reset
+--    supersedes it; drop it if it is there.
 -- ---------------------------------------------------------------------------
-update profiles set xp = xp_for_level(level) where xp < xp_for_level(level);
-update profiles set level = level_for_xp(xp) where level_for_xp(xp) > level;
+drop table if exists xp_rebalance_017_profiles;

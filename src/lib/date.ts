@@ -82,6 +82,15 @@ function shortDate(d: Date): string {
 }
 
 /**
+ * Midnight means "some time that day" rather than an appointment at 00:00 —
+ * nothing in the picker produces it, so a deadline carrying it was set by date
+ * alone and showing it a clock time would be inventing precision.
+ */
+function atMidnight(d: Date): boolean {
+  return d.getHours() === 0 && d.getMinutes() === 0;
+}
+
+/**
  * "Today · 5:00 PM", "Tomorrow · 9:00 AM", "08/14".
  *
  * Only today and tomorrow get words — every other deadline is the date, so
@@ -92,21 +101,34 @@ export function describeDue(iso: string): string {
   const d = new Date(iso);
   const days = daysAway(iso);
   const past = d.getTime() < Date.now();
-  const atMidnight = d.getHours() === 0 && d.getMinutes() === 0;
-  const time = atMidnight ? "" : ` · ${TIME.format(d)}`;
+  const time = atMidnight(d) ? "" : ` · ${TIME.format(d)}`;
 
   if (days === 0) return past ? `Today${time} — late` : `Today${time}`;
   if (days === 1) return `Tomorrow${time}`;
   return shortDate(d);
 }
 
-/** Same idea as describeDue but without the time — for the narrow boxes. */
+/**
+ * Same idea as describeDue, trimmed for the narrow category boxes: "5:00 PM",
+ * "Tomorrow", "08/14".
+ *
+ * A quest due today shows the hour rather than the word. "Today" is the one
+ * label that tells you nothing you can act on — of course it's today, it's in
+ * the box with a red chip — whereas the time is the whole question: whether
+ * this is still doable before the deadline or already gone. It needs no "Today"
+ * in front of it, because a bare clock time is only ever shown for today; every
+ * other deadline reads as a weekday word or a date.
+ */
 export function describeDueShort(iso: string): string {
   const d = new Date(iso);
   const days = daysAway(iso);
   const past = d.getTime() < Date.now();
 
-  if (days === 0) return past ? "Today · late" : "Today";
+  if (days === 0) {
+    // A date-only deadline has no hour to show, so it keeps the word.
+    const label = atMidnight(d) ? "Today" : TIME.format(d);
+    return past ? `${label} · late` : label;
+  }
   if (days === 1) return "Tomorrow";
   return shortDate(d);
 }
