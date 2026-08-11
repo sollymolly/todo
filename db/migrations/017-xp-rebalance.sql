@@ -22,21 +22,29 @@
 --  A missed deadline now costs one on-time quest rather than most of one, which
 --  is the real point of the change: the penalty stings without wiping out a day.
 --
+--  BALANCES
+--  --------
+--  Every balance is divided by the same 2.5 as the awards, which is what keeps
+--  a character exactly where it stood: the curve moved by that factor too, so
+--  50 XP of 130 towards Squire becomes 20 of 50 towards Squire. Rounding is
+--  never allowed to cost a rank — a balance that lands a hair under its own
+--  floor is lifted back to it.
+--
+--  Leaving those balances alone was the alternative, and it inverts the board:
+--  98 XP earned at 25 a quest is level 3 on a curve where Squire costs 50, so
+--  the character sitting below the cap would vault over the two being reset
+--  down to it. Dividing everything by one number avoids having to reason about
+--  that at all.
+--
 --  THE RESET
 --  ---------
---  Every character above level 3 is set back to level 3, at the bottom of it —
---  50 XP, an empty bar. Ranks earned at the old prices were earned against a
---  different curve, and this is a deliberate clean slate rather than an attempt
---  to convert them.
+--  Then every character still above level 3 is set back to level 3, at the
+--  bottom of it — 50 XP, an empty bar.
 --
 --  This is the one thing here that cannot be undone: profiles.level is a ratchet
 --  (migration 011) precisely so a level can never be lost, and this migration
 --  reaches past that on purpose. There is no record of the old level other than
 --  the xp_events row it writes, so read that before you decide you want it back.
---
---  Characters at or below level 3 keep their XP. Some of them still move up a
---  rank, because the curve came down beneath them — a bar that was nearly full
---  at the old prices is over the line at the new ones. Nobody ends up above 3.
 --
 --  Gear is left alone. Someone reset from 11 to 3 keeps wearing the plate they
 --  are wearing today: saveEquipped() starts from the stored loadout and only
@@ -111,54 +119,82 @@ language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 3. Back to level 3.
+-- 3. Re-price every balance, then cap at level 3.
 --
---    Both the stored level and the level the new curve derives from their XP
---    are checked: a character sitting on 3050 XP would read as level 20 on the
---    new curve whatever its level column says, so clamping one without the
---    other would leave the two disagreeing — the exact split migration 011
---    exists to prevent.
+--    `kept` is the divided balance, lifted to the floor of the rank the
+--    character had already earned so that rounding cannot demote anyone: the
+--    thresholds were rounded to tens, and a couple of them rounded up, which is
+--    enough to leave an exactly-on-the-line balance one XP short of its own
+--    rank.
+--
+--    The cap reads the level off `kept` rather than off the level column,
+--    because the new curve derives a level from XP whatever the column says —
+--    XPBar does exactly that — so capping one without the other would leave the
+--    two disagreeing, the precise split migration 011 exists to prevent.
 --
 --    One statement, so the ledger sees the balances as they were: every CTE
---    here reads the same snapshot, which is what lets `before` hold the old XP
---    while the update is already rewriting it. Re-running finds nothing above
---    level 3 and writes nothing.
+--    here reads the same snapshot, which is what lets `before` hold the old
+--    numbers while the update is already overwriting them.
+--
+--    This is the one step here that is not safe to repeat — dividing an already
+--    divided balance would quietly halve it again — so unlike everything else in
+--    this file it is guarded by a marker rather than by being idempotent. The
+--    marker row is written in the same statement as the work, so the two cannot
+--    come apart.
 -- ---------------------------------------------------------------------------
-with before as (
-  select id, xp as old_xp, level as old_level
+create table if not exists xp_rebalance_017 (
+  applied_at timestamptz primary key default now()
+);
+
+do $$
+begin
+  if exists (select 1 from xp_rebalance_017) then
+    raise notice 'migration 017 has already re-priced balances — skipping step 3';
+    return;
+  end if;
+
+  with before as (
+    select
+      id,
+      xp    as old_xp,
+      level as old_level,
+      greatest(round(xp / 2.5)::integer, xp_for_level(level)) as kept
     from profiles
-   where greatest(level, level_for_xp(xp)) > 3
-),
-reset as (
-  update profiles p
-     set level = 3,
-         xp    = xp_for_level(3)
-    from before b
-   where b.id = p.id
-  returning p.id, p.xp as new_xp
-)
-insert into xp_events (user_id, todo_id, delta, reason)
-select r.id, null::uuid, r.new_xp - b.old_xp,
-       'reset to level 3 (was ' || b.old_level || ', ' || b.old_xp || ' XP)'
-  from reset r
-  join before b on b.id = r.id
- where r.new_xp <> b.old_xp;
+  ),
+  priced as (
+    select
+      id, old_xp, old_level,
+      level_for_xp(kept) > 3 as capped,
+      case when level_for_xp(kept) > 3 then xp_for_level(3) else kept end as new_xp,
+      case when level_for_xp(kept) > 3 then 3 else level_for_xp(kept) end as new_level
+    from before
+  ),
+  written as (
+    update profiles p
+       set xp    = q.new_xp,
+           level = q.new_level
+      from priced q
+     where q.id = p.id
+       and (p.xp <> q.new_xp or p.level <> q.new_level)
+    returning p.id
+  )
+  insert into xp_events (user_id, todo_id, delta, reason)
+  select
+    q.id, null::uuid, q.new_xp - q.old_xp,
+    case when q.capped
+      then 'reset to level 3 (was ' || q.old_level || ', ' || q.old_xp || ' XP)'
+      else 'rebalanced to the new XP prices (was ' || q.old_xp || ' XP)'
+    end
+  from written w
+  join priced q on q.id = w.id
+  where q.new_xp <> q.old_xp;
+
+  insert into xp_rebalance_017 default values;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
--- 4. Everyone else: line the level column up with the curve it is now read
---    against. This only ever raises it — the characters whose XP outran level 3
---    were all caught above — and greatest() keeps the ratchet honest for any row
---    whose stored level was somehow ahead of its XP.
--- ---------------------------------------------------------------------------
-update profiles set level = greatest(level, level_for_xp(xp))
- where level <> greatest(level, level_for_xp(xp));
-
--- XP never sits below the floor of the earned level; that is what makes
--- level_for_xp(xp) and profiles.level agree everywhere else in the app.
-update profiles set xp = xp_for_level(level) where xp < xp_for_level(level);
-
--- ---------------------------------------------------------------------------
--- 5. Re-price past quests: finished ones at today's award, everything else
+-- 4. Re-price past quests: finished ones at today's award, everything else
 --    back to a clean nothing. Idempotent because it compares each row against
 --    what the rule says it should hold.
 -- ---------------------------------------------------------------------------
@@ -175,8 +211,8 @@ update todos t
        end;
 
 -- ---------------------------------------------------------------------------
--- 6. An earlier draft of this migration converted balances onto the new curve
---    instead of resetting them, and kept a snapshot table to do it. The reset
+-- 5. An earlier draft of this migration converted balances onto the new curve
+--    without a cap, and kept a per-profile snapshot table to do it. Step 3
 --    supersedes it; drop it if it is there.
 -- ---------------------------------------------------------------------------
 drop table if exists xp_rebalance_017_profiles;
