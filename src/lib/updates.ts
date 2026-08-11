@@ -45,6 +45,7 @@ export const UPDATES: Update[] = [
     week: "2026-08-10",
     title: "Late quests, honest XP, and a locked-down account",
     items: [
+      "XP is priced in smaller numbers: +10 for a quest done on time, +3 for a late one, -10 for one you never delivered, and +5 for anything without a deadline. Every rank threshold came down by the same amount, so the ranks still take exactly the number of quests they always did — and your character kept its rank and its place in the bar. A missed deadline now costs one on-time quest instead of most of one.",
       "New Strengths panel: how often you actually deliver in each category, weakest first, so the area you have been neglecting is the one at the top.",
       "Completed quests are now deleted after 7 days to keep the app light. Your completed total, on-time rate and category strengths are unaffected — those numbers are kept — but the titles and notes of finished quests do not stick around, so copy anything you want to keep.",
       "A missed quest now stays in its category box instead of vanishing into the chronicle. Late is not the same as gone — finish it and you get the late award, and the penalty you already paid is refunded.",

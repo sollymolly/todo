@@ -25,9 +25,9 @@ export const MAX_STEPS = 20;
 
 export const XP = {
   noDeadline: 5,
-  onTime: 25,
-  late: 8,
-  penalty: -15,
+  onTime: 10,
+  late: 3,
+  penalty: -10,
   /** Hours past the deadline before a quest auto-fails. */
   graceHours: 24,
 } as const;
@@ -44,28 +44,39 @@ export function previewXp(due: string | null): number {
 
 export type Rank = { level: number; title: string; xp: number };
 
+/**
+ * The curve is set in quests, not in XP: two on-time quests to reach level 2,
+ * three more for level 3, and so on. The numbers below are those counts priced
+ * at XP.onTime, which is why they moved when the awards did — the pace of the
+ * game is unchanged, only the units it is counted in.
+ *
+ * Mirrored in the `ranks` table (migration 017) — change both.
+ */
 export const RANKS: Rank[] = [
   { level: 1, title: "Ragged Peasant", xp: 0 },
-  { level: 2, title: "Wanderer", xp: 50 },
-  { level: 3, title: "Squire", xp: 130 },
-  { level: 4, title: "Footman", xp: 250 },
-  { level: 5, title: "Man-at-Arms", xp: 420 },
-  { level: 6, title: "Sellsword", xp: 650 },
-  { level: 7, title: "Knight", xp: 950 },
-  { level: 8, title: "Knight-Errant", xp: 1330 },
-  { level: 9, title: "Champion", xp: 1800 },
-  { level: 10, title: "Crusader", xp: 2370 },
-  { level: 11, title: "Paladin", xp: 3050 },
-  { level: 12, title: "Warlord", xp: 3850 },
-  { level: 13, title: "Vanguard", xp: 4780 },
-  { level: 14, title: "Highlord", xp: 5850 },
-  { level: 15, title: "Dragonslayer", xp: 7070 },
-  { level: 16, title: "Archon", xp: 8450 },
-  { level: 17, title: "Grandmaster", xp: 10000 },
-  { level: 18, title: "Warden of Dawn", xp: 11730 },
-  { level: 19, title: "Immortal", xp: 13650 },
-  { level: 20, title: "Living Legend", xp: 15770 },
+  { level: 2, title: "Wanderer", xp: 20 },
+  { level: 3, title: "Squire", xp: 50 },
+  { level: 4, title: "Footman", xp: 100 },
+  { level: 5, title: "Man-at-Arms", xp: 170 },
+  { level: 6, title: "Sellsword", xp: 260 },
+  { level: 7, title: "Knight", xp: 380 },
+  { level: 8, title: "Knight-Errant", xp: 530 },
+  { level: 9, title: "Champion", xp: 720 },
+  { level: 10, title: "Crusader", xp: 950 },
+  { level: 11, title: "Paladin", xp: 1220 },
+  { level: 12, title: "Warlord", xp: 1540 },
+  { level: 13, title: "Vanguard", xp: 1910 },
+  { level: 14, title: "Highlord", xp: 2340 },
+  { level: 15, title: "Dragonslayer", xp: 2830 },
+  { level: 16, title: "Archon", xp: 3380 },
+  { level: 17, title: "Grandmaster", xp: 4000 },
+  { level: 18, title: "Warden of Dawn", xp: 4690 },
+  { level: 19, title: "Immortal", xp: 5460 },
+  { level: 20, title: "Living Legend", xp: 6310 },
 ];
+
+/** Flat cost per level past the named ranks — 100 on-time quests each. */
+export const XP_PER_LEGEND_LEVEL = 1000;
 
 /** XP required to reach a level, extending past the named ranks. */
 export function xpForLevel(level: number): number {
@@ -73,7 +84,7 @@ export function xpForLevel(level: number): number {
   const named = RANKS[level - 1];
   if (named) return named.xp;
   const last = RANKS[RANKS.length - 1];
-  return last.xp + (level - last.level) * 2500;
+  return last.xp + (level - last.level) * XP_PER_LEGEND_LEVEL;
 }
 
 export type Progress = {

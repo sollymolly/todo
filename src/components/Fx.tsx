@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { XP } from "@/lib/game";
 
 /* --------------------------------------------------------------------------
    A tiny effects layer. Anything in the tree can call useFx().celebrate({...})
@@ -72,7 +73,10 @@ export function FxProvider({ children }: { children: React.ReactNode }) {
   const seq = useRef(0);
 
   const celebrate = useCallback((c: Celebration) => {
-    const tone: Tone = c.tone ?? (c.xp < 0 ? "bad" : c.xp >= 25 ? "great" : "good");
+    // The full-fanfare threshold is "you made the deadline", not a fixed
+    // number — hardcoding it meant nothing was ever great once awards shrank.
+    const tone: Tone =
+      c.tone ?? (c.xp < 0 ? "bad" : c.xp >= XP.onTime ? "great" : "good");
     const id = ++seq.current;
     setLive((prev) => [...prev, { ...c, id, tone, bits: scatter(tone) }]);
     window.setTimeout(

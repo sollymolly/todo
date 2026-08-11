@@ -199,22 +199,22 @@ $$;
 -- belonging to someone else simply will not match.
 -- ===========================================================================
 
--- Awards for finishing a quest.
+-- Awards for finishing a quest. Mirrored in XP in src/lib/game.ts.
 --   no due date       → +5   (minimal, per the honour system)
---   due date, on time → +25  (early counts the same as on time)
---   due date, late    → +8   (partial credit for finishing at all)
+--   due date, on time → +10  (early counts the same as on time)
+--   due date, late    → +3   (partial credit for finishing at all)
 create or replace function quest_xp(p_due timestamptz, p_done timestamptz)
 returns integer language sql immutable as $$
   select case
     when p_due is null    then 5
-    when p_done <= p_due  then 25
-    else                       8
+    when p_done <= p_due  then 10
+    else                       3
   end;
 $$;
 
 -- Penalty for a quest that was promised with a deadline and not delivered.
 create or replace function quest_penalty()
-returns integer language sql immutable as $$ select -15; $$;
+returns integer language sql immutable as $$ select -10; $$;
 
 -- ---------------------------------------------------------------------------
 -- What a quest should be contributing, given its current state.
