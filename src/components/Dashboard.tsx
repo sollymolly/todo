@@ -245,7 +245,11 @@ function Inner({
     guard(async () => {
       setTodos((prev) => prev.filter((t) => t.id !== todo.id));
       const res = await abandonTodo(todo.id);
-      celebrate({ ...origin, xp: res.delta, tone: "bad", label: "oath broken" });
+      // Abandoning a quest that already paid for its missed deadline costs
+      // nothing, and "+0 XP" floating off a row is worse than saying nothing.
+      if (res.delta !== 0) {
+        celebrate({ ...origin, xp: res.delta, tone: "bad", label: "oath broken" });
+      }
       applyXp(res.xp);
       startTransition(() => router.refresh());
     });

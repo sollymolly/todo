@@ -44,6 +44,17 @@ export function previewXp(due: string | null): number {
   return Date.now() <= new Date(due).getTime() ? XP.onTime : XP.late;
 }
 
+/**
+ * What abandoning this quest would cost, given what it has already taken. Zero
+ * for a missed quest: the deadline charged the full penalty when it went by, and
+ * giving up afterwards is never allowed to hand any of that back.
+ *
+ * Mirrors the least() in abandon_quest (migration 019) — change both.
+ */
+export function abandonCost(xpAwarded: number): number {
+  return Math.min(XP.abandon, xpAwarded) - xpAwarded;
+}
+
 /* ==========================================================================
    Ranks
    ========================================================================== */

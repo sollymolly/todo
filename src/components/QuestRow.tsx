@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { colorOf, XP } from "@/lib/game";
+import { abandonCost, colorOf } from "@/lib/game";
 import {
   describeDue,
   describeDueShort,
@@ -75,6 +75,8 @@ export default function QuestRow({
   const failed = todo.status === "failed";
   const overdue = todo.status === "open" && isOverdue(todo.due_date);
   const c = colorOf(category?.color ?? "amber");
+  /** Negative, or 0 when this quest has already been charged for. */
+  const cost = abandonCost(todo.xp_awarded);
 
   const stepsDone = steps.filter((s) => s.done).length;
 
@@ -412,17 +414,28 @@ export default function QuestRow({
                 {/* Two ways off the board, and the labels have to say which is
                     which: abandoning is a broken promise that costs XP and is
                     counted against the category, deleting is for a quest that
-                    was written down wrong and should leave no mark at all. */}
-                {todo.status === "open" && todo.due_date && (
+                    was written down wrong and should leave no mark at all.
+
+                    Anything unfinished can be abandoned — a missed deadline and
+                    an undated quest you are never going to do are exactly the
+                    ones worth being able to call off. The cost is read off the
+                    quest rather than assumed: a missed one has already paid. */}
+                {!done && (
                   <MenuItem
                     danger
                     onClick={(e) => {
                       setMenuAt(null);
                       onAbandon(todo, { x: e.clientX, y: e.clientY });
                     }}
-                    hint="counts as a missed deadline"
+                    hint={
+                      failed
+                        ? "the penalty is already paid"
+                        : todo.due_date
+                          ? "counts as a missed deadline"
+                          : "nothing was promised, but you did say you would"
+                    }
                   >
-                    Abandon ({XP.abandon} XP)
+                    Abandon{cost !== 0 && ` (${cost} XP)`}
                   </MenuItem>
                 )}
                 <MenuItem
