@@ -171,19 +171,34 @@ export async function uncompleteTodo(id: string): Promise<XpResult> {
   return rows[0].result;
 }
 
+/**
+ * Giving up on a quest: the penalty is charged, the missed deadline is recorded
+ * against the category, and the quest itself is deleted. Only the counter
+ * survives — see migration 018 for why the miss has to outlive the row.
+ */
 export async function abandonTodo(id: string): Promise<XpResult> {
   const userId = await requireUserId();
   const rows = (await sql`
     select abandon_quest(${userId}::uuid, ${id}::uuid) as result
   `) as { result: XpResult }[];
   bump();
+  revalidatePath("/habits");
   return rows[0].result;
 }
 
-export async function deleteTodo(id: string) {
+/**
+ * Removing a quest that should never have existed. Counts as nothing, and hands
+ * back whatever XP it had moved — so deleting a finished quest returns its
+ * award. Abandoning is the way to give up on something real.
+ */
+export async function deleteTodo(id: string): Promise<XpResult> {
   const userId = await requireUserId();
-  await sql`delete from todos where id = ${id}::uuid and user_id = ${userId}::uuid`;
+  const rows = (await sql`
+    select delete_quest(${userId}::uuid, ${id}::uuid) as result
+  `) as { result: XpResult }[];
   bump();
+  revalidatePath("/habits");
+  return rows[0].result;
 }
 
 /**

@@ -15,6 +15,11 @@ import type { Category, Todo } from "@/lib/types";
    keep, so counting them would flatter every area equally and make a neglected
    one look healthy.
 
+   A broken promise counts from the moment it breaks, with nothing finished
+   anywhere near it: an area holding two abandoned deadlines and no completions
+   is 0%, not "nothing resolved yet". Only an area that has never had a deadline
+   come due shows a dash.
+
    Higher is better here, but the weakest is still listed first: the point is to
    surface the area being neglected, not to sort it alphabetically and bury it.
    -------------------------------------------------------------------------- */
@@ -25,6 +30,7 @@ type Row = {
   color: string;
   onTime: number;
   late: number;
+  /** Deadlines that went by unmet: still on the board, or abandoned and gone. */
   failed: number;
   /** Percent of deadlines met, or null when none have resolved yet. */
   rate: number | null;
@@ -43,8 +49,12 @@ function build(categories: Category[], todos: Todo[]): Row[] {
     const late =
       (c.archived_late ?? 0) +
       done.filter((t) => t.completed_at && t.completed_at > t.due_date!).length;
-    // Missed quests are never pruned, so this side is always countable live.
-    const failed = mine.filter((t) => t.status === "failed").length;
+    // A missed quest stays on the board while it can still be redeemed, so most
+    // of this side is countable live. An abandoned one was deleted outright —
+    // giving up is the end of it — and survives only as the counter.
+    const failed =
+      (c.archived_missed ?? 0) +
+      mine.filter((t) => t.status === "failed" && t.due_date).length;
 
     const resolved = onTime + late + failed;
     return {

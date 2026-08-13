@@ -52,6 +52,9 @@ create table if not exists profiles (
   archived_done     integer not null default 0,
   archived_on_time  integer not null default 0,
   archived_late     integer not null default 0,
+  -- Deadlines that were missed and then removed by abandoning the quest. The
+  -- row is gone, so this counter is the whole record. See migration 018.
+  archived_missed   integer not null default 0,
   created_at    timestamptz not null default now()
 );
 
@@ -71,6 +74,8 @@ create table if not exists categories (
   archived_done     integer not null default 0,
   archived_on_time  integer not null default 0,
   archived_late     integer not null default 0,
+  -- Abandoned quests, which are deleted rather than kept. See migration 018.
+  archived_missed   integer not null default 0,
   created_at  timestamptz not null default now()
 );
 create index if not exists categories_user_idx on categories(user_id, sort_order);
@@ -366,6 +371,10 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- abandon_quest — give up on a deadline by hand.
+--
+-- Superseded by migration 018: abandoning now costs -5, records the miss on the
+-- archived_missed counters and deletes the quest. This version is left here as
+-- the shape of the original; the migration replaces it.
 -- ---------------------------------------------------------------------------
 create or replace function abandon_quest(p_user uuid, p_todo uuid)
 returns json
@@ -523,6 +532,15 @@ alter table todos add column if not exists habit_id uuid
   references habits(id) on delete cascade;
 
 create index if not exists todos_habit_idx on todos(habit_id, due_date desc);
+
+-- A habit day cleared by hand: today's instance was abandoned or deleted, so
+-- materialisation must not put it back. See migration 018.
+create table if not exists habit_skips (
+  habit_id   uuid not null references habits(id) on delete cascade,
+  day        date not null,
+  created_at timestamptz not null default now(),
+  primary key (habit_id, day)
+);
 
 -- ---------------------------------------------------------------------------
 -- is_habit_due(cadence, weekday, day) — whether a habit runs on a given date.

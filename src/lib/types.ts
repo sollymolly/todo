@@ -50,6 +50,8 @@ export type Profile = {
   archived_done: number;
   archived_on_time: number;
   archived_late: number;
+  /** Deadlines missed on quests that were then abandoned, and so deleted. */
+  archived_missed: number;
   created_at: string;
 };
 
@@ -63,6 +65,8 @@ export type Category = {
   archived_done: number;
   archived_on_time: number;
   archived_late: number;
+  /** Abandoned quests. They are deleted, so this is the only record of them. */
+  archived_missed: number;
   created_at: string;
 };
 

@@ -155,18 +155,27 @@ function Inner({
   const stats = useMemo(() => {
     let done = profile.archived_done ?? 0;
     let onTime = profile.archived_on_time ?? 0;
-    let missed = profile.archived_late ?? 0;
+    // Finished late, plus the deadlines that were abandoned outright — those
+    // quests are deleted, so the counter is the only place they still exist.
+    let missed = (profile.archived_late ?? 0) + (profile.archived_missed ?? 0);
     for (const t of todos) {
       if (t.status === "done") {
         done++;
         if (t.due_date && t.completed_at && t.completed_at <= t.due_date) onTime++;
         else if (t.due_date) missed++;
-      } else if (t.status === "failed") {
+      } else if (t.status === "failed" && t.due_date) {
         missed++;
       }
     }
     return { done, open: openCount, onTime, missed };
-  }, [todos, openCount, profile.archived_done, profile.archived_on_time, profile.archived_late]);
+  }, [
+    todos,
+    openCount,
+    profile.archived_done,
+    profile.archived_on_time,
+    profile.archived_late,
+    profile.archived_missed,
+  ]);
 
   /* ------------------------------------------------------------- helpers */
 
@@ -229,18 +238,26 @@ function Inner({
       setXp(res.xp);
     });
 
+  // Abandoning removes the quest. The miss it leaves behind lives on the
+  // category's counter, which only the server knows about — hence the refresh,
+  // without which Strengths would keep showing the old figure.
   const handleAbandon = (todo: Todo, origin: { x: number; y: number }) =>
     guard(async () => {
+      setTodos((prev) => prev.filter((t) => t.id !== todo.id));
       const res = await abandonTodo(todo.id);
       celebrate({ ...origin, xp: res.delta, tone: "bad", label: "oath broken" });
-      patch(todo.id, { status: "failed", xp_awarded: res.awarded });
       applyXp(res.xp);
+      startTransition(() => router.refresh());
     });
 
+  // Deleting counts as nothing, but it does hand back any XP the quest had
+  // moved — so the bar can change here too.
   const handleDelete = (todo: Todo) =>
     guard(async () => {
       setTodos((prev) => prev.filter((t) => t.id !== todo.id));
-      await deleteTodo(todo.id);
+      const res = await deleteTodo(todo.id);
+      setXp(res.xp);
+      startTransition(() => router.refresh());
     });
 
   const handleAdd = async (draft: QuestDraft) => {

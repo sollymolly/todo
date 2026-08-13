@@ -409,6 +409,10 @@ export default function QuestRow({
                     Undo (return XP)
                   </MenuItem>
                 )}
+                {/* Two ways off the board, and the labels have to say which is
+                    which: abandoning is a broken promise that costs XP and is
+                    counted against the category, deleting is for a quest that
+                    was written down wrong and should leave no mark at all. */}
                 {todo.status === "open" && todo.due_date && (
                   <MenuItem
                     danger
@@ -416,8 +420,9 @@ export default function QuestRow({
                       setMenuAt(null);
                       onAbandon(todo, { x: e.clientX, y: e.clientY });
                     }}
+                    hint="counts as a missed deadline"
                   >
-                    Abandon ({XP.penalty} XP)
+                    Abandon ({XP.abandon} XP)
                   </MenuItem>
                 )}
                 <MenuItem
@@ -426,6 +431,7 @@ export default function QuestRow({
                     setMenuAt(null);
                     onDelete(todo);
                   }}
+                  hint="as if it never existed"
                 >
                   Delete
                 </MenuItem>
@@ -442,10 +448,13 @@ function MenuItem({
   children,
   onClick,
   danger,
+  hint,
 }: {
   children: React.ReactNode;
   onClick: (e: React.MouseEvent) => void;
   danger?: boolean;
+  /** A second, quieter line — for the items whose consequence isn't obvious. */
+  hint?: string;
 }) {
   return (
     <button
@@ -455,6 +464,11 @@ function MenuItem({
       }`}
     >
       {children}
+      {hint && (
+        <span className="mt-0.5 block text-[10px] font-normal text-mud-400">
+          {hint}
+        </span>
+      )}
     </button>
   );
 }

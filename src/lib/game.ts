@@ -28,6 +28,12 @@ export const XP = {
   onTime: 10,
   late: 3,
   penalty: -10,
+  /**
+   * Calling a quest off yourself. Cheaper than letting the deadline pass in
+   * silence, which is the point: saying so is worth something. Mirrored in
+   * quest_abandon_penalty() — change both.
+   */
+  abandon: -5,
   /** Hours past the deadline before a quest auto-fails. */
   graceHours: 24,
 } as const;
