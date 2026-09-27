@@ -42,6 +42,24 @@ export function formatWeek(week: string): string {
    -------------------------------------------------------------------------- */
 export const UPDATES: Update[] = [
   {
+    week: "2026-09-28",
+    title: "HabitKnight is an app now: install it, get reminders, make the table yours",
+    items: [
+      "Install HabitKnight on your phone or computer: open the menu and choose Install app. On an iPhone or iPad, tap Share in Safari, then Add to Home Screen. It opens in its own window with its own icon, and on Android, Windows and Mac, long-pressing or right-clicking the icon gives you shortcuts straight to a new quest or to Habits.",
+      "Notifications: turn them on under Notifications in the menu, once on each device. You can get a reminder before each deadline (anywhere from 15 minutes to a day ahead — an hour unless you change it), a morning summary at a time you pick with what's due today, today's habits and anything past its deadline, and a nudge when a companion writes to you. On an iPhone or iPad they need the app added to your Home Screen first.",
+      "A message notification only says who wrote, never what they wrote: messages stay sealed, and the server can't read them to put them in a notification.",
+      "The installed app's icon shows how many quests are due today, on iPhone, iPad, Windows and Mac.",
+      "It opens without a signal: you'll see your quests as they were the last time you opened the app, with a note at the bottom saying so. Changes are paused until you're back online, and then it refreshes itself. Signing out clears the saved copy from that device.",
+      "A layout made for phones: Quests, Habits, Messages and your knight are tabs along the bottom, and the round + button adds a quest. Adding and editing quests, categories and chats slide up from the bottom of the screen, and tapping into a field no longer zooms the whole page in.",
+      "Make the table your own: add columns of your own — text, number, checkbox, a date, or a pick-list with coloured options — and fill them in quest by quest. Drag a column's edge to resize it, and use its menu to sort, rename, hide or delete it. Your layout follows your account onto every device.",
+      "Drag rows in the table into any order you like, by the handle at their left edge (or with the arrow keys once it's selected). The table switches to Manual order and keeps it; sort by any column whenever you want and click Manual order to go back. This order is the table's own — your board stays exactly as you arranged it.",
+      "The table remembers how you last sorted it.",
+      "A new look: warm paper with light falling in from a window and a few motes of dust drifting through it, and the Armoury is now a wood-panelled dressing room. Drifting dust in the menu turns the dust off on that device, and it's off already if your system is set to reduce motion.",
+      "The character strip at the top of your quests is now one big button into the Armoury.",
+      "Long quest names in the table now use the whole column instead of stopping short of the edge.",
+    ],
+  },
+  {
     week: "2026-09-21",
     title: "Drag anything, a table view, and screenshot import",
     items: [
