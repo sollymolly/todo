@@ -4,17 +4,20 @@
   --font-display: var(--font-cinzel), Georgia, serif;
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
 
-  /* Mud — parchment through to dark earth. Body text is mud-900. */
-  --color-mud-50: #fdf8ef;
-  --color-mud-100: #f4ead6;
-  --color-mud-200: #e6d5b6;
-  --color-mud-300: #d0b48c;
-  --color-mud-400: #b08f63;
-  --color-mud-500: #8d6c45;
-  --color-mud-600: #705435;
-  --color-mud-700: #573f28;
-  --color-mud-800: #3e2d1c;
-  --color-mud-900: #2a1e13;
+  /* Mud — ivory through to warm ink. Body text is mud-900.
+     Quiet on purpose: the page is a tool first, so the neutrals stay out of
+     the way and colour is left to the things that mean something — grass for
+     progress, red for late, a category's own hue. */
+  --color-mud-50: #fffdf8;
+  --color-mud-100: #f7f5ee;
+  --color-mud-200: #ebe8df;
+  --color-mud-300: #dcd8cc;
+  --color-mud-400: #aaa598;
+  --color-mud-500: #7f7a6e;
+  --color-mud-600: #615d54;
+  --color-mud-700: #48453e;
+  --color-mud-800: #33312c;
+  --color-mud-900: #26251f;
 
   /* Grass — the reward colour; everything healthy and growing. */
   --color-grass-100: #e2f4cd;
@@ -42,50 +45,70 @@ body {
   background: rgba(116, 187, 72, 0.35);
 }
 
+/* The square checkbox every quest uses, on the board and in the table. */
+.check {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1.5px solid var(--color-mud-400);
+  background: #fff;
+  color: #fff;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.check:hover { border-color: var(--color-grass-500); background: var(--color-grass-100); }
+.check.is-checked {
+  border-color: var(--color-grass-600);
+  background: var(--color-grass-600);
+}
+
 /* --------------------------------------------------------------------------
    Scrollbars
    -------------------------------------------------------------------------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(112, 84, 53, 0.4) transparent;
+  scrollbar-color: rgba(55, 53, 47, 0.3) transparent;
 }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(112, 84, 53, 0.32);
+  background: rgba(55, 53, 47, 0.22);
   border-radius: 99px;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(112, 84, 53, 0.55); }
+*::-webkit-scrollbar-thumb:hover { background: rgba(55, 53, 47, 0.4); }
 
 /* --------------------------------------------------------------------------
-   Surfaces — aged parchment pinned over the landscape.
+   Surfaces — plain ivory sheets over the landscape. Flat, a hairline border
+   and a soft shadow: enough to lift off the grass, no more.
    -------------------------------------------------------------------------- */
 .panel {
-  background: linear-gradient(180deg, #fdf9f0 0%, #f4e9d5 100%);
-  border: 1px solid var(--color-mud-300);
+  background: var(--color-mud-50);
+  border: 1px solid rgba(55, 53, 47, 0.1);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 10px 22px -14px rgba(42, 30, 19, 0.55);
+    0 1px 2px rgba(15, 15, 15, 0.04),
+    0 8px 24px -12px rgba(15, 15, 15, 0.18);
 }
 
 .panel-hover {
-  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .panel-hover:hover {
-  border-color: var(--color-mud-500);
+  border-color: rgba(55, 53, 47, 0.2);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.8) inset,
-    0 14px 26px -14px rgba(42, 30, 19, 0.6);
+    0 1px 2px rgba(15, 15, 15, 0.05),
+    0 10px 28px -12px rgba(15, 15, 15, 0.22);
 }
 
 /* Inputs and other sunken areas. */
 .field {
-  background: rgba(255, 255, 255, 0.72);
+  background: #fff;
   border: 1px solid var(--color-mud-300);
   color: var(--color-mud-900);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.field::placeholder { color: rgba(112, 84, 53, 0.45); }
+.field::placeholder { color: rgba(55, 53, 47, 0.4); }
 .field:focus {
   outline: none;
   border-color: var(--color-grass-500);

@@ -93,15 +93,13 @@ export default function CategoryStrength({
   if (rows.length === 0) return null;
 
   return (
-    <div className="panel rounded-2xl p-5">
-      <h2 className="font-display text-sm font-bold tracking-wide text-mud-800">
-        Strengths
-      </h2>
-      <p className="mt-0.5 text-[11px] leading-relaxed text-mud-500">
+    // Titled by the fold-out that holds it on the dashboard.
+    <div className="panel rounded-xl p-4">
+      <p className="text-[11px] leading-relaxed text-mud-500">
         Share of deadlines met. Finishing late doesn&apos;t count.
       </p>
 
-      <ul className="mt-3 space-y-2.5">
+      <ul className="mt-3 grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
         {rows.map((r) => {
           const col = colorOf(r.color);
           const missed = r.late + r.failed;

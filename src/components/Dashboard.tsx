@@ -15,7 +15,7 @@ import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import TimezoneSync from "@/components/TimezoneSync";
 import HeaderMenu from "@/components/HeaderMenu";
-import TaskTable from "@/components/TaskTable";
+import TaskTable, { type QuickEdit } from "@/components/TaskTable";
 import ScreenshotImport, { type ImportDraft } from "@/components/ScreenshotImport";
 import { FxProvider, useFx } from "@/components/Fx";
 import { levelFor, XP } from "@/lib/game";
@@ -35,6 +35,10 @@ import { addHabit } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
+
+/** The fold-out section headings below the board: Habits, Chronicle, Strengths. */
+const SECTION_TOGGLE =
+  "flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm font-semibold text-mud-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.6)] transition hover:text-grass-700";
 
 export default function Dashboard(props: {
   profile: Profile;
@@ -84,6 +88,7 @@ function Inner({
   const [managing, setManaging] = useState(false);
   const [showChronicle, setShowChronicle] = useState(false);
   const [showHabits, setShowHabits] = useState(true);
+  const [showStrengths, setShowStrengths] = useState(false);
   const [view, setView] = useState<"board" | "table">("board");
   const [importing, setImporting] = useState(false);
   const [composer, setComposer] = useState<{
@@ -323,6 +328,24 @@ function Inner({
     setEditing(null);
   };
 
+  // One cell edited in the table. The rest of the quest goes back unchanged,
+  // and a new date or category drops any hand-placed position, as in
+  // handleEditSave.
+  const handleQuickEdit = (todo: Todo, changes: QuickEdit) =>
+    guard(async () => {
+      const next = { ...todo, ...changes };
+      const time = (iso: string | null) => (iso ? new Date(iso).getTime() : null);
+      const moved =
+        time(next.due_date) !== time(todo.due_date) || next.category_id !== todo.category_id;
+      patch(todo.id, { ...changes, ...(moved ? { position: null } : {}) });
+      await updateTodo(todo.id, {
+        title: next.title,
+        notes: next.notes,
+        dueDate: next.due_date,
+        categoryId: next.category_id,
+      });
+    });
+
   // The boxes add inline, so this only needs the title/date/category.
   // The reviewed result of a screenshot import. Lands in the table, which is
   // where a batch of new quests is easiest to look over.
@@ -383,9 +406,9 @@ function Inner({
     <>
       <Scenery />
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-6 flex items-center justify-between gap-3">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-wide text-mud-900 drop-shadow-sm sm:text-3xl">
+          <h1 className="font-display text-xl font-bold tracking-wide text-mud-900 drop-shadow-sm sm:text-3xl">
             HabitKnight
           </h1>
         </div>
@@ -456,232 +479,253 @@ function Inner({
         )}
       </AnimatePresence>
 
-      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
-        {/* -------------------------------------------------------- left */}
-        <div className="lg:sticky lg:top-6">
-          <CharacterCard
-            name={profile.display_name}
-            xp={xp}
-            appearance={profile.appearance}
-            equipped={profile.equipped}
-            stats={stats}
-          />
+      {/* One column, quests first. The character is a strip above them
+          rather than a column beside them, so the board and the table get
+          the full width. */}
+      <div className="space-y-4">
+        <CharacterCard
+          name={profile.display_name}
+          xp={xp}
+          appearance={profile.appearance}
+          equipped={profile.equipped}
+          stats={stats}
+        />
 
-          {/* Matches the 24px grid gap either side, so the left column reads
-              with the same rhythm as the rest of the board. */}
-          <div className="mt-6">
-            <CategoryStrength categories={categories} todos={todos} />
+        {/* ------------------------------------------------- composer */}
+        {/* Sits above the board: each box below is a layout-animated
+            (transformed) element, which would otherwise paint over the
+            due-date popover. */}
+        <div ref={composerRef} className="relative z-30">
+          {composer.open ? (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              className="panel rounded-2xl p-4"
+            >
+              <QuestForm
+                key={composer.categoryId ?? "none"}
+                categories={categories}
+                defaultCategoryId={composer.categoryId}
+                autoFocus
+                onSubmit={handleAdd}
+                onCancel={() => setComposer({ open: false, categoryId: null })}
+              />
+            </motion.div>
+          ) : (
+            <button
+              onClick={() => quickAdd(null)}
+              className="panel panel-hover flex w-full items-center gap-2.5 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-mud-500 transition hover:text-grass-700"
+            >
+                              What must be done?
+            </button>
+          )}
+        </div>
+
+        {/* ---------------------------------------------------- board */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <h2 className="text-sm font-semibold text-mud-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">
+            Quests
+            {overdueCount > 0 && (
+              <span className="ml-2 font-sans text-xs font-bold text-red-700">
+                · {overdueCount} past deadline
+              </span>
+            )}
+          </h2>
+          <div className="ml-auto flex items-center gap-2">
+            {/* Two views of the same quests: boxes for doing, a table for
+                scanning, sorting and filtering. */}
+            <div
+              role="group"
+              aria-label="Quest view"
+              className="flex rounded-lg border border-mud-300 bg-white/80 p-0.5"
+            >
+              {(["board", "table"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  className={`rounded-md px-2.5 py-0.5 text-[11px] font-semibold capitalize transition ${
+                    view === v ? "bg-grass-600 text-white" : "text-mud-600 hover:text-grass-700"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setImporting(true)}
+              className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+              title="Turn a screenshot of a to-do list into quests"
+            >
+              Import screenshot
+            </button>
+            <button
+              onClick={() => setManaging(true)}
+              className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+              aria-label="Manage categories"
+              title="Manage categories"
+            >
+              Manage
+            </button>
           </div>
         </div>
 
-        {/* ------------------------------------------------------- right */}
-        <div className="min-w-0 space-y-4">
-          {/* ------------------------------------------------- composer */}
-          {/* Sits above the board: each box below is a layout-animated
-              (transformed) element, which would otherwise paint over the
-              due-date popover. */}
-          <div ref={composerRef} className="relative z-30">
-            {composer.open ? (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18 }}
-                className="panel rounded-2xl p-4"
-              >
-                <QuestForm
-                  key={composer.categoryId ?? "none"}
-                  categories={categories}
-                  defaultCategoryId={composer.categoryId}
-                  autoFocus
-                  onSubmit={handleAdd}
-                  onCancel={() => setComposer({ open: false, categoryId: null })}
-                />
-              </motion.div>
-            ) : (
-              <button
-                onClick={() => quickAdd(null)}
-                className="panel panel-hover flex w-full items-center gap-2.5 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-mud-500 transition hover:text-grass-700"
-              >
-                                What must be done?
-              </button>
-            )}
-          </div>
+        {view === "table" ? (
+          <TaskTable
+            todos={todos}
+            categories={categories}
+            steps={steps}
+            handlers={handlers}
+            onUpdate={handleQuickEdit}
+            onAdd={handleInlineAdd}
+          />
+        ) : (
+          <CategoryBoard
+            categories={categories}
+            todos={todos}
+            steps={steps}
+            handlers={handlers}
+            onInlineAdd={handleInlineAdd}
+            onPlace={handlePlace}
+            // The board shows the new order itself until this refresh lands;
+            // the refresh is for everything else that lists categories.
+            onReorderSections={(ids) =>
+              guard(async () => {
+                await reorderCategories(ids);
+                startTransition(() => router.refresh());
+              })
+            }
+            onCategoriesChanged={() => startTransition(() => router.refresh())}
+          />
+        )}
 
-          {/* ---------------------------------------------------- board */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <h2 className="font-display text-sm font-bold tracking-wide text-mud-800 drop-shadow-sm">
-              Quests
-              {overdueCount > 0 && (
-                <span className="ml-2 font-sans text-xs font-bold text-red-700">
-                  · {overdueCount} past deadline
+        {/* --------------------------------------------------- habits */}
+        {/* Below the board, because the board is what gets done today and a
+            habit is the standing commitment behind it. Collapsible for the
+            same reason the chronicle is: forty habits shouldn't push the
+            quests off the screen. */}
+        <div>
+          {/* The toggle and the link are siblings rather than nested: a link
+              inside a button is neither valid nor clickable in peace. */}
+          <div className="flex items-center gap-2 px-1">
+            <button
+              onClick={() => setShowHabits((v) => !v)}
+              aria-expanded={showHabits}
+              className={`${SECTION_TOGGLE} flex-1`}
+            >
+              <span className={showHabits ? "rotate-90" : ""}>▸</span>
+              Habits
+              {habits.length > 0 && (
+                <span className="font-sans text-xs font-semibold text-mud-500">
+                  ({habits.length})
                 </span>
               )}
-            </h2>
-            <div className="ml-auto flex items-center gap-2">
-              {/* Two views of the same quests: boxes for doing, a table for
-                  scanning, sorting and filtering. */}
-              <div
-                role="group"
-                aria-label="Quest view"
-                className="flex rounded-lg border border-mud-300 bg-white/80 p-0.5"
-              >
-                {(["board", "table"] as const).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setView(v)}
-                    aria-pressed={view === v}
-                    className={`rounded-md px-2.5 py-0.5 text-[11px] font-semibold capitalize transition ${
-                      view === v ? "bg-grass-600 text-white" : "text-mud-600 hover:text-grass-700"
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setImporting(true)}
-                className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-                title="Turn a screenshot of a to-do list into quests"
-              >
-                Import screenshot
-              </button>
-              <button
-                onClick={() => setManaging(true)}
-                className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-                aria-label="Manage categories"
-                title="Manage categories"
-              >
-                Manage
-              </button>
-            </div>
+              {waitingToday > 0 && (
+                <span className="font-sans text-xs font-bold text-amber-700">
+                  · {waitingToday} waiting today
+                </span>
+              )}
+            </button>
+            <Link
+              href="/habits"
+              className="shrink-0 rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+            >
+              {habits.length > 0 ? "Manage" : "New habit"}
+            </Link>
           </div>
 
-          {view === "table" ? (
-            <TaskTable
-              todos={todos}
-              categories={categories}
-              steps={steps}
-              handlers={handlers}
-            />
-          ) : (
-            <CategoryBoard
-              categories={categories}
-              todos={todos}
-              steps={steps}
-              handlers={handlers}
-              onInlineAdd={handleInlineAdd}
-              onPlace={handlePlace}
-              // The board shows the new order itself until this refresh lands;
-              // the refresh is for everything else that lists categories.
-              onReorderSections={(ids) =>
-                guard(async () => {
-                  await reorderCategories(ids);
-                  startTransition(() => router.refresh());
-                })
-              }
-              onCategoriesChanged={() => startTransition(() => router.refresh())}
-            />
-          )}
+          <AnimatePresence initial={false}>
+            {showHabits && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden pt-2"
+              >
+                {habits.length === 0 ? (
+                  <p className="panel rounded-2xl px-4 py-3 text-xs leading-relaxed text-mud-500">
+                    Nothing recurring yet. Add a quest with a repeat and it
+                    becomes a habit — a fresh quest appears on the board each
+                    day it&apos;s due, and the streak is counted here.
+                  </p>
+                ) : (
+                  <HabitList
+                    habits={habits}
+                    categories={categories}
+                    compact
+                    onChanged={() => startTransition(() => router.refresh())}
+                  />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-          {/* --------------------------------------------------- habits */}
-          {/* Below the board, because the board is what gets done today and a
-              habit is the standing commitment behind it. Collapsible for the
-              same reason the chronicle is: forty habits shouldn't push the
-              quests off the screen. */}
+        {/* ------------------------------------------------ chronicle */}
+        {chronicle.length > 0 && (
           <div>
-            {/* The toggle and the link are siblings rather than nested: a link
-                inside a button is neither valid nor clickable in peace. */}
-            <div className="flex items-center gap-2 px-1">
-              <button
-                onClick={() => setShowHabits((v) => !v)}
-                aria-expanded={showHabits}
-                className="flex flex-1 items-center gap-2 rounded-lg py-1.5 text-left font-display text-sm font-bold tracking-wide text-mud-800 drop-shadow-sm transition hover:text-grass-700"
-              >
-                <span className={showHabits ? "rotate-90" : ""}>▸</span>
-                Habits
-                {habits.length > 0 && (
-                  <span className="font-sans text-xs font-semibold text-mud-500">
-                    ({habits.length})
-                  </span>
-                )}
-                {waitingToday > 0 && (
-                  <span className="font-sans text-xs font-bold text-amber-700">
-                    · {waitingToday} waiting today
-                  </span>
-                )}
-              </button>
-              <Link
-                href="/habits"
-                className="shrink-0 rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-              >
-                {habits.length > 0 ? "Manage" : "New habit"}
-              </Link>
-            </div>
+            <button
+              onClick={() => setShowChronicle((v) => !v)}
+              className={SECTION_TOGGLE}
+            >
+              <span className={showChronicle ? "rotate-90" : ""}>▸</span>
+              Chronicle
+              <span className="font-sans text-xs font-semibold text-mud-500">
+                ({chronicle.length})
+              </span>
+            </button>
 
             <AnimatePresence initial={false}>
-              {showHabits && (
+              {showChronicle && (
+                <motion.ul
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden pt-2"
+                >
+                  {chronicle.map((t) => (
+                    <QuestRow
+                      key={t.id}
+                      todo={t}
+                      category={categories.find((c) => c.id === t.category_id)}
+                      steps={steps[t.id] ?? []}
+                      {...handlers}
+                    />
+                  ))}
+                </motion.ul>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* ------------------------------------------------ strengths */}
+        {/* Folded away by default: worth checking now and then, not worth
+            the space every time the board is open. */}
+        {categories.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowStrengths((v) => !v)}
+              aria-expanded={showStrengths}
+              className={SECTION_TOGGLE}
+            >
+              <span className={showStrengths ? "rotate-90" : ""}>▸</span>
+              Strengths
+            </button>
+            <AnimatePresence initial={false}>
+              {showStrengths && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden pt-2"
                 >
-                  {habits.length === 0 ? (
-                    <p className="panel rounded-2xl px-4 py-3 text-xs leading-relaxed text-mud-500">
-                      Nothing recurring yet. Add a quest with a repeat and it
-                      becomes a habit — a fresh quest appears on the board each
-                      day it&apos;s due, and the streak is counted here.
-                    </p>
-                  ) : (
-                    <HabitList
-                      habits={habits}
-                      categories={categories}
-                      compact
-                      onChanged={() => startTransition(() => router.refresh())}
-                    />
-                  )}
+                  <CategoryStrength categories={categories} todos={todos} />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          {/* ------------------------------------------------ chronicle */}
-          {chronicle.length > 0 && (
-            <div>
-              <button
-                onClick={() => setShowChronicle((v) => !v)}
-                className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left font-display text-sm font-bold tracking-wide text-mud-800 drop-shadow-sm transition hover:text-grass-700"
-              >
-                <span className={showChronicle ? "rotate-90" : ""}>▸</span>
-                Chronicle
-                <span className="font-sans text-xs font-semibold text-mud-500">
-                  ({chronicle.length})
-                </span>
-              </button>
-
-              <AnimatePresence initial={false}>
-                {showChronicle && (
-                  <motion.ul
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-2 overflow-hidden pt-2"
-                  >
-                    {chronicle.map((t) => (
-                      <QuestRow
-                        key={t.id}
-                        todo={t}
-                        category={categories.find((c) => c.id === t.category_id)}
-                        steps={steps[t.id] ?? []}
-                        {...handlers}
-                      />
-                    ))}
-                  </motion.ul>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Reports the browser's timezone so habits roll over at the user's

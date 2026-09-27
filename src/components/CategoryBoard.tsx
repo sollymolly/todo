@@ -33,7 +33,7 @@ import type { Category, Subtask, Todo } from "@/lib/types";
 
 const LIST_H = 234; // ~3 compact rows
 const EXPANDED_H = 468; // twice that, the ceiling while a checklist is open
-const HEADER_H = 45; // the box header, so the add tile matches a box exactly
+const HEADER_H = 38; // the box header, so the add tile matches a box exactly
 
 /** The key the Uncategorised box goes by, since it has no category id. */
 const LOOSE = "__none";
@@ -474,7 +474,7 @@ function Ghost({
       >
         <span className={`absolute inset-y-0 left-0 w-1.5 ${c.dot}`} />
         {carrying.kind === "section" ? (
-          <p className={`truncate font-display text-sm font-bold tracking-wide ${c.text}`}>
+          <p className={`truncate text-sm font-semibold ${c.text}`}>
             {carrying.category.name}
           </p>
         ) : (
@@ -586,11 +586,11 @@ function Box({
     <section
       data-drop-box={boxKey}
       data-section={category?.id}
-      className={`panel flex flex-col overflow-hidden rounded-2xl transition ${
-        // Loud enough to find at a glance across a full board: a stronger
-        // border plus a soft red halo, rather than a hairline tint.
-        overdue > 0 ? "border-red-500 ring-[3px] ring-red-400/80 shadow-[0_0_0_1px_rgba(220,38,38,0.35),0_8px_24px_-8px_rgba(220,38,38,0.5)]" : ""
-      } ${target ? "scale-[1.01] border-grass-500 ring-2 ring-grass-400" : ""} ${
+      className={`panel flex flex-col overflow-hidden rounded-xl transition ${
+        // A red edge is enough to find a late box on a calm board; the red
+        // "late" tag in the header says how many.
+        overdue > 0 ? "border-red-300" : ""
+      } ${target ? "border-grass-500 ring-2 ring-grass-400" : ""} ${
         carryingSection ? "opacity-40" : ""
       }`}
     >
@@ -599,32 +599,37 @@ function Box({
         ref={sectionRef}
         {...(category ? sectionListeners : {})}
         title={category ? "Drag to move this section" : undefined}
-        className={`flex items-center gap-2 border-b border-mud-200 px-3 py-2 ${c.head} ${
+        className={`flex items-center gap-1.5 px-3 pb-1 pt-2.5 ${
           category ? "cursor-grab touch-manipulation select-none [-webkit-touch-callout:none]" : ""
         }`}
       >
-        <h3 className={`flex-1 truncate font-display text-sm font-bold tracking-wide ${c.text}`}>
-          {category?.name ?? "Uncategorised"}
+        {/* The name as a coloured tag, the way a board groups by a select
+            property. The box itself stays neutral. */}
+        <h3 className="min-w-0 flex-1 truncate">
+          <span
+            className={`rounded px-1.5 py-0.5 text-[13px] font-medium ${
+              category ? `${c.head} ${c.text}` : "bg-mud-200 text-mud-700"
+            }`}
+          >
+            {category?.name ?? "Uncategorised"}
+          </span>
+          <span className="ml-1.5 text-[12px] tabular-nums text-mud-400">{items.length}</span>
         </h3>
 
         {overdue > 0 && (
           <span
-            className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
+            className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700"
             title={`${overdue} past deadline`}
           >
             {overdue} late
           </span>
         )}
 
-        <span className="rounded-full bg-white/70 px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums text-mud-600">
-          {items.length}
-        </span>
-
         <button
           onClick={startAdding}
           aria-label={`Add a quest to ${category?.name ?? "Uncategorised"}`}
           title="Add a quest here"
-          className="grid size-6 place-items-center rounded-lg text-lg leading-none text-mud-500 transition hover:bg-white/70 hover:text-grass-700"
+          className="grid size-6 place-items-center rounded-md text-lg leading-none text-mud-400 transition hover:bg-mud-100 hover:text-mud-800"
         >
           +
         </button>
@@ -635,7 +640,7 @@ function Box({
             onClick={() => setConfirming(true)}
             aria-label={`Delete the ${category.name} category`}
             title="Delete this category"
-            className="grid size-6 place-items-center rounded-lg text-mud-400 transition hover:bg-red-100 hover:text-red-700"
+            className="grid size-6 place-items-center rounded-md text-mud-400 transition hover:bg-red-50 hover:text-red-700"
           >
             <TrashIcon />
           </button>
@@ -649,7 +654,7 @@ function Box({
           style={{ height: LIST_H }}
         >
           <div>
-            <p className="font-display text-sm font-bold text-mud-900">
+            <p className="text-sm font-semibold text-mud-900">
               Delete &ldquo;{category.name}&rdquo;?
             </p>
             <p className="mt-1.5 text-xs leading-relaxed text-mud-500">
@@ -719,13 +724,13 @@ function Box({
         {items.length === 0 && !adding ? (
           <button
             onClick={startAdding}
-            className={`flex h-full w-full items-center justify-center rounded-xl border-2 border-dashed px-3 text-xs font-semibold transition ${
+            className={`flex h-full w-full items-center justify-center rounded-lg px-3 text-[13px] transition ${
               carryingId
-                ? "border-grass-400 bg-grass-50/70 text-grass-700"
-                : "border-mud-200 text-mud-400 hover:border-grass-400 hover:bg-grass-50 hover:text-grass-700"
+                ? "border border-dashed border-grass-400 bg-grass-100/60 text-grass-700"
+                : "text-mud-400 hover:bg-mud-100 hover:text-mud-700"
             }`}
           >
-            {carryingId ? "Drop here" : "+ Add a quest"}
+            {carryingId ? "Drop here" : "+ New"}
           </button>
         ) : (
           <ul className="space-y-1.5">
@@ -804,10 +809,10 @@ function AddCategoryTile({
   }
 
   return (
-    /* A parchment fill of its own: the real boxes get theirs from `panel`, and
-       without one this tile was a faint outline floating on the scenery. */
+    /* A translucent ivory fill of its own: the real boxes get theirs from
+       `panel`, and without one this tile was a faint outline on the scenery. */
     <section
-      className="flex flex-col rounded-2xl border-2 border-dashed border-mud-400 bg-mud-50/70 shadow-[0_10px_22px_-14px_rgba(42,30,19,0.45)] backdrop-blur-[2px] transition hover:border-grass-500 hover:bg-grass-50/80"
+      className="flex flex-col rounded-xl border border-dashed border-mud-400/70 bg-mud-50/60 backdrop-blur-[2px] transition hover:border-mud-500 hover:bg-mud-50/85"
       style={{ minHeight: LIST_H + HEADER_H }}
     >
       {adding ? (
@@ -861,14 +866,9 @@ function AddCategoryTile({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="group/add flex h-full w-full flex-1 flex-col items-center justify-center gap-2 rounded-2xl px-3 text-mud-600 transition hover:text-grass-700"
+          className="flex h-full w-full flex-1 items-center justify-center rounded-xl px-3 text-sm text-mud-500 transition hover:text-mud-800"
         >
-          <span className="grid size-10 place-items-center rounded-full border-2 border-mud-400 text-2xl leading-none transition group-hover/add:border-grass-500 group-hover/add:bg-white/70">
-            +
-          </span>
-          <span className="font-display text-sm font-bold tracking-wide">
-            Add a category
-          </span>
+          + Add a category
         </button>
       )}
     </section>
@@ -912,7 +912,7 @@ function InlineComposer({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.16 }}
-      className="mb-1.5 rounded-xl border-2 border-grass-400 bg-white p-2 shadow-sm"
+      className="mb-1.5 rounded-lg border border-mud-300 bg-white p-2 shadow-[0_1px_2px_rgba(15,15,15,0.06)] focus-within:border-grass-500"
     >
       <input
         autoFocus

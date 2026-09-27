@@ -5,8 +5,16 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import CharacterSprite from "@/components/CharacterSprite";
 import XPBar from "@/components/XPBar";
-import { findItem, SLOTS } from "@/lib/game";
 import type { Appearance, Equipped } from "@/lib/types";
+
+/* --------------------------------------------------------------------------
+   The character, as one slim strip above the quests.
+
+   It used to be a whole column — a large sprite, the gear list, stat tiles —
+   and it took a third of the page from the thing the page is for. Now it's a
+   glance: who you are, how far to the next level, and three numbers. The gear
+   lives one click away in the Armoury.
+   -------------------------------------------------------------------------- */
 
 export default function CharacterCard({
   name,
@@ -29,67 +37,33 @@ export default function CharacterCard({
       : null;
 
   return (
-    <div className="panel rounded-2xl p-5">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="truncate font-display text-lg font-bold tracking-wide text-mud-900">
-          {name}
-        </h2>
-        <Link
-          href="/character"
-          className="shrink-0 rounded-lg border border-mud-300 bg-white/70 px-2.5 py-1 text-xs font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-        >
-          Customize
-        </Link>
-      </div>
-
-      <motion.div
-        className="relative mx-auto w-fit"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 20 }}
-      >
+    <div className="panel flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl px-4 py-2.5">
+      <div className="relative shrink-0">
         <CharacterSprite
           appearance={appearance}
           equipped={equipped}
-          scale={4}
+          scale={1}
           interactive
           onPoke={() => setPoke((n) => n + 1)}
-          className="relative drop-shadow-[0_8px_10px_rgba(42,30,19,0.35)]"
+          className="relative"
         />
         <Sparkles trigger={poke} />
-      </motion.div>
-
-      <div className="mt-2">
-        <XPBar xp={xp} />
       </div>
 
-      {/* Each slot links straight into the Armoury with that tab open. */}
-      <ul className="mt-4 space-y-1">
-        {SLOTS.map(({ slot, label }) => {
-          const item = findItem(slot, equipped[slot]);
-          return (
-            <li key={slot}>
-              <Link
-                href={`/character?slot=${slot}`}
-                className="group flex items-center gap-2 rounded-lg border border-transparent bg-white/60 px-2.5 py-1.5 text-xs transition hover:border-grass-400 hover:bg-grass-50"
-              >
-                <span className="w-16 shrink-0 font-semibold text-mud-500">
-                  {label}
-                </span>
-                <span className="truncate font-medium text-mud-900">
-                  {item?.name ?? "—"}
-                </span>
-                <span className="ml-auto shrink-0 text-mud-300 transition group-hover:text-grass-600">
-                  →
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="min-w-0 flex-1 basis-56">
+        <div className="mb-1 flex items-baseline gap-2">
+          <h2 className="truncate text-sm font-semibold text-mud-900">{name}</h2>
+          <Link
+            href="/character"
+            className="shrink-0 text-xs font-medium text-mud-500 underline-offset-2 transition hover:text-grass-700 hover:underline"
+          >
+            Customize
+          </Link>
+        </div>
+        <XPBar xp={xp} compact />
+      </div>
 
-      {/* stats */}
-      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+      <div className="flex gap-5">
         <Stat value={stats.done} label="completed" />
         <Stat value={stats.open} label="in progress" />
         <Stat
@@ -98,7 +72,6 @@ export default function CharacterCard({
           tone={rate !== null && rate >= 70 ? "good" : rate !== null ? "warn" : undefined}
         />
       </div>
-
     </div>
   );
 }
@@ -120,11 +93,11 @@ function Sparkles({ trigger }: { trigger: number }) {
           return (
             <motion.span
               key={i}
-              className="absolute text-lg"
-              initial={{ x: 0, y: 6, scale: 0.4, opacity: 0 }}
+              className="absolute text-xs"
+              initial={{ x: 0, y: 4, scale: 0.4, opacity: 0 }}
               animate={{
-                x: Math.cos(a) * 74,
-                y: Math.sin(a) * 58 - 10,
+                x: Math.cos(a) * 34,
+                y: Math.sin(a) * 26 - 6,
                 scale: 1.05,
                 opacity: [0, 1, 0],
               }}
@@ -149,9 +122,9 @@ function Stat({
   tone?: "good" | "warn";
 }) {
   return (
-    <div className="rounded-xl border border-mud-200 bg-white/70 px-2 py-2">
+    <div className="text-right">
       <p
-        className={`font-display text-lg font-bold tabular-nums ${
+        className={`text-base font-semibold leading-tight tabular-nums ${
           tone === "good"
             ? "text-grass-600"
             : tone === "warn"
@@ -161,9 +134,7 @@ function Stat({
       >
         {value}
       </p>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-mud-400">
-        {label}
-      </p>
+      <p className="text-[11px] text-mud-500">{label}</p>
     </div>
   );
 }

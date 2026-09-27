@@ -18,13 +18,14 @@ import type { Category, Subtask, Todo } from "@/lib/types";
 const MENU_W = 190;
 
 /* How soon a deadline reads at a glance. Written out in full rather than
-   composed, because Tailwind only ships classes it can see as literal text. */
+   composed, because Tailwind only ships classes it can see as literal text.
+   Flat pastel tags, no outline: the colour carries it. */
 const URGENCY: Record<Urgency, string> = {
-  overdue: "bg-red-100 text-red-700 ring-red-300",
-  urgent: "bg-red-100 text-red-700 ring-red-300",
-  soon: "bg-amber-100 text-amber-800 ring-amber-300",
+  overdue: "bg-red-100 text-red-700",
+  urgent: "bg-red-100 text-red-700",
+  soon: "bg-amber-100 text-amber-800",
   // grass stops at 700 in globals.css — 800 would render with no colour.
-  later: "bg-grass-100 text-grass-700 ring-grass-300",
+  later: "bg-grass-100 text-grass-700",
 };
 
 export default function QuestRow({
@@ -170,9 +171,9 @@ export default function QuestRow({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: 30, scale: 0.95, transition: { duration: 0.24 } }}
       transition={{ type: "spring", stiffness: 340, damping: 30 }}
-      className={`group relative overflow-hidden rounded-xl border bg-white/80 shadow-sm transition hover:bg-white ${
-        overdue ? "border-red-300" : "border-mud-200"
-      } ${done ? "opacity-70" : ""} ${failed ? "border-red-300" : ""} ${
+      className={`group relative overflow-hidden rounded-lg border bg-white shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition hover:border-mud-300 ${
+        overdue || failed ? "border-red-200" : "border-mud-200"
+      } ${done ? "opacity-70" : ""} ${
         drag?.active ? "opacity-40" : ""
       } ${
         // No text selection or iOS callout: a long press is how a row is
@@ -181,12 +182,6 @@ export default function QuestRow({
         canDrag ? "cursor-grab touch-manipulation select-none [-webkit-touch-callout:none]" : ""
       }`}
     >
-      <span
-        className={`absolute inset-y-0 left-0 w-1.5 ${c.dot} ${
-          done ? "opacity-40" : ""
-        }`}
-      />
-
       {/* sword-slash sweep */}
       <AnimatePresence>
         {slashing && (
@@ -199,22 +194,18 @@ export default function QuestRow({
         )}
       </AnimatePresence>
 
-      <div className={`flex items-start gap-2.5 ${compact ? "py-2 pl-3.5 pr-1.5" : "py-3 pl-4 pr-2"}`}>
+      <div className={`flex items-start gap-2 ${compact ? "py-1.5 pl-2.5 pr-1" : "py-2 pl-3 pr-1.5"}`}>
         {/* --------------------------------------------------------- check */}
         <button
           ref={boxRef}
           onClick={handleCheck}
           aria-label={done ? "Mark as not done" : "Complete quest"}
-          className={`group/box relative mt-0.5 grid shrink-0 place-items-center rounded-full border-2 transition active:scale-90 ${
-            done
-              ? "border-grass-600 bg-grass-600"
-              : "border-mud-300 bg-white hover:border-grass-500 hover:bg-grass-100"
-          } ${compact ? "size-6" : "size-7"}`}
+          className={`check group/box relative mt-[3px] active:scale-90 ${done ? "is-checked" : ""}`}
         >
           {done ? (
             <motion.svg
               viewBox="0 0 24 24"
-              className="size-4 text-white"
+              className="size-3 text-white"
               initial={{ scale: 0, rotate: -40 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", stiffness: 400, damping: 16 }}
@@ -231,7 +222,7 @@ export default function QuestRow({
           ) : (
             // A missed quest keeps the same hover affordance as an open one:
             // finishing it late is the point.
-            <span className="scale-0 text-xs opacity-0 transition-all group-hover/box:scale-100 group-hover/box:opacity-100">
+            <span className="scale-0 text-[10px] leading-none text-grass-600 opacity-0 transition-all group-hover/box:scale-100 group-hover/box:opacity-100">
               ✓
             </span>
           )}
@@ -265,16 +256,16 @@ export default function QuestRow({
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
             {category && showCategory && (
-              <span className={`rounded-md px-1.5 py-0.5 font-semibold ${c.soft} ${c.text} ring-1 ring-inset ${c.ring}`}>
+              <span className={`rounded-md px-1.5 py-0.5 font-semibold ${c.soft} ${c.text}`}>
                 {category.name}
               </span>
             )}
 
             {todo.due_date ? (
               <span
-                className={`rounded-md px-1.5 py-0.5 font-semibold ring-1 ring-inset ${
+                className={`rounded-md px-1.5 py-0.5 font-semibold ${
                   done
-                    ? "bg-mud-50 text-mud-400 ring-mud-200"
+                    ? "bg-mud-100 text-mud-500"
                     : URGENCY[urgencyOf(todo.due_date)]
                 }`}
               >
@@ -283,14 +274,14 @@ export default function QuestRow({
             ) : (
               !done &&
               !failed && (
-                <span className="rounded-md bg-mud-50 px-1.5 py-0.5 text-mud-400 ring-1 ring-inset ring-mud-200">
+                <span className="rounded-md bg-mud-100 px-1.5 py-0.5 text-mud-500">
                   no deadline
                 </span>
               )
             )}
 
             {done && (
-              <span className="rounded-md bg-grass-100 px-1.5 py-0.5 font-bold text-grass-700 ring-1 ring-inset ring-grass-300">
+              <span className="rounded-md bg-grass-100 px-1.5 py-0.5 font-bold text-grass-700">
                 +{todo.xp_awarded} XP
                 {todo.completed_at && !compact && (
                   <span className="ml-1 font-normal opacity-70">
@@ -302,7 +293,7 @@ export default function QuestRow({
 
             {failed && (
               <span
-                className="rounded-md bg-red-100 px-1.5 py-0.5 font-bold text-red-700 ring-1 ring-inset ring-red-300"
+                className="rounded-md bg-red-100 px-1.5 py-0.5 font-bold text-red-700"
                 title="Still completable — finishing it refunds this and pays the late award"
               >
                 missed{todo.xp_awarded !== 0 ? ` · ${todo.xp_awarded} XP` : ""}
@@ -315,10 +306,10 @@ export default function QuestRow({
               <button
                 onClick={() => toggleSteps(!showSteps)}
                 aria-expanded={showSteps}
-                className={`rounded-md px-1.5 py-0.5 font-semibold ring-1 ring-inset transition ${
+                className={`rounded-md px-1.5 py-0.5 font-semibold transition ${
                   stepsDone === steps.length
-                    ? "bg-grass-100 text-grass-700 ring-grass-300"
-                    : "bg-mud-50 text-mud-500 ring-mud-200 hover:bg-mud-100"
+                    ? "bg-grass-100 text-grass-700"
+                    : "bg-mud-50 text-mud-500 hover:bg-mud-100"
                 }`}
               >
                 {stepsDone}/{steps.length} steps
