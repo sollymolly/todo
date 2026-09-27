@@ -37,7 +37,11 @@ body {
   min-height: 100dvh;
   color: var(--color-mud-900);
   font-family: var(--font-sans);
-  background: #cfe4f2;
+  /* Warm paper, a shade deeper than the ivory panels and deepening a little
+     towards the bottom. Fixed, so the gradient stays put while pages scroll. */
+  background-color: #eee6d2;
+  background-image: linear-gradient(180deg, #f6f0e2 0%, #efe7d4 55%, #e7dcc3 100%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -138,24 +142,6 @@ body {
   transform-origin: 50% 0%;
 }
 
-/* --------------------------------------------------------------------------
-   Scenery motion
-   -------------------------------------------------------------------------- */
-@keyframes drift {
-  from { transform: translateX(-6%) }
-  to   { transform: translateX(106%) }
-}
-@keyframes sway {
-  0%, 100% { transform: rotate(-1.6deg) }
-  50%      { transform: rotate(1.6deg) }
-}
-.cloud-drift { animation: drift 90s linear infinite; }
-.banner-sway {
-  animation: sway 3.4s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: top center;
-}
-
 @keyframes float-up {
   0%   { transform: translateY(0) scale(0.85); opacity: 0 }
   20%  { opacity: 1 }
@@ -163,6 +149,22 @@ body {
 }
 .float-up { animation: float-up 1.5s ease-out forwards; }
 
+/* Dust drifting up through the window light. Each mote rises and sways a
+   little over half a minute, fading in and out so none of them pops. */
+@keyframes mote-drift {
+  0%   { transform: translate(0, 0); opacity: 0 }
+  15%  { opacity: 0.9 }
+  50%  { transform: translate(24px, -70px) }
+  85%  { opacity: 0.8 }
+  100% { transform: translate(-8px, -140px); opacity: 0 }
+}
+.mote {
+  background: rgba(196, 156, 82, 0.55);
+  box-shadow: 0 0 6px 2px rgba(255, 238, 196, 0.8);
+  animation: mote-drift 30s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .char-idle, .char-cape, .cloud-drift, .banner-sway { animation: none !important; }
+  .char-idle, .char-cape { animation: none !important; }
+  .mote { display: none; }
 }

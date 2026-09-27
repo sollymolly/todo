@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import MarkUpdatesSeen from "@/components/MarkUpdatesSeen";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import { getUserId } from "@/lib/session";
 import { UPDATES, formatWeek, latestUpdate } from "@/lib/updates";
 
@@ -16,7 +16,7 @@ export default async function UpdatesPage() {
   return (
     <>
       {latest && <MarkUpdatesSeen week={latest.week} />}
-      <Scenery />
+      <Backdrop />
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between gap-3">
           <div>

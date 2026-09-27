@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import CharacterCard from "@/components/CharacterCard";
 import HabitList from "@/components/HabitList";
 import CategoryBoard, { type InlineDraft } from "@/components/CategoryBoard";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import CategoryManager from "@/components/CategoryManager";
 import CategoryStrength from "@/components/CategoryStrength";
 import QuestForm, { type QuestDraft } from "@/components/QuestForm";
@@ -35,6 +35,7 @@ import { addHabit } from "@/lib/habit-actions";
 import type { Habit } from "@/lib/habits";
 import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
+import type { ColumnValues, TableColumn } from "@/lib/table-columns";
 
 /** The fold-out section headings below the board: Habits, Chronicle, Strengths. */
 const SECTION_TOGGLE =
@@ -47,6 +48,8 @@ export default function Dashboard(props: {
   steps: Record<string, Subtask[]>;
   /** The recurring definitions. Today's instances are already in `todos`. */
   habits: Habit[];
+  tableColumns: TableColumn[];
+  tableValues: ColumnValues;
   sweptCount: number;
   unread: number;
   update: Update | null;
@@ -64,6 +67,8 @@ function Inner({
   todos: serverTodos,
   steps,
   habits,
+  tableColumns,
+  tableValues,
   sweptCount,
   unread,
   update,
@@ -73,6 +78,8 @@ function Inner({
   todos: Todo[];
   steps: Record<string, Subtask[]>;
   habits: Habit[];
+  tableColumns: TableColumn[];
+  tableValues: ColumnValues;
   sweptCount: number;
   unread: number;
   update: Update | null;
@@ -404,7 +411,7 @@ function Inner({
 
   return (
     <>
-      <Scenery />
+      <Backdrop />
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div>
@@ -579,6 +586,9 @@ function Inner({
             handlers={handlers}
             onUpdate={handleQuickEdit}
             onAdd={handleInlineAdd}
+            columns={tableColumns}
+            values={tableValues}
+            layout={profile.table_layout}
           />
         ) : (
           <CategoryBoard

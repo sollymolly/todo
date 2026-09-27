@@ -44,6 +44,8 @@ export type Profile = {
   equipped: Equipped;
   /** Week key of the last changelog entry shown. Null means never. */
   updates_seen: string | null;
+  /** The table view's column layout (migration 023). Null or absent: default. */
+  table_layout?: unknown;
   /** IANA zone reported by the browser; null means fall back to UTC. */
   timezone: string | null;
   /* Quests deleted after the retention window still count here. */

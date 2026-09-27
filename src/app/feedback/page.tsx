@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import FeedbackForm from "@/components/FeedbackForm";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import { getUserId } from "@/lib/session";
 import { amOwner, listFeedback } from "@/lib/feedback-actions";
 
@@ -23,7 +23,7 @@ export default async function FeedbackPage() {
 
   return (
     <>
-      <Scenery />
+      <Backdrop />
       <FeedbackForm notes={notes} isOwner={isOwner} />
     </>
   );

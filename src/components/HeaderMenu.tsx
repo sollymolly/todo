@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { signOut } from "@/lib/auth-actions";
 import { forgetPrivateKey } from "@/lib/crypto";
+import { useBackdropMotion } from "@/lib/motion-pref";
 
 /* --------------------------------------------------------------------------
    Everything that isn't a daily action, behind one button.
@@ -31,6 +32,7 @@ export default function HeaderMenu({
   hasUnseenUpdate?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [dust, setDust] = useBackdropMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export default function HeaderMenu({
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.13 }}
             // Opaque: a floating menu must not read through to the board.
-            style={{ background: "#fdf9f0" }}
+            style={{ background: "var(--color-mud-50)" }}
             className="absolute right-0 z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-mud-300 py-1 shadow-xl shadow-mud-900/25"
           >
             {ITEMS.map((item) => (
@@ -93,6 +95,22 @@ export default function HeaderMenu({
                 )}
               </Link>
             ))}
+
+            <div className="my-1 h-px bg-mud-200" />
+
+            {/* A matter of taste on this device, so it's a switch here rather
+                than a setting on the account. */}
+            <button
+              role="menuitemcheckbox"
+              aria-checked={dust}
+              onClick={() => setDust(!dust)}
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-mud-800 transition hover:bg-mud-100"
+            >
+              Drifting dust
+              <span className={`text-xs ${dust ? "text-grass-700" : "text-mud-400"}`}>
+                {dust ? "On" : "Off"}
+              </span>
+            </button>
 
             <div className="my-1 h-px bg-mud-200" />
 

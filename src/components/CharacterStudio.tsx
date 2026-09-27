@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import CharacterSprite from "@/components/CharacterSprite";
 import XPBar from "@/components/XPBar";
-import Scenery from "@/components/Scenery";
+import ClosetBackdrop from "@/components/ClosetBackdrop";
 import {
   BODY_TYPES,
   EYE_COLORS,
@@ -84,7 +84,7 @@ export default function CharacterStudio({
 
   return (
     <>
-      <Scenery />
+      <ClosetBackdrop />
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between gap-3">
           <div>

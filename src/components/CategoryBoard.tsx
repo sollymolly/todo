@@ -686,7 +686,9 @@ function Box({
       <div
         ref={listRef}
         data-drop-list=""
-        className="relative overflow-y-auto overscroll-contain p-2"
+        // No overscroll-contain: once the list hits its top or bottom, the
+        // wheel or swipe should carry on and scroll the page, not stop dead.
+        className="relative overflow-y-auto p-2"
         style={
           grown
             ? { minHeight: LIST_H, maxHeight: EXPANDED_H }

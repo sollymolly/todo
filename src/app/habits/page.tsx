@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Habits from "@/components/Habits";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
 import { listHabits, syncHabits } from "@/lib/habit-actions";
@@ -54,7 +54,7 @@ export default async function HabitsPage() {
 
   return (
     <>
-      <Scenery />
+      <Backdrop />
       <Habits habits={habits} categories={categories} timezone={timezone} />
     </>
   );

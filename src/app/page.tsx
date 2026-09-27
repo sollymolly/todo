@@ -6,6 +6,8 @@ import { pruneFinished, sweepOverdue } from "@/lib/actions";
 import { signOut } from "@/lib/auth-actions";
 import { listHabits, syncHabits } from "@/lib/habit-actions";
 import { unreadTotal } from "@/lib/social-actions";
+import { loadTableData } from "@/lib/column-actions";
+import type { ColumnValues, TableColumn } from "@/lib/table-columns";
 import { latestUpdate, shouldShowUpdate } from "@/lib/updates";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
 import { normalizeTodo } from "@/lib/types";
@@ -102,6 +104,15 @@ export default async function Home() {
   // already came back with the board above; these are the definitions behind
   // them — the schedule and the streak, which is the part worth seeing next to
   // today's quests rather than only on /habits.
+  // And for migration 023: the table's custom columns and their values.
+  let tableColumns: TableColumn[] = [];
+  let tableValues: ColumnValues = {};
+  try {
+    ({ columns: tableColumns, values: tableValues } = await loadTableData());
+  } catch {
+    /* custom columns aren't set up yet */
+  }
+
   let habits: Habit[] = [];
   try {
     habits = await listHabits();
@@ -120,6 +131,8 @@ export default async function Home() {
       todos={todos}
       steps={steps}
       habits={habits}
+      tableColumns={tableColumns}
+      tableValues={tableValues}
       sweptCount={sweptCount}
       unread={unread}
       // Decided here rather than in the browser so "this week" means one thing

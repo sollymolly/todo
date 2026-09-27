@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import { changePassword, type Account } from "@/lib/auth-actions";
 import {
   createKeyBundle,
@@ -108,7 +108,7 @@ export default function AccountForm({ account }: { account: Account }) {
 
   return (
     <>
-      <Scenery />
+      <Backdrop />
       <main className="mx-auto max-w-xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between gap-3">
           <div>

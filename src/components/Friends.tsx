@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import CharacterSprite from "@/components/CharacterSprite";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import { colorOf, progressFor } from "@/lib/game";
 import {
   cancelRequest,
@@ -109,7 +109,7 @@ export default function Friends({
 
   return (
     <>
-      <Scenery />
+      <Backdrop />
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between gap-3">
           <div>

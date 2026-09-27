@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import ConsentGate from "@/components/ConsentGate";
-import Scenery from "@/components/Scenery";
+import Backdrop from "@/components/Backdrop";
 import { sql } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { refreshConsentSession } from "@/lib/auth-actions";
@@ -31,7 +31,7 @@ export default async function ConsentPage() {
 
   return (
     <>
-      <Scenery />
+      <Backdrop />
       <ConsentGate displayName={displayName} />
     </>
   );
