@@ -18,6 +18,11 @@
      masterKey   = PBKDF2(password, "questline-key|" + email)    -> never
                    leaves the browser. Wraps the user's ECDH private key.
 
+   The private key itself is also held by the server in escrow (migration 022,
+   src/lib/escrow.ts), sealed under a server-side secret, so that messages
+   belong to the account and survive a forgotten password. The password is one
+   way to the key; being signed in is the other.
+
    The email is the salt so a fresh browser can derive both before it has ever
    talked to the server. That is weaker than a random per-user salt against
    precomputation, which is why the iteration count is high and the server
@@ -130,6 +135,8 @@ async function deriveMasterKey(
 export type KeyBundle = {
   publicKey: string; // SPKI, base64
   wrappedPrivateKey: string; // iv.ciphertext, both base64
+  /** PKCS#8, base64 — for escrow. Never send it anywhere else. */
+  privateKey: string;
 };
 
 /** Encrypts a private key under the master key derived from a password. */
@@ -161,7 +168,32 @@ export async function createKeyBundle(
   return {
     publicKey: toB64(spki),
     wrappedPrivateKey: await wrapPrivateKey(email, password, pair.privateKey),
+    privateKey: await exportPrivateKey(pair.privateKey),
   };
+}
+
+/** PKCS#8, base64 — the form escrow stores and hands back. */
+export async function exportPrivateKey(key: CryptoKey): Promise<string> {
+  return toB64(await subtle().exportKey("pkcs8", key));
+}
+
+export async function importPrivateKey(pkcs8: string): Promise<CryptoKey> {
+  return subtle().importKey("pkcs8", fromB64(pkcs8), { name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveKey",
+    "deriveBits",
+  ]);
+}
+
+/**
+ * Seals a key that came back from escrow under a new password. This is what
+ * lets a password reset keep the same keypair — and so every message.
+ */
+export async function wrapExistingPrivateKey(
+  email: string,
+  password: string,
+  pkcs8: string
+): Promise<string> {
+  return wrapPrivateKey(email, password, await importPrivateKey(pkcs8));
 }
 
 /**

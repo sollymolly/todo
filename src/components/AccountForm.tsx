@@ -11,6 +11,7 @@ import {
   rewrapPrivateKey,
   unwrapPrivateKey,
 } from "@/lib/crypto";
+import { escrowKey } from "@/lib/message-key";
 
 /* --------------------------------------------------------------------------
    Changing the password is a browser-side job, because the password is what
@@ -88,10 +89,11 @@ export default function AccountForm({ account }: { account: Account }) {
       });
       if (!res.ok) return setError(res.error);
 
-      // Keep this tab unlocked under the new wrapping.
-      await rememberPrivateKey(
-        await unwrapPrivateKey(email, next, wrappedPrivateKey)
-      );
+      // Keep this tab unlocked under the new wrapping, and make sure the
+      // account's escrow has the key — it may have just been created above.
+      const key = await unwrapPrivateKey(email, next, wrappedPrivateKey);
+      await rememberPrivateKey(key);
+      await escrowKey(key);
 
       setCurrent("");
       setNext("");

@@ -149,7 +149,7 @@ export async function markUpdatesSeen(week: string): Promise<void> {
   const userId = await requireUserId();
 
   // Only ever a week key, and never one from the future — a bad value here
-  // would either re-show the popup forever or silence it permanently.
+  // would either show the dot forever or silence it permanently.
   if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || week > weekKey()) return;
 
   await sql`

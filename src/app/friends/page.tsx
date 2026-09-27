@@ -25,6 +25,7 @@ export default async function FriendsPage() {
         requests={data.requests}
         meId={userId}
         myPublicKey={data.keys.publicKey}
+        keyEscrowed={data.keys.escrowed}
       />
     );
   }

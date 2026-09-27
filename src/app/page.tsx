@@ -127,8 +127,9 @@ export default async function Home() {
       //
       // The `in` check distinguishes "column exists, never seen" (null, so
       // show it) from "migration 008 hasn't run" (absent). Without it, the
-      // popup would appear and then fail to record the dismissal, reappearing
-      // on every single page load.
+      // dot on "What's new" could never be cleared. It's only a dot now: the
+      // changelog used to open itself over the board, and the board is what
+      // people come here for.
       update={
         "updates_seen" in profile &&
         shouldShowUpdate(profile.updates_seen ?? null)

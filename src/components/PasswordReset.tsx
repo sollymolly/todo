@@ -8,21 +8,24 @@ import {
   completePasswordReset,
   openPasswordReset,
   requestPasswordReset,
+  type OpenedReset,
 } from "@/lib/auth-actions";
 import {
   createKeyBundle,
   deriveAuthSecret,
+  importPrivateKey,
   rememberPrivateKey,
-  unwrapPrivateKey,
+  wrapExistingPrivateKey,
 } from "@/lib/crypto";
 
 /* --------------------------------------------------------------------------
    Both halves of a forgotten password: asking for a link, and using one.
 
    As on the login form, the new password never leaves the browser. It becomes
-   an auth secret for the server and a fresh keypair for messages — fresh
-   because the old private key was sealed under the password being replaced,
-   and nobody here knows it.
+   an auth secret for the server and a new sealing for the message key. The
+   key itself comes back from escrow when the account has one, so every
+   message survives; only an account without one gets a fresh keypair and
+   loses its history.
    -------------------------------------------------------------------------- */
 
 function Card({ title, subtitle, children }: {
@@ -135,7 +138,7 @@ export function ForgotPasswordForm() {
 type LinkState =
   | { kind: "checking" }
   | { kind: "bad"; error: string }
-  | { kind: "ready"; email: string };
+  | { kind: "ready"; email: string; keys: OpenedReset["keys"] };
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -159,7 +162,11 @@ export function ResetPasswordForm() {
     openPasswordReset(token.current)
       .then((res) => {
         if (!live) return;
-        setLink(res.ok ? { kind: "ready", email: res.email } : { kind: "bad", error: res.error });
+        setLink(
+          res.ok
+            ? { kind: "ready", email: res.email, keys: res.keys }
+            : { kind: "bad", error: res.error }
+        );
       })
       .catch(() => {
         if (live) setLink({ kind: "bad", error: "Could not check that link. Please try again." });
@@ -177,21 +184,26 @@ export function ResetPasswordForm() {
     setBusy(true);
     setError(null);
     try {
-      const { email } = link;
+      const { email, keys } = link;
       const authSecret = await deriveAuthSecret(email, password);
-      const bundle = await createKeyBundle(email, password);
+      // The same keypair re-sealed when escrow had it; a new one otherwise.
+      const sealed = keys
+        ? {
+            ...keys,
+            wrappedPrivateKey: await wrapExistingPrivateKey(email, password, keys.privateKey),
+          }
+        : await createKeyBundle(email, password);
       const res = await completePasswordReset({
         token: token.current,
         authSecret,
-        publicKey: bundle.publicKey,
-        wrappedPrivateKey: bundle.wrappedPrivateKey,
+        publicKey: sealed.publicKey,
+        wrappedPrivateKey: sealed.wrappedPrivateKey,
+        privateKey: sealed.privateKey,
       });
       if (!res.ok) return setError(res.error);
 
       // Signed in by the reset; unlock messages for this tab as sign-in would.
-      await rememberPrivateKey(
-        await unwrapPrivateKey(email, password, bundle.wrappedPrivateKey)
-      );
+      await rememberPrivateKey(await importPrivateKey(sealed.privateKey));
       router.push("/");
       router.refresh();
     } catch (err) {
@@ -228,15 +240,22 @@ export function ResetPasswordForm() {
   return (
     <Card title="Choose a new password" subtitle={`For ${link.email}`}>
       <form onSubmit={submit} className="mt-6 space-y-3">
-        <div className="rounded-xl border border-amber-400 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
-          <p className="font-bold">Your message history will be cleared.</p>
-          <p className="mt-1">
-            Messages with companions are end-to-end encrypted with a key that
-            only your old password could unlock, so no one — including this
-            server — can recover them. Your quests, XP, gear, habits and
-            friends are all kept.
+        {link.keys ? (
+          <p className="rounded-xl bg-grass-50 p-3 text-xs leading-relaxed text-grass-700 ring-1 ring-grass-300">
+            Everything is kept — quests, XP, gear, habits, friends and your
+            messages.
           </p>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-amber-400 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+            <p className="font-bold">Your message history will be cleared.</p>
+            <p className="mt-1">
+              This account&rsquo;s message key was only ever sealed under your
+              old password, so it can&rsquo;t be recovered. Your quests, XP,
+              gear, habits and friends are all kept, and messages from here on
+              will survive any future reset.
+            </p>
+          </div>
+        )}
 
         {/* Lets a password manager file the new password under the account. */}
         <input type="email" value={link.email} autoComplete="username" readOnly hidden />

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
+import { ESCROW_CONFIGURED, openPrivateKey, publicKeyFor, sealPrivateKey } from "@/lib/escrow";
 import type { Appearance, Equipped } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
@@ -12,8 +13,9 @@ import type { Appearance, Equipped } from "@/lib/types";
    Two rules hold throughout:
      1. Every read about another person goes through are_friends(), so a raw
         user id is never enough to see anything.
-     2. Message bodies are opaque here. This file moves base64 around and can
-        no more read a message than the database can.
+     2. Message bodies are opaque here. This file moves base64 around and
+        never decrypts anything. (The account's key *is* held in escrow — see
+        migration 022 — but only ever handed back to that same account.)
    -------------------------------------------------------------------------- */
 
 export type PublicProfile = {
@@ -348,6 +350,8 @@ export async function listRequests(): Promise<PendingRequest[]> {
 export async function myKeys(): Promise<{
   publicKey: string | null;
   wrappedPrivateKey: string | null;
+  /** The server already holds this account's key (migration 022). */
+  escrowed: boolean;
 }> {
   const me = await requireUserId();
   const rows = (await sql`
@@ -357,7 +361,74 @@ export async function myKeys(): Promise<{
   return {
     publicKey: rows[0]?.public_key ?? null,
     wrappedPrivateKey: rows[0]?.wrapped_private_key ?? null,
+    escrowed: await hasEscrow(me),
   };
+}
+
+/** Own query, so a database without migration 022 still loads Messages. */
+async function hasEscrow(me: string): Promise<boolean> {
+  try {
+    const rows = (await sql`
+      select escrowed_private_key is not null as escrowed
+        from users where id = ${me}::uuid
+    `) as { escrowed: boolean }[];
+    return !!rows[0]?.escrowed;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Files the account's private key (PKCS#8, base64) in escrow, so it survives
+ * a forgotten password. Called by a browser that has the key unlocked.
+ *
+ * Only a key that matches the account's published public key is accepted —
+ * one that didn't would read none of its messages — and an existing escrow is
+ * left alone, so an old tab can't overwrite a newer key.
+ */
+export async function escrowMyKey(privateKey: string): Promise<boolean> {
+  const me = await requireUserId();
+  if (!ESCROW_CONFIGURED) return false;
+
+  const publicKey = publicKeyFor(privateKey);
+  if (!publicKey) return false;
+
+  try {
+    const rows = (await sql`
+      update users set escrowed_private_key = ${sealPrivateKey(privateKey)}
+       where id = ${me}::uuid
+         and public_key = ${publicKey}
+         and escrowed_private_key is null
+      returning 1
+    `) as unknown[];
+    return rows.length > 0;
+  } catch {
+    return false; // migration 022 not run yet
+  }
+}
+
+/**
+ * The account's private key out of escrow, for a signed-in session that
+ * doesn't have it — a new device, a new tab, a password nobody typed here.
+ * This is what makes messages belong to the account rather than the password.
+ */
+export async function recoverMyKey(): Promise<string | null> {
+  const me = await requireUserId();
+  if (!ESCROW_CONFIGURED) return null;
+
+  try {
+    const rows = (await sql`
+      select public_key, escrowed_private_key from users where id = ${me}::uuid
+    `) as { public_key: string | null; escrowed_private_key: string | null }[];
+
+    const sealed = rows[0]?.escrowed_private_key;
+    if (!sealed) return null;
+    const key = openPrivateKey(sealed);
+    // A key for some other keypair would decrypt nothing; better to say so.
+    return key && publicKeyFor(key) === rows[0].public_key ? key : null;
+  } catch {
+    return null;
+  }
 }
 
 /* ========================================================================== */
@@ -394,7 +465,7 @@ export async function sendMessage(
 
   if (!iv || !body) return { ok: false, error: "Nothing to send." };
   if (body.length > MAX_BODY) return { ok: false, error: "That message is too long." };
-  // The server can't read these, so it validates what it can: that they are
+  // The server doesn't decrypt these, so it validates what it can: that they are
   // base64 of a sane size. Without this, `body` is an unbounded blob store.
   if (iv.length > 32 || !B64.test(iv) || !B64.test(body))
     return { ok: false, error: "That message could not be encrypted." };

@@ -12,6 +12,7 @@ import {
   unwrapPrivateKey,
 } from "@/lib/crypto";
 import { DEFAULT_APPEARANCE, DEFAULT_EQUIPPED } from "@/lib/game";
+import { escrowKey } from "@/lib/message-key";
 import {
   PRIVACY_EFFECTIVE,
   PRIVACY_HIGHLIGHTS,
@@ -21,7 +22,9 @@ import {
 /* --------------------------------------------------------------------------
    The password never leaves this component. It becomes two derived values in
    the browser: an auth secret for the server, and — from a different salt —
-   the key that unwraps the private key used for encrypted messages.
+   the key that unwraps the private key used for encrypted messages. That
+   private key is then filed in escrow (migration 022), which is what lets
+   messages survive a forgotten password.
    -------------------------------------------------------------------------- */
 
 type Mode = "signin" | "signup";
@@ -88,9 +91,9 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
           acceptedPrivacyVersion: PRIVACY_VERSION,
         });
         if (!res.ok) return setError(res.error);
-        await rememberPrivateKey(
-          await unwrapPrivateKey(email, password, bundle.wrappedPrivateKey)
-        );
+        const key = await unwrapPrivateKey(email, password, bundle.wrappedPrivateKey);
+        await rememberPrivateKey(key);
+        await escrowKey(key);
       } else {
         // One call. The wrapped key comes back with the success result, so
         // nothing about this account is observable before the secret verifies.
@@ -99,11 +102,14 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
 
         if (res.wrappedPrivateKey) {
           try {
-            await rememberPrivateKey(
-              await unwrapPrivateKey(email, password, res.wrappedPrivateKey)
-            );
+            const key = await unwrapPrivateKey(email, password, res.wrappedPrivateKey);
+            await rememberPrivateKey(key);
+            // Accounts from before escrow get their key filed on the next
+            // sign-in; for everyone else the server already has it and this
+            // is a no-op. Either way messages then outlive the password.
+            await escrowKey(key);
           } catch {
-            // Signed in fine; messages just stay locked for this session.
+            // Signed in fine; Messages will fetch the key from escrow.
           }
         }
       }
@@ -289,9 +295,9 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
               </button>
 
               <p className="pt-1 text-center text-[10px] leading-relaxed text-mud-400">
-                Your password becomes keys in this browser. It is never sent
-                to the server, and neither is anything needed to read your
-                messages.{" "}
+                Your password becomes keys in this browser and is never sent to
+                the server. Messages are encrypted, and tied to your account
+                so they survive a forgotten password.{" "}
                 <Link
                   href="/privacy"
                   className="underline underline-offset-2 transition hover:text-grass-700"

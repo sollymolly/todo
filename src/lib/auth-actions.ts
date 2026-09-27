@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { appUrl, EMAIL_CONFIGURED, sendEmail } from "@/lib/email";
+import { ESCROW_CONFIGURED, openPrivateKey, publicKeyFor, sealPrivateKey } from "@/lib/escrow";
 import { dummyVerify, hashPassword, verifyPassword } from "@/lib/password";
 import { endSession, requireUserId, startSession } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
@@ -372,15 +373,13 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
           `Choose a new one here: ${link}`,
           "",
           `The link works once and expires in ${RESET_MINUTES} minutes.`,
-          "Resetting clears your message history, which only your old password could unlock.",
           "",
           "If this wasn't you, ignore this email. Nothing changes until the link is used.",
         ].join("\n"),
         html: `
           <p>Someone — hopefully you — asked to reset the password for this HabitKnight account.</p>
           <p><a href="${link}">Choose a new password</a></p>
-          <p>The link works once and expires in ${RESET_MINUTES} minutes. Resetting clears your
-             message history, which only your old password could unlock.</p>
+          <p>The link works once and expires in ${RESET_MINUTES} minutes.</p>
           <p style="color:#6b5b47">If this wasn't you, ignore this email. Nothing changes until the link is used.</p>
         `,
       });
@@ -392,29 +391,51 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
   return { ok: true };
 }
 
+export type OpenedReset = {
+  ok: true;
+  email: string;
+  /**
+   * The account's message key out of escrow, with the public key it belongs
+   * to — or null when there is none to give, and the reset must make a fresh
+   * keypair and clear the history.
+   */
+  keys: { publicKey: string; privateKey: string } | null;
+};
+
 /**
- * Checks a link before the form is shown, and hands back the address it
- * belongs to. The browser needs that address: it is the salt for the keys
- * derived from the new password. Anyone holding a live token can read that
- * inbox already, so this reveals nothing they don't have.
+ * Checks a link before the form is shown, and hands back what the browser
+ * needs to finish: the address, which salts the keys derived from the new
+ * password, and the account's message key, to re-seal under it.
+ *
+ * Handing a private key to whoever holds the link is the point of escrow, not
+ * a leak: a live token already proves control of the inbox, and completing
+ * the reset gives them the account — and so the messages — anyway.
  */
 export async function openPasswordReset(
   token: string
-): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+): Promise<OpenedReset | { ok: false; error: string }> {
   if (!RESET_TOKEN.test(token)) return { ok: false, error: RESET_GONE };
   if (await rateLimited("resetComplete")) return { ok: false, error: TOO_MANY };
 
   try {
     const rows = (await sql`
-      select u.email::text as email
+      select u.email::text as email, u.public_key, u.escrowed_private_key
         from password_resets r
         join users u on u.id = r.user_id
        where r.token_hash = ${resetHash(token)}
          and r.used_at is null
          and r.expires_at > now()
-    `) as { email: string }[];
+    `) as { email: string; public_key: string | null; escrowed_private_key: string | null }[];
     if (rows.length === 0) return { ok: false, error: RESET_GONE };
-    return { ok: true, email: rows[0].email };
+
+    const { email, public_key, escrowed_private_key } = rows[0];
+    const privateKey =
+      ESCROW_CONFIGURED && escrowed_private_key ? openPrivateKey(escrowed_private_key) : null;
+    const keys =
+      privateKey && public_key && publicKeyFor(privateKey) === public_key
+        ? { publicKey: public_key, privateKey }
+        : null;
+    return { ok: true, email, keys };
   } catch (e) {
     return { ok: false, error: friendly(e) };
   }
@@ -423,30 +444,41 @@ export async function openPasswordReset(
 /**
  * Spends the link and sets the new credential, then signs the person in.
  *
- * Like changePassword, the server only ever sees a derived secret. Unlike it,
- * there is no old password to re-wrap the private key with, so the browser
- * brings a brand-new keypair — and the messages sealed under the old one are
- * deleted by reset_password, because nothing can open them any more.
+ * Like changePassword, the server only ever sees a derived secret for the
+ * password. The browser brings the message key sealed under the new password:
+ * the escrowed one from openPasswordReset when there was one, so the keypair
+ * and every message survive; otherwise a brand-new keypair, and reset_password
+ * deletes the messages nothing can open any more.
+ *
+ * `privateKey` comes along in the clear so the server can check it matches
+ * `publicKey` and escrow it — the same key it either just handed out or will
+ * hold from now on.
  */
 export async function completePasswordReset(input: {
   token: string;
   authSecret: string;
   publicKey: string;
   wrappedPrivateKey: string;
+  privateKey: string;
 }): Promise<AuthResult> {
   if (!RESET_TOKEN.test(input.token)) return { ok: false, error: RESET_GONE };
   if (!input.authSecret)
     return { ok: false, error: "A new password is required." };
-  if (!wellFormedKeys(input.publicKey, input.wrappedPrivateKey))
+  if (
+    !wellFormedKeys(input.publicKey, input.wrappedPrivateKey) ||
+    publicKeyFor(input.privateKey) !== input.publicKey
+  )
     return { ok: false, error: "Your browser could not prepare encryption keys." };
 
   if (await rateLimited("resetComplete")) return { ok: false, error: TOO_MANY };
 
   try {
     const hash = await hashPassword(input.authSecret);
+    const escrow = ESCROW_CONFIGURED ? sealPrivateKey(input.privateKey) : null;
     const rows = (await sql`
       select reset_password(
-        ${resetHash(input.token)}, ${hash}, ${input.publicKey}, ${input.wrappedPrivateKey}
+        ${resetHash(input.token)}, ${hash}, ${input.publicKey},
+        ${input.wrappedPrivateKey}, ${escrow}::text
       ) as user_id
     `) as { user_id: string | null }[];
 

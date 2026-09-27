@@ -27,6 +27,7 @@ import {
   sealMessage,
 } from "@/lib/crypto";
 import { formatStamp } from "@/lib/date";
+import { escrowKey, getMessageKey } from "@/lib/message-key";
 
 type Shown = { id: string; mine: boolean; text: string; at: string };
 
@@ -51,13 +52,23 @@ export default function Friends({
   requests,
   meId,
   myPublicKey,
+  keyEscrowed,
 }: {
   friends: FriendSummary[];
   requests: PendingRequest[];
   meId: string;
   myPublicKey: string | null;
+  /** The server already holds this account's message key (migration 022). */
+  keyEscrowed: boolean;
 }) {
   const hasKeys = !!myPublicKey;
+
+  // An account from before escrow, in a tab that still has its key unlocked:
+  // file it now, so the history survives if the password is ever forgotten.
+  useEffect(() => {
+    if (keyEscrowed) return;
+    void loadPrivateKey().then((key) => key && escrowKey(key));
+  }, [keyEscrowed]);
   const router = useRouter();
   // The id rather than the row: a refresh replaces the objects in `friends`,
   // and an open thread should follow the new one (its unread count resets).
@@ -510,7 +521,8 @@ function Thread({
         // an idle thread from costing a request every few seconds forever.
         if (!first && typeof document !== "undefined" && document.hidden) return;
 
-        const priv = keyRef.current ?? (await loadPrivateKey());
+        // This tab's key, or the account's from escrow — see message-key.ts.
+        const priv = keyRef.current ?? (await getMessageKey());
         if (!alive) return;
         if (!priv) {
           setState("locked");
@@ -624,7 +636,7 @@ function Thread({
               {friend.display_name}
             </p>
             <p className="text-[11px] text-mud-500">
-              End-to-end encrypted · @{friend.username}
+              Encrypted · @{friend.username}
               {fingerprint && (
                 <>
                   {" · "}
@@ -667,9 +679,9 @@ function Thread({
           )}
           {state === "locked" && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-900 ring-1 ring-amber-300">
-              Your key isn&apos;t loaded in this tab. Sign out and back in to
-              unlock messages — nothing is stored on the server that could
-              decrypt them for you.
+              Your message key isn&apos;t available on this device yet. Sign
+              out and back in with your password to unlock messages — after
+              that, they follow your account everywhere.
             </p>
           )}
           {state === "nokey" && (

@@ -3,7 +3,7 @@
 
    Weeks are keyed by the ISO date of their Monday, computed in **UTC**. One
    definition of "this week" for everybody is the point: deriving it from each
-   browser's clock would make the popup appear, vanish and reappear for anyone
+   browser's clock would make the dot appear, vanish and reappear for anyone
    whose Sunday evening is already Monday somewhere else, and would differ
    between the server render and the client hydration.
    -------------------------------------------------------------------------- */
@@ -38,17 +38,20 @@ export function formatWeek(week: string): string {
 
 /* --------------------------------------------------------------------------
    Newest first. Add an entry at the top when you ship something; everyone who
-   hasn't already seen that week gets the popup once.
+   hasn't already seen that week gets a dot on "What's new" until they open it.
    -------------------------------------------------------------------------- */
 export const UPDATES: Update[] = [
   {
     week: "2026-09-21",
-    title: "Drag quests anywhere, and a way back in",
+    title: "Drag anything, and a way back in",
     items: [
       "Quests can be dragged into any order within a category, not just from one category to another. A green line shows where it will land. A quest you haven't moved still sorts by its deadline, and editing a quest's deadline or category puts it back in deadline order.",
       "Dragging works on phones and tablets: press and hold a quest for a moment, then move it. A quick swipe still scrolls the page as normal, and holding a quest near the top or bottom edge scrolls for you.",
       "While you're carrying a quest, an Uncategorised box appears, so you can take a quest out of its category even when nothing else is uncategorised.",
-      "Forgot your password? There's now a link on the sign-in page that emails you a reset link. Because messages are end-to-end encrypted with a key only your old password could unlock, resetting clears your message history. Quests, XP, gear, habits and friends are all kept.",
+      "Forgot your password? There's now a link on the sign-in page that emails you a reset link. Quests, XP, gear, habits and friends are always kept, and so are your messages as long as you've signed in once since this update.",
+      "Messages now belong to your account instead of your password: they survive a password reset and open on any device you sign in to. The trade-off is that whoever runs the app holds a key that can read them — the privacy policy has been updated to say so, and you'll be asked to agree to it once.",
+      "\"What's new\" no longer pops up over your board. A red dot on the menu tells you when there's something to read.",
+      "Whole categories can be dragged too: pick one up by its header and drop it where you want it on the board.",
     ],
   },
   {
@@ -82,8 +85,8 @@ export function latestUpdate(now: Date = new Date()): Update | null {
 }
 
 /**
- * Whether to interrupt someone with the popup. True on their first visit of a
- * week in which something shipped, and false for the rest of that week.
+ * Whether to show the dot on "What's new". True from the week something
+ * shipped until the changelog is opened.
  */
 export function shouldShowUpdate(
   lastSeenWeek: string | null,

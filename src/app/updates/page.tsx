@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import MarkUpdatesSeen from "@/components/MarkUpdatesSeen";
 import Scenery from "@/components/Scenery";
 import { getUserId } from "@/lib/session";
-import { UPDATES, formatWeek } from "@/lib/updates";
+import { UPDATES, formatWeek, latestUpdate } from "@/lib/updates";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,11 @@ export default async function UpdatesPage() {
   const userId = await getUserId();
   if (!userId) redirect("/login");
 
+  const latest = latestUpdate();
+
   return (
     <>
+      {latest && <MarkUpdatesSeen week={latest.week} />}
       <Scenery />
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between gap-3">

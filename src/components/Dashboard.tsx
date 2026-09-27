@@ -13,7 +13,6 @@ import CategoryStrength from "@/components/CategoryStrength";
 import QuestForm, { type QuestDraft } from "@/components/QuestForm";
 import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
-import UpdatesModal from "@/components/UpdatesModal";
 import TimezoneSync from "@/components/TimezoneSync";
 import HeaderMenu from "@/components/HeaderMenu";
 import { FxProvider, useFx } from "@/components/Fx";
@@ -25,6 +24,7 @@ import {
   completeTodo,
   deleteTodo,
   placeTodo,
+  reorderCategories,
   uncompleteTodo,
   updateTodo,
 } from "@/lib/actions";
@@ -521,6 +521,14 @@ function Inner({
             handlers={handlers}
             onInlineAdd={handleInlineAdd}
             onPlace={handlePlace}
+            // The board shows the new order itself until this refresh lands;
+            // the refresh is for everything else that lists categories.
+            onReorderSections={(ids) =>
+              guard(async () => {
+                await reorderCategories(ids);
+                startTransition(() => router.refresh());
+              })
+            }
             onCategoriesChanged={() => startTransition(() => router.refresh())}
           />
 
@@ -624,14 +632,6 @@ function Inner({
           )}
         </div>
       </div>
-
-      {/* The changelog sits above the board but below nothing else, so it is
-          the first thing seen on the first visit of the week. */}
-      {update && <UpdatesModal update={update} />}
-
-      {/* Reports the browser's timezone so habits roll over at the user's
-          midnight. Delete this and src/lib/timezone.ts to drop the feature. */}
-      <TimezoneSync stored={profile.timezone ?? null} />
 
       {/* Reports the browser's timezone so habits roll over at the user's
           midnight. Delete this and src/lib/timezone.ts to drop the feature. */}

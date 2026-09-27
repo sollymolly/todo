@@ -88,13 +88,22 @@ const EDGE = 56;
 const LIST_EDGE = 32;
 const MAX_SPEED = 16;
 
+/** Where a carried section would land: before the index-th other section. */
+type Slot = {
+  index: number;
+  /** The drop marker, in the grid's own coordinates. */
+  bar: { left: number; top: number; width: number; height: number };
+};
+
+/** The drag id a section's header registers under, next to the quests' ids. */
+const SECTION = "section:";
+
 type Carrying = {
-  todo: Todo;
   width: number;
-  /** Where on the row it was grabbed, so the ghost doesn't jump. */
+  /** Where it was grabbed, so the ghost doesn't jump. */
   grab: { x: number; y: number };
   start: { x: number; y: number };
-};
+} & ({ kind: "quest"; todo: Todo } | { kind: "section"; category: Category });
 
 export default function CategoryBoard({
   categories,
@@ -103,6 +112,7 @@ export default function CategoryBoard({
   handlers,
   onInlineAdd,
   onPlace,
+  onReorderSections,
   onCategoriesChanged,
 }: {
   categories: Category[];
@@ -116,6 +126,8 @@ export default function CategoryBoard({
    * new order, the dropped quest included.
    */
   onPlace: (todoId: string, categoryId: string | null, orderedIds: string[]) => void;
+  /** Every category's id, in the order the sections were just dragged into. */
+  onReorderSections: (orderedIds: string[]) => void;
   onCategoriesChanged: () => void;
 }) {
   // Everything not finished, so a missed quest stays put and can still be
@@ -138,9 +150,12 @@ export default function CategoryBoard({
 
   const [carrying, setCarrying] = useState<Carrying | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
+  const [slot, setSlot] = useState<Slot | null>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const targetRef = useRef<Target | null>(null);
+  const slotRef = useRef<Slot | null>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   /** Undoes everything a drag set up: listeners and the frame loop. */
   const teardown = useRef<(() => void) | null>(null);
 
@@ -149,15 +164,30 @@ export default function CategoryBoard({
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
   );
 
+  // The order a dropped section was given, shown straight away and dropped
+  // again as soon as the server's order arrives to replace it.
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [syncedCategories, setSyncedCategories] = useState(categories);
+  if (categories !== syncedCategories) {
+    setSyncedCategories(categories);
+    setOrder(null);
+  }
+  const sections = order
+    ? [
+        ...order.flatMap((id) => categories.filter((c) => c.id === id)),
+        ...categories.filter((c) => !order.includes(c.id)),
+      ]
+    : categories;
+
   const boxes: { key: string; category: Category | null; items: Todo[] }[] = [
-    ...categories.map((c) => ({
+    ...sections.map((c) => ({
       key: c.id,
       category: c,
       items: boardOrder(unfinished.filter((t) => t.category_id === c.id)),
     })),
     // Shown while something is being carried even when it's empty, so a quest
     // can be taken out of its category without another loose one to join.
-    ...(loose.length || carrying
+    ...(loose.length || carrying?.kind === "quest"
       ? [{ key: LOOSE, category: null, items: boardOrder(loose) }]
       : []),
   ];
@@ -170,26 +200,33 @@ export default function CategoryBoard({
     teardown.current = null;
     pointer.current = null;
     targetRef.current = null;
+    slotRef.current = null;
   }
 
   function handleDragStart(e: DragStartEvent) {
-    const todo = unfinished.find((t) => t.id === e.active.id);
-    const row = document.querySelector<HTMLElement>(
-      `[data-quest-id="${String(e.active.id)}"]`
-    );
+    const id = String(e.active.id);
     const ev = e.activatorEvent as MouseEvent | TouchEvent;
     const p = "touches" in ev ? ev.touches[0] : ev;
-    if (!todo || !row || !p) return;
-
-    const r = row.getBoundingClientRect();
+    if (!p) return;
     const start = { x: p.clientX, y: p.clientY };
+
+    // A section is carried by its header, a quest by its row. Either way the
+    // ghost starts as a copy of what was picked up, held where it was grabbed.
+    const category = id.startsWith(SECTION)
+      ? categories.find((c) => c.id === id.slice(SECTION.length))
+      : undefined;
+    const todo = category ? undefined : unfinished.find((t) => t.id === id);
+    const el = document.querySelector<HTMLElement>(
+      category ? `[data-section="${category.id}"] header` : `[data-quest-id="${id}"]`
+    );
+    if (!el || (!category && !todo)) return;
+
+    const r = el.getBoundingClientRect();
+    const held = { width: r.width, grab: { x: start.x - r.left, y: start.y - r.top }, start };
     pointer.current = start;
-    setCarrying({
-      todo,
-      width: r.width,
-      grab: { x: start.x - r.left, y: start.y - r.top },
-      start,
-    });
+    setCarrying(
+      category ? { kind: "section", category, ...held } : { kind: "quest", todo: todo!, ...held }
+    );
     // A short buzz where supported, so a finger knows the hold has taken.
     if ("touches" in ev) navigator.vibrate?.(10);
 
@@ -206,16 +243,24 @@ export default function CategoryBoard({
       if (at) {
         if (ghostRef.current)
           ghostRef.current.style.transform = `translate(${at.x}px, ${at.y}px)`;
-        scrollNear(at.x, at.y);
-        const next = locate(at.x, at.y, todo.id);
-        const prev = targetRef.current;
-        if (
-          next?.boxKey !== prev?.boxKey ||
-          next?.index !== prev?.index ||
-          next?.y !== prev?.y
-        ) {
-          targetRef.current = next;
-          setTarget(next);
+        scrollNear(at.x, at.y, !category);
+        if (category) {
+          const next = gridRef.current && locateSection(gridRef.current, at.x, at.y, category.id);
+          if (JSON.stringify(next) !== JSON.stringify(slotRef.current)) {
+            slotRef.current = next;
+            setSlot(next);
+          }
+        } else {
+          const next = locate(at.x, at.y, id);
+          const prev = targetRef.current;
+          if (
+            next?.boxKey !== prev?.boxKey ||
+            next?.index !== prev?.index ||
+            next?.y !== prev?.y
+          ) {
+            targetRef.current = next;
+            setTarget(next);
+          }
         }
       }
       frame = requestAnimationFrame(tick);
@@ -230,12 +275,27 @@ export default function CategoryBoard({
   }
 
   function finish(drop: boolean) {
-    const carried = carrying?.todo;
     const at = targetRef.current;
+    const landing = slotRef.current;
     stopTracking();
     setCarrying(null);
     setTarget(null);
-    if (!drop || !carried || !at) return;
+    setSlot(null);
+    if (!drop || !carrying) return;
+
+    if (carrying.kind === "section") {
+      if (!landing) return;
+      const current = sections.map((c) => c.id);
+      const next = current.filter((id) => id !== carrying.category.id);
+      next.splice(landing.index, 0, carrying.category.id);
+      if (next.every((id, i) => id === current[i])) return;
+      setOrder(next);
+      onReorderSections(next);
+      return;
+    }
+
+    const carried = carrying.todo;
+    if (!at) return;
 
     const box = boxes.find((b) => b.key === at.boxKey);
     if (!box) return;
@@ -262,7 +322,16 @@ export default function CategoryBoard({
       onDragEnd={() => finish(true)}
       onDragCancel={() => finish(false)}
     >
-      <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div ref={gridRef} className="relative grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {/* Where a carried section will land: a bar in the gap before the
+            section it would push along. Absolute, so it takes no grid cell. */}
+        {slot && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute z-20 rounded-full bg-grass-500 shadow-[0_0_0_2px_rgba(255,255,255,0.8)]"
+            style={slot.bar}
+          />
+        )}
         {boxes.map((box) => (
           <Box
             key={box.key}
@@ -273,20 +342,15 @@ export default function CategoryBoard({
             handlers={handlers}
             onInlineAdd={onInlineAdd}
             onChanged={onCategoriesChanged}
-            carryingId={carrying?.todo.id ?? null}
+            carryingId={carrying?.kind === "quest" ? carrying.todo.id : null}
+            carryingSection={carrying?.kind === "section" && carrying.category.id === box.key}
             target={target?.boxKey === box.key ? target : null}
           />
         ))}
         <AddCategoryTile color={nextColor} onAdded={onCategoriesChanged} />
       </div>
 
-      {carrying && (
-        <Ghost
-          ref={ghostRef}
-          carrying={carrying}
-          category={categories.find((c) => c.id === carrying.todo.category_id)}
-        />
-      )}
+      {carrying && <Ghost ref={ghostRef} carrying={carrying} categories={categories} />}
     </DndContext>
   );
 }
@@ -318,17 +382,50 @@ function locate(x: number, y: number, carriedId: string): Target | null {
 }
 
 /**
+ * Where a carried section would land among the others, in reading order.
+ *
+ * On a phone the sections stack in one column, so it's above or below the
+ * middle of each; in a grid, a section counts as passed once the pointer is
+ * below its row, or level with it and past its middle.
+ */
+function locateSection(grid: HTMLElement, x: number, y: number, carriedId: string): Slot | null {
+  const rects = Array.from(grid.querySelectorAll<HTMLElement>("[data-section]"))
+    .filter((el) => el.dataset.section !== carriedId)
+    .map((el) => el.getBoundingClientRect());
+  if (!rects.length) return null;
+
+  const g = grid.getBoundingClientRect();
+  const oneColumn = getComputedStyle(grid).gridTemplateColumns.split(" ").length === 1;
+  const index = rects.filter((r) =>
+    oneColumn
+      ? r.top + r.height / 2 < y
+      : y > r.bottom || (y >= r.top && x > r.left + r.width / 2)
+  ).length;
+
+  // Centred in the 12px grid gap, beside or above the section it lands before
+  // — or after the last one.
+  const at = rects[Math.min(index, rects.length - 1)];
+  const after = index >= rects.length;
+  const bar = oneColumn
+    ? { left: 0, width: g.width, height: 4, top: (after ? at.bottom + 6 : at.top - 6) - g.top - 2 }
+    : { top: at.top - g.top, height: at.height, width: 4, left: (after ? at.right + 6 : at.left - 6) - g.left - 2 };
+
+  return { index, bar: { ...bar, top: Math.round(bar.top), left: Math.round(bar.left) } };
+}
+
+/**
  * Scrolls the page near the top or bottom of the window, and a box's list near
  * the top or bottom of the box. On a touchscreen this is the only way to
  * reach anything off-screen: the finger is busy carrying.
  */
-function scrollNear(x: number, y: number) {
+function scrollNear(x: number, y: number, lists = true) {
   const speed = (depth: number, edge: number, max: number) =>
     Math.ceil((Math.min(depth, edge) / edge) * max);
 
   if (y < EDGE) window.scrollBy(0, -speed(EDGE - y, EDGE, MAX_SPEED));
   else if (y > window.innerHeight - EDGE)
     window.scrollBy(0, speed(y - window.innerHeight + EDGE, EDGE, MAX_SPEED));
+  if (!lists) return;
 
   const list = document
     .elementsFromPoint(x, y)
@@ -342,20 +439,25 @@ function scrollNear(x: number, y: number) {
     list.scrollTop += speed(y - r.bottom + LIST_EDGE, LIST_EDGE, MAX_SPEED / 2);
 }
 
-/* The copy of a quest that follows the pointer. Deliberately a light sketch of
-   the row rather than the row itself: the real one owns menus, portals and a
-   checklist, none of which should exist twice. The drag loop moves it by
-   writing a transform straight to the node, so following the pointer costs no
-   render per frame. */
+/* The copy of whatever is being carried that follows the pointer. Deliberately
+   a light sketch rather than the real thing: a row owns menus, portals and a
+   checklist, and a section owns a whole list, none of which should exist
+   twice. The drag loop moves it by writing a transform straight to the node,
+   so following the pointer costs no render per frame. */
 function Ghost({
   ref,
-  carrying: { todo, width, grab, start },
-  category,
+  carrying,
+  categories,
 }: {
   ref: React.Ref<HTMLDivElement>;
   carrying: Carrying;
-  category?: Category;
+  categories: Category[];
 }) {
+  const { width, grab, start } = carrying;
+  const category =
+    carrying.kind === "section"
+      ? carrying.category
+      : categories.find((c) => c.id === carrying.todo.category_id);
   const c = colorOf(category?.color ?? "amber");
   return (
     <div
@@ -365,15 +467,27 @@ function Ghost({
       style={{ transform: `translate(${start.x}px, ${start.y}px)` }}
     >
       <div
-        className="relative -rotate-2 overflow-hidden rounded-xl border border-mud-300 bg-white py-2 pl-3.5 pr-3 shadow-2xl shadow-mud-900/30"
+        className={`relative -rotate-2 overflow-hidden rounded-xl border border-mud-300 py-2 pl-3.5 pr-3 shadow-2xl shadow-mud-900/30 ${
+          carrying.kind === "section" ? c.head : "bg-white"
+        }`}
         style={{ width, marginLeft: -grab.x, marginTop: -grab.y }}
       >
         <span className={`absolute inset-y-0 left-0 w-1.5 ${c.dot}`} />
-        <p className="truncate text-[13.5px] font-medium text-mud-900">{todo.title}</p>
-        {todo.due_date && (
-          <p className="mt-0.5 text-[11px] font-semibold text-mud-500">
-            {describeDueShort(todo.due_date)}
+        {carrying.kind === "section" ? (
+          <p className={`truncate font-display text-sm font-bold tracking-wide ${c.text}`}>
+            {carrying.category.name}
           </p>
+        ) : (
+          <>
+            <p className="truncate text-[13.5px] font-medium text-mud-900">
+              {carrying.todo.title}
+            </p>
+            {carrying.todo.due_date && (
+              <p className="mt-0.5 text-[11px] font-semibold text-mud-500">
+                {describeDueShort(carrying.todo.due_date)}
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -402,6 +516,7 @@ function Box({
   onInlineAdd,
   onChanged,
   carryingId,
+  carryingSection,
   target,
 }: {
   boxKey: string;
@@ -413,9 +528,17 @@ function Box({
   onInlineAdd: (draft: InlineDraft) => Promise<void>;
   onChanged: () => void;
   carryingId: string | null;
+  /** This whole section is the one being carried. */
+  carryingSection: boolean;
   /** Set while a carried quest would land in this box. */
   target: Target | null;
 }) {
+  // Sections are picked up by the header. Uncategorised always trails the
+  // real categories, so it can't be.
+  const { setNodeRef: sectionRef, listeners: sectionListeners } = useDraggable({
+    id: `${SECTION}${category?.id ?? LOOSE}`,
+    disabled: !category,
+  });
   const [adding, setAdding] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -462,15 +585,23 @@ function Box({
   return (
     <section
       data-drop-box={boxKey}
+      data-section={category?.id}
       className={`panel flex flex-col overflow-hidden rounded-2xl transition ${
         // Loud enough to find at a glance across a full board: a stronger
         // border plus a soft red halo, rather than a hairline tint.
         overdue > 0 ? "border-red-500 ring-[3px] ring-red-400/80 shadow-[0_0_0_1px_rgba(220,38,38,0.35),0_8px_24px_-8px_rgba(220,38,38,0.5)]" : ""
-      } ${target ? "scale-[1.01] border-grass-500 ring-2 ring-grass-400" : ""}`}
+      } ${target ? "scale-[1.01] border-grass-500 ring-2 ring-grass-400" : ""} ${
+        carryingSection ? "opacity-40" : ""
+      }`}
     >
       {/* --------------------------------------------------------- header */}
       <header
-        className={`flex items-center gap-2 border-b border-mud-200 px-3 py-2 ${c.head}`}
+        ref={sectionRef}
+        {...(category ? sectionListeners : {})}
+        title={category ? "Drag to move this section" : undefined}
+        className={`flex items-center gap-2 border-b border-mud-200 px-3 py-2 ${c.head} ${
+          category ? "cursor-grab touch-manipulation select-none [-webkit-touch-callout:none]" : ""
+        }`}
       >
         <h3 className={`flex-1 truncate font-display text-sm font-bold tracking-wide ${c.text}`}>
           {category?.name ?? "Uncategorised"}

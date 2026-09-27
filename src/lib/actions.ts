@@ -251,6 +251,25 @@ export async function placeTodo(
 }
 
 /**
+ * Dragging a section (a category's box) into a new place on the board.
+ * `orderedIds` is every category in its new order; sort_order is rewritten
+ * from it, so it also tidies any gaps or ties left by older data.
+ */
+export async function reorderCategories(orderedIds: string[]) {
+  const userId = await requireUserId();
+  const ids = orderedIds.filter((x) => UUID.test(x)).slice(0, 200);
+
+  await sql`
+    update categories c set sort_order = o.n - 1
+      from unnest(${ids}::uuid[]) with ordinality as o(id, n)
+     where c.id = o.id
+       and c.user_id = ${userId}::uuid
+  `;
+
+  bump();
+}
+
+/**
  * Deletes completed quests past the retention window, folding their counts into
  * the durable totals first. Irreversible by design — see migration 009.
  */

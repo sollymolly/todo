@@ -52,7 +52,12 @@ export default function PrivacyPage() {
               <B>Your character</B> — display name, level, appearance, gear.
             </li>
             <li>
-              <B>Your messages, as ciphertext only.</B> See below.
+              <B>Your messages, as ciphertext</B>, and the key that reads
+              them. See below.
+            </li>
+            <li>
+              <B>Password reset links</B> — only a fingerprint of each link,
+              never the link itself, kept until it is used or expires.
             </li>
             <li>
               <B>Rate-limiting counters</B> keyed by IP address or account, kept
@@ -66,23 +71,28 @@ export default function PrivacyPage() {
           </List>
         </Section>
 
-        <Section title="What the server cannot read">
+        <Section title="Who can read your messages">
           <p>
-            Direct messages are end-to-end encrypted in your browser. The key
-            that reads them is derived from your password and stored only
-            wrapped — encrypted with a second key that also never leaves your
-            device. The server holds ciphertext and cannot decrypt it, and
-            neither can anyone with a copy of the database.
+            Direct messages are encrypted in your browser before they are sent,
+            and stored as ciphertext. The key that reads them belongs to your
+            account, not your password: it is kept in two sealed copies, one
+            locked with your password and one locked with a secret held by the
+            server. That second copy is what lets your messages survive a
+            forgotten password, and follow you to a new device.
           </p>
           <p className="mt-3">
-            Two honest limits. First, if you forget your password, your
-            messages are unrecoverable — there is no reset that could preserve
-            them, because that would mean the server could read them. Second,
-            your friends&apos; public keys are handed to you <em>by this
-            server</em>, so a compromised server could hand you the wrong one
-            and read what follows. Each conversation shows a verification code
-            for exactly this reason: compare it with your friend out loud, and a
-            substituted key becomes visible.
+            The honest consequence: <B>whoever runs this app can decrypt your
+            messages.</B> The server&apos;s secret is kept apart from the
+            database, so someone with only a copy of the database still cannot
+            read them — but the operator, who has both, could. If you need
+            messages nobody but you and your friend can read, use an app built
+            for that.
+          </p>
+          <p className="mt-3">
+            Your friends&apos; public keys are also handed to you by this
+            server, so a compromised server could hand you the wrong one. Each
+            conversation shows a verification code: compare it with your friend
+            out loud, and a substituted key becomes visible.
           </p>
         </Section>
 
@@ -108,9 +118,11 @@ export default function PrivacyPage() {
         <Section title="Who else is involved">
           <p>
             Data is held in a Postgres database (Neon) and served from Vercel.
-            Both can see traffic metadata and operate their own logging. There
-            is no analytics, no advertising, no third-party trackers, and
-            nothing is sold or shared beyond those two providers.
+            Both can see traffic metadata and operate their own logging. If you
+            ask for a password reset, your email address is passed to Resend,
+            which delivers the reset email. There is no analytics, no
+            advertising, no third-party trackers, and nothing is sold or shared
+            beyond those providers.
           </p>
         </Section>
 
