@@ -15,12 +15,15 @@ import QuestRow from "@/components/QuestRow";
 import LevelUpModal from "@/components/LevelUpModal";
 import TimezoneSync from "@/components/TimezoneSync";
 import HeaderMenu from "@/components/HeaderMenu";
+import TaskTable from "@/components/TaskTable";
+import ScreenshotImport, { type ImportDraft } from "@/components/ScreenshotImport";
 import { FxProvider, useFx } from "@/components/Fx";
 import { levelFor, XP } from "@/lib/game";
 import { isOverdue } from "@/lib/date";
 import {
   abandonTodo,
   addTodo,
+  addTodos,
   completeTodo,
   deleteTodo,
   placeTodo,
@@ -81,6 +84,8 @@ function Inner({
   const [managing, setManaging] = useState(false);
   const [showChronicle, setShowChronicle] = useState(false);
   const [showHabits, setShowHabits] = useState(true);
+  const [view, setView] = useState<"board" | "table">("board");
+  const [importing, setImporting] = useState(false);
   const [composer, setComposer] = useState<{
     open: boolean;
     categoryId: string | null;
@@ -319,6 +324,14 @@ function Inner({
   };
 
   // The boxes add inline, so this only needs the title/date/category.
+  // The reviewed result of a screenshot import. Lands in the table, which is
+  // where a batch of new quests is easiest to look over.
+  const handleImport = async (drafts: ImportDraft[]) => {
+    const created = await addTodos(drafts);
+    setTodos((prev) => [...created, ...prev]);
+    setView("table");
+  };
+
   const handleInlineAdd = async (draft: InlineDraft) => {
     const created = await addTodo({
       title: draft.title,
@@ -495,7 +508,7 @@ function Inner({
           </div>
 
           {/* ---------------------------------------------------- board */}
-          <div className="flex items-center justify-between gap-2 px-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <h2 className="font-display text-sm font-bold tracking-wide text-mud-800 drop-shadow-sm">
               Quests
               {overdueCount > 0 && (
@@ -504,33 +517,71 @@ function Inner({
                 </span>
               )}
             </h2>
-            <button
-              onClick={() => setManaging(true)}
-              className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
-              aria-label="Manage categories"
-              title="Manage categories"
-            >
-              Manage
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              {/* Two views of the same quests: boxes for doing, a table for
+                  scanning, sorting and filtering. */}
+              <div
+                role="group"
+                aria-label="Quest view"
+                className="flex rounded-lg border border-mud-300 bg-white/80 p-0.5"
+              >
+                {(["board", "table"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setView(v)}
+                    aria-pressed={view === v}
+                    className={`rounded-md px-2.5 py-0.5 text-[11px] font-semibold capitalize transition ${
+                      view === v ? "bg-grass-600 text-white" : "text-mud-600 hover:text-grass-700"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setImporting(true)}
+                className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+                title="Turn a screenshot of a to-do list into quests"
+              >
+                Import screenshot
+              </button>
+              <button
+                onClick={() => setManaging(true)}
+                className="rounded-lg border border-mud-300 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-mud-600 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+                aria-label="Manage categories"
+                title="Manage categories"
+              >
+                Manage
+              </button>
+            </div>
           </div>
 
-          <CategoryBoard
-            categories={categories}
-            todos={todos}
-            steps={steps}
-            handlers={handlers}
-            onInlineAdd={handleInlineAdd}
-            onPlace={handlePlace}
-            // The board shows the new order itself until this refresh lands;
-            // the refresh is for everything else that lists categories.
-            onReorderSections={(ids) =>
-              guard(async () => {
-                await reorderCategories(ids);
-                startTransition(() => router.refresh());
-              })
-            }
-            onCategoriesChanged={() => startTransition(() => router.refresh())}
-          />
+          {view === "table" ? (
+            <TaskTable
+              todos={todos}
+              categories={categories}
+              steps={steps}
+              handlers={handlers}
+            />
+          ) : (
+            <CategoryBoard
+              categories={categories}
+              todos={todos}
+              steps={steps}
+              handlers={handlers}
+              onInlineAdd={handleInlineAdd}
+              onPlace={handlePlace}
+              // The board shows the new order itself until this refresh lands;
+              // the refresh is for everything else that lists categories.
+              onReorderSections={(ids) =>
+                guard(async () => {
+                  await reorderCategories(ids);
+                  startTransition(() => router.refresh());
+                })
+              }
+              onCategoriesChanged={() => startTransition(() => router.refresh())}
+            />
+          )}
 
           {/* --------------------------------------------------- habits */}
           {/* Below the board, because the board is what gets done today and a
@@ -639,6 +690,15 @@ function Inner({
 
       {/* ------------------------------------------------------- overlays */}
       <AnimatePresence>
+        {importing && (
+          <ScreenshotImport
+            key="import"
+            categories={categories}
+            onClose={() => setImporting(false)}
+            onAdd={handleImport}
+          />
+        )}
+
         {managing && (
           <CategoryManager
             categories={categories}

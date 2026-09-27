@@ -47,6 +47,7 @@ cp .env.local.example .env.local
 | `RESEND_API_KEY` | *Optional.* Turns on "Forgot your password?" by letting the app email reset links through [Resend](https://resend.com). Installing the Resend integration from the Vercel Marketplace sets it for you. Without it the reset page says reset isn't set up |
 | `EMAIL_FROM` | *Optional.* The sender for reset emails, e.g. `HabitKnight <noreply@yourdomain.com>`. Must be on a domain verified in Resend. Defaults to `onboarding@resend.dev`, which Resend only delivers to the address that owns the Resend account |
 | `MESSAGE_KEY_SECRET` | *Recommended.* Seals the server's copy of each account's message key, which is what lets messages survive a forgotten password and open on any signed-in device. At least 32 characters — generate with `openssl rand -base64 32`. **Set it once and never change it**: a new value makes every stored copy unreadable. Without it, messages are tied to the password and a reset clears them |
+| `OPENROUTER_API_KEY` | *Optional.* Turns on "Import screenshot". Create one at [openrouter.ai/keys](https://openrouter.ai/keys). Screenshots are read by the free `google/gemma-4-31b-it:free`, so no credit is needed — but free models share a daily cap across the whole OpenRouter account (50 requests a day, or 1,000 once you've ever bought 10 credits) |
 | `APP_URL` | *Optional.* The site's public address, used to build links in emails. On Vercel it defaults to the production domain; locally, `http://localhost:3000` |
 
 All of these are server-only and never reach the browser. `.env*` is gitignored.

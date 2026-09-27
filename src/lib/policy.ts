@@ -11,10 +11,10 @@
    — re-consenting people for nothing trains them to click through.
    -------------------------------------------------------------------------- */
 
-export const PRIVACY_VERSION = 2;
+export const PRIVACY_VERSION = 3;
 
 /** Shown alongside the version so "which one did I agree to" has an answer. */
-export const PRIVACY_EFFECTIVE = "26 September 2026";
+export const PRIVACY_EFFECTIVE = "27 September 2026";
 
 /**
  * The handful of points someone must actually see before agreeing. The full
@@ -26,5 +26,5 @@ export const PRIVACY_HIGHLIGHTS = [
   "Your direct messages are encrypted, and tied to your account rather than your password, so they survive a forgotten password. The trade-off: whoever runs this app holds the key that can decrypt them.",
   "Companions you accept can see your level, completed-quest count, and your category names with how many quests are open in each. Never the quests themselves.",
   "New accounts start already befriended to whoever runs this instance, which gives them that same visibility.",
-  "Data is held by Neon (database) and Vercel (hosting). If you ask for a password reset, Resend delivers the email. There is no analytics, no advertising and no third-party tracking.",
+  "Data is held by Neon (database) and Vercel (hosting). If you ask for a password reset, Resend delivers the email. If you import a screenshot, it is sent to an AI model through OpenRouter to be read. There is no analytics, no advertising and no third-party tracking.",
 ] as const;

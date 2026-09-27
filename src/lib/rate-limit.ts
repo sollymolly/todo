@@ -38,6 +38,11 @@ export const LIMITS = {
   sendMessage: { limit: 120, windowSeconds: 60 },
   /** Per account. Generous for a real person, tight enough to stop a flood. */
   feedback: { limit: 10, windowSeconds: 3600 },
+  /**
+   * Per account. The free model's daily cap is shared by everyone using this
+   * instance, so no one person gets to spend most of it.
+   */
+  importScreenshot: { limit: 10, windowSeconds: 3600 },
 } as const satisfies Record<string, Limit>;
 
 /**

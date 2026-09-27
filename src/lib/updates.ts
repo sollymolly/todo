@@ -43,8 +43,10 @@ export function formatWeek(week: string): string {
 export const UPDATES: Update[] = [
   {
     week: "2026-09-21",
-    title: "Drag anything, and a way back in",
+    title: "Drag anything, a table view, and screenshot import",
     items: [
+      "New table view: flip the Board / Table switch above your quests to see every quest in one list. Sort by name, category, deadline, status or when it was added, and filter by category, deadline, status, or a search.",
+      "Import from a screenshot: snap or paste a picture of any to-do list — notes, a syllabus, a group chat — and the tasks in it come back as a list you can fix up before adding. The picture is read by an AI model, so the privacy policy has been updated to say so, and you'll be asked to agree to it once.",
       "Quests can be dragged into any order within a category, not just from one category to another. A green line shows where it will land. A quest you haven't moved still sorts by its deadline, and editing a quest's deadline or category puts it back in deadline order.",
       "Dragging works on phones and tablets: press and hold a quest for a moment, then move it. A quick swipe still scrolls the page as normal, and holding a quest near the top or bottom edge scrolls for you.",
       "While you're carrying a quest, an Uncategorised box appears, so you can take a quest out of its category even when nothing else is uncategorised.",

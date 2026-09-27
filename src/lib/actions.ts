@@ -93,6 +93,40 @@ export async function addTodo(input: {
   return normalizeTodo(rows[0]);
 }
 
+/**
+ * Adds several quests at once — the reviewed result of a screenshot import.
+ * The same checks as addTodo, one statement for the lot, so a list of twenty
+ * lands together rather than trickling in over twenty round trips.
+ */
+export async function addTodos(
+  drafts: { title: string; dueDate: string | null; categoryId: string | null }[]
+) {
+  const userId = await requireUserId();
+
+  const rows: { title: string; due: string | null; category: string | null }[] = [];
+  const owned = new Map<string | null, string | null>();
+  for (const d of drafts.slice(0, 50)) {
+    const title = typeof d.title === "string" ? d.title.trim().slice(0, 200) : "";
+    if (!title) continue;
+    const due = d.dueDate && !isNaN(new Date(d.dueDate).getTime()) ? d.dueDate : null;
+    if (!owned.has(d.categoryId)) owned.set(d.categoryId, await ownCategory(userId, d.categoryId));
+    rows.push({ title, due, category: owned.get(d.categoryId) ?? null });
+  }
+  if (rows.length === 0) return [];
+
+  // A JSON document rather than parallel arrays: nulls survive it unambiguously.
+  const created = (await sql`
+    insert into todos (user_id, title, due_date, category_id)
+    select ${userId}::uuid, x.title, x.due, x.category
+      from json_to_recordset(${JSON.stringify(rows)}::json)
+        as x(title text, due timestamptz, category uuid)
+    returning *
+  `) as Record<string, unknown>[];
+
+  bump();
+  return created.map(normalizeTodo);
+}
+
 export async function updateTodo(
   id: string,
   next: {

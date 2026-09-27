@@ -124,6 +124,17 @@ export default function PrivacyPage() {
             advertising, no third-party trackers, and nothing is sold or shared
             beyond those providers.
           </p>
+          <p className="mt-3">
+            <B>Screenshot import</B> is the one feature that sends your content
+            to an AI. When you import a screenshot, the image — along with
+            today&apos;s date and your category names — is sent through
+            OpenRouter to an AI model (Google&apos;s Gemma, on OpenRouter&apos;s
+            free tier) to read the tasks in it. Those services handle it
+            under their own policies, and free models may keep what they are
+            sent. The screenshot itself is never stored here. Nothing is sent
+            unless you choose to import one, so leave out anything you
+            wouldn&apos;t want a third party to see.
+          </p>
         </Section>
 
         <Section title="Agreeing to this policy">
