@@ -14,7 +14,7 @@ import { PRIVACY_VERSION } from "@/lib/policy";
    per-request nonce, and an injected <script> without one simply never runs.
    -------------------------------------------------------------------------- */
 
-const PUBLIC_PATHS = ["/login", "/privacy"];
+const PUBLIC_PATHS = ["/login", "/privacy", "/forgot-password", "/reset-password"];
 
 function policy(nonce: string, dev: boolean): string {
   return [

@@ -127,5 +127,6 @@ export function normalizeTodo(row: Record<string, unknown>): Todo {
     due_date: iso(row.due_date),
     completed_at: iso(row.completed_at),
     created_at: iso(row.created_at) ?? new Date(0).toISOString(),
+    position: row.position == null ? null : Number(row.position),
   };
 }

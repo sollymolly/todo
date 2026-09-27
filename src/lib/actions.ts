@@ -110,8 +110,19 @@ export async function updateTodo(
   const notes = next.notes?.trim() ? next.notes.trim().slice(0, 2000) : null;
   const categoryId = await ownCategory(userId, next.categoryId);
 
+  // A new deadline or a new category hands the quest back to deadline order
+  // (see boardOrder): a hand-placed position would otherwise pin it where it
+  // was, which is exactly the "edited the date and nothing moved" complaint
+  // that once removed manual ordering altogether. On the right-hand side the
+  // columns still hold their old values, which is what makes the comparison.
   await sql`
     update todos set
+      position    = case
+                      when due_date is distinct from ${next.dueDate || null}::timestamptz
+                        or category_id is distinct from ${categoryId}::uuid
+                      then null
+                      else position
+                    end,
       title       = ${title.slice(0, 200)},
       notes       = ${notes},
       due_date    = ${next.dueDate || null}::timestamptz,
@@ -202,16 +213,38 @@ export async function deleteTodo(id: string): Promise<XpResult> {
 }
 
 /**
- * Dragging a quest onto another category. Only the category moves — where it
- * sits in that list is decided by its deadline, not by where it was dropped.
+ * Dropping a quest into a box — its own or another category's. `orderedIds` is
+ * that box's whole list in its new order, and every quest in it is renumbered,
+ * so the order survives exactly as it was shown.
+ *
+ * The whole list rather than just the dropped quest's neighbours because a box
+ * can hold quests that were never placed (position null, slotted by deadline);
+ * their order only exists on screen until something writes it down.
  */
-export async function moveTodo(id: string, categoryId: string | null) {
+export async function placeTodo(
+  id: string,
+  categoryId: string | null,
+  orderedIds: string[]
+) {
   const userId = await requireUserId();
   const target = await ownCategory(userId, categoryId);
+
+  const ids = orderedIds.filter((x) => UUID.test(x)).slice(0, 500);
+  if (!UUID.test(id) || !ids.includes(id)) throw new Error("Could not move that quest");
 
   await sql`
     update todos set category_id = ${target}::uuid
     where id = ${id}::uuid and user_id = ${userId}::uuid
+  `;
+
+  // Only quests that really are the caller's and really are in that box —
+  // a stale list can't reach into another category's order.
+  await sql`
+    update todos t set position = o.n * 1024
+      from unnest(${ids}::uuid[]) with ordinality as o(id, n)
+     where t.id = o.id
+       and t.user_id = ${userId}::uuid
+       and t.category_id is not distinct from ${target}::uuid
   `;
 
   bump();

@@ -203,6 +203,16 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
                 required
                 minLength={8}
               />
+              {mode === "signin" && (
+                <p className="-mt-1 text-right">
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-semibold text-mud-500 underline-offset-4 transition hover:text-grass-700 hover:underline"
+                  >
+                    Forgot your password?
+                  </Link>
+                </p>
+              )}
 
               {mode === "signup" && (
                 <div className="rounded-xl border border-mud-200 bg-white/60 p-3">
@@ -297,7 +307,7 @@ function Inner({ missingEnv }: { missingEnv: string[] }) {
   );
 }
 
-function Field({
+export function Field({
   label,
   value,
   onChange,

@@ -42,6 +42,16 @@ export function formatWeek(week: string): string {
    -------------------------------------------------------------------------- */
 export const UPDATES: Update[] = [
   {
+    week: "2026-09-21",
+    title: "Drag quests anywhere, and a way back in",
+    items: [
+      "Quests can be dragged into any order within a category, not just from one category to another. A green line shows where it will land. A quest you haven't moved still sorts by its deadline, and editing a quest's deadline or category puts it back in deadline order.",
+      "Dragging works on phones and tablets: press and hold a quest for a moment, then move it. A quick swipe still scrolls the page as normal, and holding a quest near the top or bottom edge scrolls for you.",
+      "While you're carrying a quest, an Uncategorised box appears, so you can take a quest out of its category even when nothing else is uncategorised.",
+      "Forgot your password? There's now a link on the sign-in page that emails you a reset link. Because messages are end-to-end encrypted with a key only your old password could unlock, resetting clears your message history. Quests, XP, gear, habits and friends are all kept.",
+    ],
+  },
+  {
     week: "2026-08-10",
     title: "Late quests, honest XP, and a locked-down account",
     items: [

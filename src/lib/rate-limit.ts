@@ -27,6 +27,12 @@ export const LIMITS = {
   signInEmail: { limit: 10, windowSeconds: 900 },
   signUp: { limit: 5, windowSeconds: 3600 },
   changePassword: { limit: 10, windowSeconds: 900 },
+  /** Per IP. Each one can send an email, so a script mustn't spam an inbox. */
+  resetRequest: { limit: 5, windowSeconds: 900 },
+  /** Per address, however many IPs are asking for it. */
+  resetRequestEmail: { limit: 3, windowSeconds: 3600 },
+  /** Per IP. Opening and spending links; the secret gets scrypt-hashed. */
+  resetComplete: { limit: 10, windowSeconds: 900 },
   /** Exact-match lookup, but still worth capping as a probing tool. */
   findPerson: { limit: 60, windowSeconds: 300 },
   sendMessage: { limit: 120, windowSeconds: 60 },

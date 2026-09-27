@@ -40,7 +40,7 @@ export default function QuestRow({
   onEdit,
   onStepsChanged,
   onStepsToggle,
-  draggable = false,
+  drag,
 }: {
   todo: Todo;
   category?: Category;
@@ -57,10 +57,10 @@ export default function QuestRow({
   onStepsChanged?: () => void;
   /** Lets a fixed-height container grow while this checklist is open. */
   onStepsToggle?: (open: boolean) => void;
-  draggable?: boolean;
+  /** Supplied by the board when this row can be picked up. */
+  drag?: RowDrag;
 }) {
   const [slashing, setSlashing] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [menuAt, setMenuAt] = useState<{ left: number; top: number } | null>(null);
   // The category boxes only fit about three rows before they scroll, so steps
   // start collapsed there — the n/m chip is the glanceable part, and opening it
@@ -79,6 +79,7 @@ export default function QuestRow({
   const cost = abandonCost(todo.xp_awarded);
 
   const stepsDone = steps.filter((s) => s.done).length;
+  const canDrag = !!drag && !done;
 
   /* The boxes scroll and clip their contents, so the menu is positioned in a
      portal against the viewport instead of inside the row. */
@@ -157,17 +158,14 @@ export default function QuestRow({
 
   return (
     <motion.li
-      ref={rowRef}
+      ref={(el) => {
+        rowRef.current = el;
+        drag?.ref(el);
+      }}
       layout
       data-quest-row=""
-      draggable={draggable && todo.status !== "done"}
-      onDragStart={(ev) => {
-        const e = ev as unknown as React.DragEvent;
-        e.dataTransfer?.setData("text/quest-id", todo.id);
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-        setDragging(true);
-      }}
-      onDragEnd={() => setDragging(false)}
+      data-quest-id={todo.id}
+      {...(canDrag && drag ? startListeners(drag) : {})}
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: 30, scale: 0.95, transition: { duration: 0.24 } }}
@@ -175,8 +173,13 @@ export default function QuestRow({
       className={`group relative overflow-hidden rounded-xl border bg-white/80 shadow-sm transition hover:bg-white ${
         overdue ? "border-red-300" : "border-mud-200"
       } ${done ? "opacity-70" : ""} ${failed ? "border-red-300" : ""} ${
-        dragging ? "opacity-40" : ""
-      } ${draggable && todo.status !== "done" ? "cursor-grab active:cursor-grabbing" : ""}`}
+        drag?.active ? "opacity-40" : ""
+      } ${
+        // No text selection or iOS callout: a long press is how a row is
+        // picked up on a touchscreen. `manipulation` keeps scrolling working
+        // until the hold completes.
+        canDrag ? "cursor-grab touch-manipulation select-none [-webkit-touch-callout:none]" : ""
+      }`}
     >
       <span
         className={`absolute inset-y-0 left-0 w-1.5 ${c.dot} ${
@@ -367,6 +370,7 @@ export default function QuestRow({
             {menuAt && (
               <motion.div
                 ref={menuRef}
+                data-no-drag=""
                 initial={{ opacity: 0, scale: 0.95, y: -4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -455,6 +459,37 @@ export default function QuestRow({
         )}
     </motion.li>
   );
+}
+
+/* ========================================================================== */
+/* Dragging                                                                   */
+/* ========================================================================== */
+
+export type RowDrag = {
+  ref: (el: HTMLElement | null) => void;
+  /** The sensor handlers from useDraggable: onMouseDown, onTouchStart. */
+  listeners: Record<string, ((e: React.SyntheticEvent) => void) | undefined> | undefined;
+  /** This row is the one being carried. */
+  active: boolean;
+};
+
+/**
+ * The sensors' start handlers, minus anything that begins in a text field or
+ * the options menu. Typing a step's name, or selecting text in it, must never
+ * turn into a drag — and the menu is portalled out of the row in the DOM but
+ * not in React, so its presses would otherwise bubble up to here.
+ */
+function startListeners(drag: RowDrag) {
+  const out: Record<string, (e: React.SyntheticEvent) => void> = {};
+  for (const [name, handler] of Object.entries(drag.listeners ?? {})) {
+    if (!handler) continue;
+    out[name] = (e) => {
+      const target = e.target as Element | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable], [data-no-drag]")) return;
+      handler(e);
+    };
+  }
+  return out;
 }
 
 function MenuItem({

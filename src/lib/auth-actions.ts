@@ -1,8 +1,11 @@
 "use server";
 
+import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { sql } from "@/lib/db";
+import { appUrl, EMAIL_CONFIGURED, sendEmail } from "@/lib/email";
 import { dummyVerify, hashPassword, verifyPassword } from "@/lib/password";
 import { endSession, requireUserId, startSession } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
@@ -295,6 +298,166 @@ export async function changePassword(input: {
       where id = ${userId}::uuid
     `;
 
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: friendly(e) };
+  }
+}
+
+/* ========================================================================== */
+/* Forgotten password                                                         */
+/* ========================================================================== */
+
+const RESET_MINUTES = 30;
+const RESET_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const RESET_GONE = "This link has expired or has already been used. Ask for a new one.";
+
+/** What's stored in place of a token. See migration 021. */
+function resetHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Emails a reset link, if the address has an account.
+ *
+ * The answer is the same either way, and so is the time it takes: everything
+ * that depends on whether the account exists — the lookup, the token, the send
+ * — runs in `after`, once the response has gone. Otherwise a real address
+ * would answer a few hundred milliseconds slower than an invented one, which
+ * is a membership oracle for any list of emails.
+ */
+export async function requestPasswordReset(email: string): Promise<AuthResult> {
+  const mail = email.trim().toLowerCase();
+  if (!EMAIL.test(mail)) return { ok: false, error: "That doesn't look like an email address." };
+
+  // Worth naming, since it's about this deployment rather than anyone's account.
+  if (!EMAIL_CONFIGURED)
+    return { ok: false, error: "Password reset isn't set up on this server yet." };
+
+  if ((await rateLimited("resetRequest")) || (await rateLimited("resetRequestEmail", mail)))
+    return { ok: false, error: TOO_MANY };
+
+  after(async () => {
+    try {
+      const rows = (await sql`
+        select id from users where email = ${mail}
+      `) as { id: string }[];
+      if (rows.length === 0) return;
+      const userId = rows[0].id;
+
+      const token = randomBytes(32).toString("base64url");
+
+      // One live link per account, and spent or expired rows don't pile up.
+      await sql`
+        delete from password_resets
+         where (user_id = ${userId}::uuid and used_at is null)
+            or expires_at < now() - interval '1 day'
+      `;
+      await sql`
+        insert into password_resets (token_hash, user_id, expires_at)
+        values (${resetHash(token)}, ${userId}::uuid,
+                now() + make_interval(mins => ${RESET_MINUTES}))
+      `;
+
+      // In the fragment, not the query: a fragment is never sent to a server,
+      // so the token stays out of access logs on the way back in.
+      const link = `${appUrl()}/reset-password#token=${token}`;
+      await sendEmail({
+        to: mail,
+        subject: "Reset your HabitKnight password",
+        text: [
+          "Someone — hopefully you — asked to reset the password for this HabitKnight account.",
+          "",
+          `Choose a new one here: ${link}`,
+          "",
+          `The link works once and expires in ${RESET_MINUTES} minutes.`,
+          "Resetting clears your message history, which only your old password could unlock.",
+          "",
+          "If this wasn't you, ignore this email. Nothing changes until the link is used.",
+        ].join("\n"),
+        html: `
+          <p>Someone — hopefully you — asked to reset the password for this HabitKnight account.</p>
+          <p><a href="${link}">Choose a new password</a></p>
+          <p>The link works once and expires in ${RESET_MINUTES} minutes. Resetting clears your
+             message history, which only your old password could unlock.</p>
+          <p style="color:#6b5b47">If this wasn't you, ignore this email. Nothing changes until the link is used.</p>
+        `,
+      });
+    } catch (e) {
+      console.error("[reset]", e);
+    }
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Checks a link before the form is shown, and hands back the address it
+ * belongs to. The browser needs that address: it is the salt for the keys
+ * derived from the new password. Anyone holding a live token can read that
+ * inbox already, so this reveals nothing they don't have.
+ */
+export async function openPasswordReset(
+  token: string
+): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+  if (!RESET_TOKEN.test(token)) return { ok: false, error: RESET_GONE };
+  if (await rateLimited("resetComplete")) return { ok: false, error: TOO_MANY };
+
+  try {
+    const rows = (await sql`
+      select u.email::text as email
+        from password_resets r
+        join users u on u.id = r.user_id
+       where r.token_hash = ${resetHash(token)}
+         and r.used_at is null
+         and r.expires_at > now()
+    `) as { email: string }[];
+    if (rows.length === 0) return { ok: false, error: RESET_GONE };
+    return { ok: true, email: rows[0].email };
+  } catch (e) {
+    return { ok: false, error: friendly(e) };
+  }
+}
+
+/**
+ * Spends the link and sets the new credential, then signs the person in.
+ *
+ * Like changePassword, the server only ever sees a derived secret. Unlike it,
+ * there is no old password to re-wrap the private key with, so the browser
+ * brings a brand-new keypair — and the messages sealed under the old one are
+ * deleted by reset_password, because nothing can open them any more.
+ */
+export async function completePasswordReset(input: {
+  token: string;
+  authSecret: string;
+  publicKey: string;
+  wrappedPrivateKey: string;
+}): Promise<AuthResult> {
+  if (!RESET_TOKEN.test(input.token)) return { ok: false, error: RESET_GONE };
+  if (!input.authSecret)
+    return { ok: false, error: "A new password is required." };
+  if (!wellFormedKeys(input.publicKey, input.wrappedPrivateKey))
+    return { ok: false, error: "Your browser could not prepare encryption keys." };
+
+  if (await rateLimited("resetComplete")) return { ok: false, error: TOO_MANY };
+
+  try {
+    const hash = await hashPassword(input.authSecret);
+    const rows = (await sql`
+      select reset_password(
+        ${resetHash(input.token)}, ${hash}, ${input.publicKey}, ${input.wrappedPrivateKey}
+      ) as user_id
+    `) as { user_id: string | null }[];
+
+    const userId = rows[0]?.user_id;
+    if (!userId) return { ok: false, error: RESET_GONE };
+
+    const account = (await sql`
+      select privacy_version from users where id = ${userId}::uuid
+    `) as { privacy_version: number }[];
+
+    await startSession(userId, account[0]?.privacy_version ?? 0);
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

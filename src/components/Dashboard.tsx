@@ -24,7 +24,7 @@ import {
   addTodo,
   completeTodo,
   deleteTodo,
-  moveTodo,
+  placeTodo,
   uncompleteTodo,
   updateTodo,
 } from "@/lib/actions";
@@ -303,11 +303,17 @@ function Inner({
       dueDate: draft.dueDate,
       categoryId: draft.categoryId,
     });
+    // A new date or category drops any hand-placed position, as updateTodo does.
+    const moved =
+      (editing.due_date ? new Date(editing.due_date).getTime() : null) !==
+        (draft.dueDate ? new Date(draft.dueDate).getTime() : null) ||
+      editing.category_id !== draft.categoryId;
     patch(editing.id, {
       title: draft.title,
       notes: draft.notes || null,
       due_date: draft.dueDate,
       category_id: draft.categoryId,
+      ...(moved ? { position: null } : {}),
     });
     setEditing(null);
   };
@@ -323,10 +329,21 @@ function Inner({
     if (created) setTodos((prev) => [created, ...prev]);
   };
 
-  const handleMove = (todoId: string, categoryId: string | null) =>
+  // Mirrors placeTodo: the dropped quest changes box, and the whole box is
+  // renumbered in the order it was shown.
+  const handlePlace = (todoId: string, categoryId: string | null, orderedIds: string[]) =>
     guard(async () => {
-      patch(todoId, { category_id: categoryId });
-      await moveTodo(todoId, categoryId);
+      const rank = new Map(orderedIds.map((id, i) => [id, (i + 1) * 1024]));
+      setTodos((prev) =>
+        prev.map((t) =>
+          t.id === todoId
+            ? { ...t, category_id: categoryId, position: rank.get(t.id)! }
+            : rank.has(t.id)
+              ? { ...t, position: rank.get(t.id)! }
+              : t
+        )
+      );
+      await placeTodo(todoId, categoryId, orderedIds);
     });
 
   function quickAdd(categoryId: string | null) {
@@ -503,7 +520,7 @@ function Inner({
             steps={steps}
             handlers={handlers}
             onInlineAdd={handleInlineAdd}
-            onMove={handleMove}
+            onPlace={handlePlace}
             onCategoriesChanged={() => startTransition(() => router.refresh())}
           />
 

@@ -44,7 +44,11 @@ cp .env.local.example .env.local
 | `SESSION_SECRET` | Signs your session cookie. Generate with `openssl rand -base64 32` |
 | `OWNER_EMAIL` | *Optional.* Whoever every new account is befriended to on sign-up, and the only account that can read the feedback inbox. Defaults to the constant in `src/lib/owner.ts` |
 
-Both are server-only and never reach the browser. `.env*` is gitignored.
+| `RESEND_API_KEY` | *Optional.* Turns on "Forgot your password?" by letting the app email reset links through [Resend](https://resend.com). Installing the Resend integration from the Vercel Marketplace sets it for you. Without it the reset page says reset isn't set up |
+| `EMAIL_FROM` | *Optional.* The sender for reset emails, e.g. `HabitKnight <noreply@yourdomain.com>`. Must be on a domain verified in Resend. Defaults to `onboarding@resend.dev`, which Resend only delivers to the address that owns the Resend account |
+| `APP_URL` | *Optional.* The site's public address, used to build links in emails. On Vercel it defaults to the production domain; locally, `http://localhost:3000` |
+
+All of these are server-only and never reach the browser. `.env*` is gitignored.
 
 ### 4. Run it
 
