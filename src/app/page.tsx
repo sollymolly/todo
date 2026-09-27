@@ -16,7 +16,12 @@ import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  /** `?new=1`: the installed app's "New quest" shortcut. */
+  searchParams: Promise<{ new?: string }>;
+}) {
   const userId = await getUserId();
   if (!userId) redirect("/login");
 
@@ -135,6 +140,7 @@ export default async function Home() {
       tableValues={tableValues}
       sweptCount={sweptCount}
       unread={unread}
+      startComposing={(await searchParams).new === "1"}
       // Decided here rather than in the browser so "this week" means one thing
       // for everybody and the server and client agree on the first render.
       //

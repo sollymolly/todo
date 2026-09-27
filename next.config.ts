@@ -9,6 +9,19 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "4mb",
     },
   },
+  // The service worker must never be served from a cache, or a fix to it
+  // could take a day to reach installed apps.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

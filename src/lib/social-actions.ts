@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { sendToUser } from "@/lib/push";
 import { sql } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
@@ -485,6 +487,10 @@ export async function sendMessage(
     returning id, sender_id, iv, body, created_at
   `) as Record<string, unknown>[];
 
+  // A push to the recipient's devices, once the sender already has their
+  // answer. Only who wrote: the text is sealed, and the server can't read it.
+  after(() => notifyMessage(friendId, me));
+
   const r = rows[0];
   return {
     ok: true,
@@ -579,6 +585,27 @@ export async function unreadTotal(): Promise<number> {
      where recipient_id = ${me}::uuid and read_at is null
   `) as { n: number }[];
   return rows[0]?.n ?? 0;
+}
+
+async function notifyMessage(recipientId: string, senderId: string) {
+  try {
+    const rows = (await sql`
+      select coalesce(np.messages, true) as wanted,
+             (select display_name from profiles where id = ${senderId}::uuid) as sender
+        from (select 1) one
+        left join notification_prefs np on np.user_id = ${recipientId}::uuid
+    `) as { wanted: boolean; sender: string | null }[];
+    if (!rows[0]?.wanted) return;
+    await sendToUser(recipientId, {
+      title: rows[0].sender ?? "A companion",
+      body: "Sent you a message.",
+      url: "/friends",
+      // One per sender: a burst of messages is one notification, not ten.
+      tag: `msg-${senderId}`,
+    });
+  } catch {
+    /* notifications not set up (migration 025): the message still went */
+  }
 }
 
 /** Never hand a raw driver error to the client — it names tables and columns. */

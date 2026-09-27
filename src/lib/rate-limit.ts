@@ -43,6 +43,8 @@ export const LIMITS = {
    * instance, so no one person gets to spend most of it.
    */
   importScreenshot: { limit: 10, windowSeconds: 3600 },
+  /** Per account. "Send a test" — each one buzzes every device they have. */
+  testPush: { limit: 5, windowSeconds: 300 },
 } as const satisfies Record<string, Limit>;
 
 /**

@@ -132,14 +132,14 @@ export default function ScreenshotImport({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="sheet-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={() => stage !== "adding" && onClose()}
     >
       <motion.div
-        className="panel flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl"
+        className="sheet panel flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl"
         initial={{ scale: 0.94, y: 16, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.96, opacity: 0 }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -33,6 +33,7 @@ import {
   updateTodo,
 } from "@/lib/actions";
 import { addHabit } from "@/lib/habit-actions";
+import { setIconBadge } from "@/lib/push-client";
 import type { Habit } from "@/lib/habits";
 import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
@@ -54,6 +55,8 @@ export default function Dashboard(props: {
   sweptCount: number;
   unread: number;
   update: Update | null;
+  /** Open the composer straight away — the app's "New quest" shortcut. */
+  startComposing?: boolean;
 }) {
   return (
     <FxProvider>
@@ -73,6 +76,7 @@ function Inner({
   sweptCount,
   unread,
   update,
+  startComposing = false,
 }: {
   profile: Profile;
   categories: Category[];
@@ -84,6 +88,8 @@ function Inner({
   sweptCount: number;
   unread: number;
   update: Update | null;
+  /** Open the composer straight away — the app's "New quest" shortcut. */
+  startComposing?: boolean;
 }) {
   const router = useRouter();
   const { celebrate } = useFx();
@@ -102,7 +108,24 @@ function Inner({
   const [composer, setComposer] = useState<{
     open: boolean;
     categoryId: string | null;
-  }>({ open: false, categoryId: null });
+  }>({ open: startComposing, categoryId: null });
+
+  // The number on the installed app's icon: quests still open and due today.
+  // Push notifications set it too, while the app is closed.
+  useEffect(() => {
+    const today = new Date().toDateString();
+    setIconBadge(
+      todos.filter(
+        (t) => t.status === "open" && t.due_date && new Date(t.due_date).toDateString() === today
+      ).length
+    );
+  }, [todos]);
+
+  // The shortcut's ?new=1 has done its job; drop it so a reload doesn't
+  // open the composer again.
+  useEffect(() => {
+    if (startComposing) window.history.replaceState(null, "", "/");
+  }, [startComposing]);
   const [banner, setBanner] = useState<string | null>(
     sweptCount > 0
       ? `${sweptCount} ${sweptCount === 1 ? "oath was" : "oaths were"} broken while you were away.`
@@ -431,10 +454,11 @@ function Inner({
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* On a phone these two are tabs along the bottom (TabBar). */}
           <Link
             href="/habits"
             title="Recurring habits"
-            className="rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+            className="max-sm:hidden rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
           >
             Habits
           </Link>
@@ -443,7 +467,7 @@ function Inner({
           <Link
             href="/friends"
             title="Your conversations"
-            className="relative rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+            className="relative max-sm:hidden rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
           >
             Messages
             {unread > 0 && (
@@ -512,14 +536,26 @@ function Inner({
         {/* ------------------------------------------------- composer */}
         {/* Sits above the board: each box below is a layout-animated
             (transformed) element, which would otherwise paint over the
-            due-date popover. */}
-        <div ref={composerRef} className="relative z-30">
+            due-date popover.
+
+            On a phone it's a sheet from the bottom instead, opened by the
+            round + button, so the keyboard and the form share the screen
+            rather than the form being somewhere up the page. `z-30` only
+            from `sm` up: as a stacking context it would trap the sheet
+            underneath the tab bar. */}
+        <div ref={composerRef} className="relative sm:z-30">
           {composer.open ? (
+            <>
+            <div
+              aria-hidden
+              className="fixed inset-0 z-50 bg-black/40 sm:hidden"
+              onClick={() => setComposer({ open: false, categoryId: null })}
+            />
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18 }}
-              className="panel rounded-2xl p-4"
+              className="panel rounded-2xl p-4 max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-50 max-sm:max-h-[92dvh] max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
             >
               <QuestForm
                 key={composer.categoryId ?? "none"}
@@ -530,10 +566,11 @@ function Inner({
                 onCancel={() => setComposer({ open: false, categoryId: null })}
               />
             </motion.div>
+            </>
           ) : (
             <button
               onClick={() => quickAdd(null)}
-              className="panel panel-hover flex w-full items-center gap-2.5 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-mud-500 transition hover:text-grass-700"
+              className="max-sm:hidden panel panel-hover flex w-full items-center gap-2.5 rounded-2xl px-4 py-3.5 text-left text-sm font-semibold text-mud-500 transition hover:text-grass-700"
             >
                               What must be done?
             </button>
@@ -776,7 +813,7 @@ function Inner({
 
         {editing && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            className="sheet-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -786,7 +823,7 @@ function Inner({
               /* Bounded and scrollable: with a long note plus an open date
                  picker this panel outgrows a short viewport, and without this
                  the overflow was simply unreachable. */
-              className="panel max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6"
+              className="sheet panel max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6"
               initial={{ scale: 0.94, y: 16, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
@@ -807,6 +844,20 @@ function Inner({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* The phone's way to add a quest: a round button above the tab bar,
+          where a thumb already is. */}
+      {!composer.open && (
+        <button
+          onClick={() => quickAdd(null)}
+          aria-label="New quest"
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 grid size-14 place-items-center rounded-full bg-grass-600 text-white shadow-lg shadow-mud-900/30 transition active:scale-95 sm:hidden"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden className="size-7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      )}
 
       <LevelUpModal
           level={levelUp}

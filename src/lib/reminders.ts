@@ -1,0 +1,214 @@
+import { sql } from "@/lib/db";
+import { sendToUser } from "@/lib/push";
+
+/* --------------------------------------------------------------------------
+   What the every-five-minutes job sends (src/app/api/cron/reminders).
+
+   Only people with at least one device subscribed are looked at, and each
+   notification is *claimed* in notification_log before it's sent — insert,
+   on conflict do nothing, returning what was new — so two runs that overlap
+   can never both send it.
+
+   Local times use each person's timezone from their profile. One that
+   Postgres doesn't know falls back to UTC rather than failing the whole run
+   for everybody.
+   -------------------------------------------------------------------------- */
+
+/** due_ms is a bigint, which the driver hands back as a string. */
+type DueRow = { user_id: string; todo_id: string; title: string; due_ms: string; ref: string };
+
+export async function runReminders(): Promise<{ due: number; morning: number; pruned: number }> {
+  const pruned = (await sql`
+    delete from notification_log where sent_at < now() - interval '3 days' returning 1
+  `).length;
+
+  const due = await dueSoon();
+  const morning = await morningSummaries();
+  return { due, morning, pruned };
+}
+
+/* ------------------------------------------------------------ deadlines */
+
+async function dueSoon(): Promise<number> {
+  // Open quests whose deadline falls inside the person's chosen lead time and
+  // hasn't been reminded about yet. The ref names the deadline too, so a
+  // quest whose deadline moves gets reminded about the new one.
+  const found = (await sql`
+    with people as (
+      select s.user_id, coalesce(np.lead_minutes, 60) as lead
+        from (select distinct user_id from push_subscriptions) s
+        left join notification_prefs np on np.user_id = s.user_id
+       where coalesce(np.due_soon, true)
+    )
+    select t.user_id, t.id as todo_id, t.title,
+           (extract(epoch from t.due_date) * 1000)::bigint as due_ms,
+           t.id::text || '@' || floor(extract(epoch from t.due_date))::bigint as ref
+      from todos t
+      join people p on p.user_id = t.user_id
+     where t.status = 'open'
+       and t.due_date > now()
+       and t.due_date <= now() + make_interval(mins => p.lead)
+     order by t.due_date
+     limit 1000
+  `) as DueRow[];
+  if (!found.length) return 0;
+
+  const claimed = new Set(
+    (
+      (await sql`
+        insert into notification_log (user_id, kind, ref)
+        select u, 'due', r from unnest(${found.map((f) => f.user_id)}::uuid[], ${found.map((f) => f.ref)}::text[]) as x(u, r)
+        on conflict do nothing
+        returning ref
+      `) as { ref: string }[]
+    ).map((r) => r.ref)
+  );
+
+  const byUser = new Map<string, DueRow[]>();
+  for (const f of found) {
+    if (!claimed.has(f.ref)) continue;
+    byUser.set(f.user_id, [...(byUser.get(f.user_id) ?? []), f]);
+  }
+  if (!byUser.size) return 0;
+
+  const badges = await dueTodayCounts([...byUser.keys()]);
+  let sent = 0;
+  for (const [userId, rows] of byUser) {
+    const first = rows[0];
+    const payload =
+      rows.length === 1
+        ? {
+            title: first.title,
+            body: `Due ${fromNow(Number(first.due_ms))}.`,
+            tag: `due-${first.todo_id}`,
+          }
+        : {
+            title: `${rows.length} quests due soon`,
+            body: listTitles(rows.map((r) => r.title)),
+            tag: "due-soon",
+          };
+    if (await sendToUser(userId, { ...payload, url: "/", badge: badges.get(userId) ?? 0 })) sent++;
+  }
+  return sent;
+}
+
+/* -------------------------------------------------------------- morning */
+
+type MorningRow = { user_id: string; tz: string; today: string; name: string | null };
+
+async function morningSummaries(): Promise<number> {
+  // Everyone whose chosen time has passed today, locally — within three
+  // hours of it, so a summary switched on at night waits for the morning
+  // rather than arriving at 11pm.
+  const people = (await sql`
+    with people as (
+      select s.user_id,
+             coalesce(np.morning_minutes, 480) as at_minute,
+             coalesce((select name from pg_timezone_names where name = pr.timezone), 'UTC') as tz,
+             pr.display_name as name
+        from (select distinct user_id from push_subscriptions) s
+        join profiles pr on pr.id = s.user_id
+        left join notification_prefs np on np.user_id = s.user_id
+       where coalesce(np.morning, true)
+    )
+    select user_id, tz, name, (now() at time zone tz)::date::text as today
+      from people
+     where extract(hour from now() at time zone tz) * 60
+           + extract(minute from now() at time zone tz)
+           between at_minute and at_minute + 180
+  `) as MorningRow[];
+  if (!people.length) return 0;
+
+  const claimed = new Set(
+    (
+      (await sql`
+        insert into notification_log (user_id, kind, ref)
+        select u, 'morning', r from unnest(${people.map((p) => p.user_id)}::uuid[], ${people.map((p) => p.today)}::text[]) as x(u, r)
+        on conflict do nothing
+        returning user_id
+      `) as { user_id: string }[]
+    ).map((r) => r.user_id)
+  );
+
+  let sent = 0;
+  for (const p of people) {
+    if (!claimed.has(p.user_id)) continue;
+
+    // What opening the app would do first: today's habits become today's
+    // quests, so the summary can count them. Both are idempotent.
+    try {
+      await sql`select break_stale_streaks(${p.user_id}::uuid)`;
+      await sql`select materialise_habits(${p.user_id}::uuid)`;
+    } catch {
+      /* habits not set up: the summary just won't count them */
+    }
+
+    const rows = (await sql`
+      select t.title, t.habit_id is not null as habit,
+             (t.due_date at time zone ${p.tz})::date < ${p.today}::date as late
+        from todos t
+       where t.user_id = ${p.user_id}::uuid
+         and t.status = 'open'
+         and t.due_date is not null
+         and (t.due_date at time zone ${p.tz})::date <= ${p.today}::date
+       order by t.due_date
+    `) as { title: string; habit: boolean; late: boolean }[];
+
+    const quests = rows.filter((r) => !r.habit && !r.late);
+    const habits = rows.filter((r) => r.habit && !r.late);
+    const late = rows.filter((r) => r.late);
+
+    const parts: string[] = [];
+    if (quests.length)
+      parts.push(`${quests.length} due today: ${listTitles(quests.map((q) => q.title))}.`);
+    if (habits.length) parts.push(`${habits.length} habit${habits.length === 1 ? "" : "s"} to keep.`);
+    if (late.length) parts.push(`${late.length} past deadline.`);
+
+    const reached = await sendToUser(p.user_id, {
+      title: p.name ? `Good morning, ${p.name}` : "Good morning",
+      body: parts.length ? parts.join(" ") : "Nothing due today. A good day to get ahead.",
+      url: "/",
+      tag: "morning",
+      badge: quests.length + habits.length,
+    });
+    if (reached) sent++;
+  }
+  return sent;
+}
+
+/* -------------------------------------------------------------- helpers */
+
+/** Open quests due today, locally, per person: the number on the app icon. */
+async function dueTodayCounts(userIds: string[]): Promise<Map<string, number>> {
+  const rows = (await sql`
+    with zones as (
+      select pr.id as user_id,
+             coalesce((select name from pg_timezone_names where name = pr.timezone), 'UTC') as tz
+        from profiles pr where pr.id = any(${userIds}::uuid[])
+    )
+    select z.user_id, count(t.id)::int as n
+      from zones z
+      left join todos t
+        on t.user_id = z.user_id and t.status = 'open' and t.due_date is not null
+       and (t.due_date at time zone z.tz)::date = (now() at time zone z.tz)::date
+     group by z.user_id
+  `) as { user_id: string; n: number }[];
+  return new Map(rows.map((r) => [r.user_id, r.n]));
+}
+
+function fromNow(ms: number): string {
+  const min = Math.max(1, Math.round((ms - Date.now()) / 60_000));
+  if (min < 90) return `in ${min} min`;
+  const h = Math.round(min / 60);
+  return h < 36 ? `in ${h} hours` : `in ${Math.round(h / 24)} days`;
+}
+
+/** "A, B and C", or "A, B and 3 more" once it gets long. */
+function listTitles(titles: string[]): string {
+  const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
+  const shown = titles.slice(0, 2).map(clip);
+  const rest = titles.length - shown.length;
+  if (rest <= 0) return shown.length === 2 ? `${shown[0]} and ${shown[1]}` : shown[0];
+  if (rest === 1) return `${shown.join(", ")} and ${clip(titles[2])}`;
+  return `${shown.join(", ")} and ${rest} more`;
+}

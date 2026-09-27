@@ -617,14 +617,14 @@ function Thread({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-mud-900/60 p-4 backdrop-blur-sm"
+      className="sheet-backdrop fixed inset-0 z-50 flex items-center justify-center bg-mud-900/60 p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
     >
       <motion.div
-        className="panel flex h-[80dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl"
+        className="sheet panel flex h-[80dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl"
         initial={{ scale: 0.95, y: 16, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.97, opacity: 0 }}

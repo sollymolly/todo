@@ -14,7 +14,9 @@ import { PRIVACY_VERSION } from "@/lib/policy";
    per-request nonce, and an injected <script> without one simply never runs.
    -------------------------------------------------------------------------- */
 
-const PUBLIC_PATHS = ["/login", "/privacy", "/forgot-password", "/reset-password"];
+/* /api/cron is called by the scheduler, which has no session; it checks its
+   own secret (src/app/api/cron/reminders/route.ts). */
+const PUBLIC_PATHS = ["/login", "/privacy", "/forgot-password", "/reset-password", "/api/cron"];
 
 function policy(nonce: string, dev: boolean): string {
   return [
@@ -127,8 +129,11 @@ export async function proxy(request: NextRequest) {
   return harden(NextResponse.next({ request: { headers: requestHeaders } }));
 }
 
+/* Past the gate: static files, and what makes the app installable. Browsers
+   fetch the manifest without cookies, so behind the gate it would always be
+   bounced to /login and the app could never be installed. */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

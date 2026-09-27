@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { signOut } from "@/lib/auth-actions";
 import { forgetPrivateKey } from "@/lib/crypto";
 import { useBackdropMotion } from "@/lib/motion-pref";
+import { forgetSavedPages, useInstall } from "@/lib/pwa";
+import { forgetPush } from "@/lib/push-client";
 
 /* --------------------------------------------------------------------------
    Everything that isn't a daily action, behind one button.
@@ -18,6 +20,7 @@ import { useBackdropMotion } from "@/lib/motion-pref";
 
 const ITEMS: { href: string; label: string }[] = [
   { href: "/friends", label: "Companions" },
+  { href: "/notifications", label: "Notifications" },
   { href: "/updates", label: "What's new" },
   { href: "/feedback", label: "Feedback" },
   { href: "/account", label: "Account" },
@@ -33,6 +36,11 @@ export default function HeaderMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [dust, setDust] = useBackdropMotion();
+  const install = useInstall();
+  const [iosHelp, setIosHelp] = useState(false);
+  // Chromium can install on request; Safari on iOS only from its Share
+  // sheet, so there the item explains how. Gone once it's installed.
+  const canInstall = !install.installed && (install.canPrompt || install.ios);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,13 +120,41 @@ export default function HeaderMenu({
               </span>
             </button>
 
+            {canInstall && (
+              <>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    if (install.canPrompt) {
+                      setOpen(false);
+                      void install.prompt();
+                    } else setIosHelp((v) => !v);
+                  }}
+                  aria-expanded={install.canPrompt ? undefined : iosHelp}
+                  className="w-full px-3 py-2 text-left text-sm font-medium text-mud-800 transition hover:bg-mud-100"
+                >
+                  Install app
+                </button>
+                {iosHelp && (
+                  <p className="px-3 pb-2 text-xs leading-relaxed text-mud-600">
+                    Tap <b>Share</b> <span aria-hidden>(□↑)</span> in Safari, then{" "}
+                    <b>Add to Home Screen</b>.
+                  </p>
+                )}
+              </>
+            )}
+
             <div className="my-1 h-px bg-mud-200" />
 
             <form action={signOut}>
               <button
                 type="submit"
                 role="menuitem"
-                onClick={() => forgetPrivateKey()}
+                onClick={() => {
+                  forgetPrivateKey();
+                  forgetSavedPages();
+                  void forgetPush().catch(() => {});
+                }}
                 className="w-full px-3 py-2 text-left text-sm font-medium text-red-700 transition hover:bg-red-50"
               >
                 Sign out

@@ -38,14 +38,14 @@ export default function CategoryManager({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="sheet-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
     >
       <motion.div
-        className="panel max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6"
+        className="sheet panel max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6"
         initial={{ scale: 0.94, y: 16, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.96, opacity: 0 }}
