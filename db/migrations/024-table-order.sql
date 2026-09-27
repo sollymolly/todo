@@ -1,0 +1,23 @@
+-- ===========================================================================
+--  Migration 024 — rows can be dragged into any order in the table view
+--
+--  Run once in the Neon SQL Editor. Safe to re-run.
+--
+--  THE MODEL
+--  ---------
+--  The table keeps its own manual order, apart from the board's. The board's
+--  `position` is numbered within each category box; the table is one flat
+--  list across every category, so it needs a number of its own.
+--
+--    * Dragging a row renumbers the whole list in the order it was shown
+--      (orderTable), and switches the table's sort to "Manual".
+--    * A quest with no table_position — new, or today's habit instance — is
+--      slotted in by deadline among the placed ones, as on the board.
+--    * Unlike the board, editing a deadline or category doesn't clear it: in
+--      a manual order, a row stays where it was put.
+--
+--  Which sort is active is saved with the rest of the table's layout, in
+--  profiles.table_layout (migration 023).
+-- ===========================================================================
+
+alter table todos add column if not exists table_position double precision;

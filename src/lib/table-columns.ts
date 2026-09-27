@@ -68,9 +68,17 @@ export const LOCKED: ReadonlySet<string> = new Set(["title"]);
 /**
  * Which columns show, in what order, how wide. A built-in by its key, a
  * custom column as "custom:<id>". Anything not listed is hidden.
+ *
+ * And how the rows are sorted: by a column's key, or "manual" for the order
+ * they were dragged into (migration 024). Saved so a hand-made order is still
+ * the one showing next time.
  */
 export type LayoutColumn = { key: string; width: number };
-export type TableLayout = { columns: LayoutColumn[] };
+export type TableSort = { key: string; dir: 1 | -1 };
+export type TableLayout = { columns: LayoutColumn[]; sort?: TableSort };
+
+export const MANUAL = "manual";
+export const DEFAULT_SORT: TableSort = { key: "due", dir: 1 };
 
 export const MIN_WIDTH = 60;
 export const MAX_WIDTH = 800;
@@ -112,7 +120,17 @@ export function cleanLayout(raw: unknown): TableLayout {
 
   if (!seen.has("title")) columns.unshift({ key: "title", width: BUILTINS[0].width });
   else columns.sort((a, b) => (a.key === "title" ? -1 : b.key === "title" ? 1 : 0));
-  return { columns };
+
+  const s = (raw as { sort?: { key?: unknown; dir?: unknown } }).sort;
+  const sortKey = s?.key;
+  const sortOk =
+    typeof sortKey === "string" &&
+    (sortKey === MANUAL ||
+      BUILTIN_KEYS.has(sortKey) ||
+      (sortKey.startsWith("custom:") && UUID.test(sortKey.slice(7))));
+  return sortOk
+    ? { columns, sort: { key: sortKey, dir: sortKey !== MANUAL && s?.dir === -1 ? -1 : 1 } }
+    : { columns };
 }
 
 /* ------------------------------------------------------------------ values */

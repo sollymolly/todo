@@ -63,12 +63,16 @@ export type InlineDraft = {
  * deadline order, exactly as it used to, and a new quest still lands where its
  * date says rather than at the bottom of a hand-made list.
  */
-export function boardOrder(items: Todo[]): Todo[] {
+export function boardOrder(
+  items: Todo[],
+  /** Which hand-placed number to read. The table view keeps its own. */
+  pos: (t: Todo) => number | null = (t) => t.position
+): Todo[] {
   const placed = items
-    .filter((t) => t.position != null)
-    .sort((a, b) => a.position! - b.position! || byDeadline(a, b));
+    .filter((t) => pos(t) != null)
+    .sort((a, b) => pos(a)! - pos(b)! || byDeadline(a, b));
   const out = [...placed];
-  for (const t of items.filter((t) => t.position == null).sort(byDeadline)) {
+  for (const t of items.filter((t) => pos(t) == null).sort(byDeadline)) {
     const at = out.findIndex((o) => byDeadline(t, o) < 0);
     out.splice(at === -1 ? out.length : at, 0, t);
   }

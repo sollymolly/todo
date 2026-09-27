@@ -85,6 +85,8 @@ export type Todo = {
   /** Set when this quest was materialised from a recurring habit. */
   habit_id: string | null;
   position: number | null;
+  /** Hand-placed order in the table view, across every category (migration 024). */
+  table_position: number | null;
   created_at: string;
 };
 
@@ -130,5 +132,6 @@ export function normalizeTodo(row: Record<string, unknown>): Todo {
     completed_at: iso(row.completed_at),
     created_at: iso(row.created_at) ?? new Date(0).toISOString(),
     position: row.position == null ? null : Number(row.position),
+    table_position: row.table_position == null ? null : Number(row.table_position),
   };
 }

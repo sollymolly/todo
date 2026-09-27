@@ -285,6 +285,28 @@ export async function placeTodo(
 }
 
 /**
+ * Dragging a row in the table view (migration 024). `orderedIds` is the whole
+ * table in its new order, renumbered for the same reason placeTodo takes a
+ * whole box: unplaced quests only have an order on screen until it's written.
+ *
+ * No bump(): the table already shows the new order, and a refresh here could
+ * bring back the saved layout before the switch to the "Manual" sort that
+ * came with this drag has landed, snapping the rows back to the old sort.
+ */
+export async function orderTable(orderedIds: string[]) {
+  const userId = await requireUserId();
+  const ids = orderedIds.filter((x) => UUID.test(x)).slice(0, 1000);
+  if (!ids.length) return;
+
+  await sql`
+    update todos t set table_position = o.n * 1024
+      from unnest(${ids}::uuid[]) with ordinality as o(id, n)
+     where t.id = o.id
+       and t.user_id = ${userId}::uuid
+  `;
+}
+
+/**
  * Dragging a section (a category's box) into a new place on the board.
  * `orderedIds` is every category in its new order; sort_order is rewritten
  * from it, so it also tidies any gaps or ties left by older data.

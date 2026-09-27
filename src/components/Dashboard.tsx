@@ -26,6 +26,7 @@ import {
   addTodos,
   completeTodo,
   deleteTodo,
+  orderTable,
   placeTodo,
   reorderCategories,
   uncompleteTodo,
@@ -389,6 +390,16 @@ function Inner({
       await placeTodo(todoId, categoryId, orderedIds);
     });
 
+  // Mirrors orderTable: the table's whole list, renumbered as it was shown.
+  const handleTableOrder = (orderedIds: string[]) =>
+    guard(async () => {
+      const rank = new Map(orderedIds.map((id, i) => [id, (i + 1) * 1024]));
+      setTodos((prev) =>
+        prev.map((t) => (rank.has(t.id) ? { ...t, table_position: rank.get(t.id)! } : t))
+      );
+      await orderTable(orderedIds);
+    });
+
   function quickAdd(categoryId: string | null) {
     setComposer({ open: true, categoryId });
     requestAnimationFrame(() =>
@@ -586,6 +597,7 @@ function Inner({
             handlers={handlers}
             onUpdate={handleQuickEdit}
             onAdd={handleInlineAdd}
+            onReorder={handleTableOrder}
             columns={tableColumns}
             values={tableValues}
             layout={profile.table_layout}

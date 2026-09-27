@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { boardOrder } from "@/components/CategoryBoard";
 import { COLOR_KEYS, colorOf } from "@/lib/game";
 import {
   byDeadline,
@@ -25,8 +26,10 @@ import {
   BUILTINS,
   DEFAULT_CUSTOM_WIDTH,
   DEFAULT_LAYOUT,
+  DEFAULT_SORT,
   KINDS,
   LOCKED,
+  MANUAL,
   MAX_CUSTOM_COLUMNS,
   clampWidth,
   cleanLayout,
@@ -38,6 +41,7 @@ import {
   type ColumnValues,
   type TableColumn,
   type TableLayout,
+  type TableSort,
 } from "@/lib/table-columns";
 import type { Category, Subtask, Todo } from "@/lib/types";
 
@@ -54,6 +58,11 @@ import type { Category, Subtask, Todo } from "@/lib/types";
 
    Sorting and filtering happen on the quests already loaded, so they cost no
    request.
+
+   Rows can be dragged by the grip at their left edge — or moved with the
+   arrow keys once it has focus — into an order of the table's own, apart
+   from the board's (migration 024). Dragging switches the sort to "Manual",
+   starting from the order that was showing.
    -------------------------------------------------------------------------- */
 
 type Status = "overdue" | "missed" | "open" | "done";
@@ -113,6 +122,7 @@ type Col =
   | { key: string; width: number; builtin: BuiltinKey; label: string }
   | { key: string; width: number; custom: TableColumn; label: string };
 
+const GRIP_W = 24;
 const CHECK_W = 36;
 const PLUS_W = 44;
 
@@ -136,6 +146,7 @@ export default function TaskTable({
   handlers,
   onUpdate,
   onAdd,
+  onReorder,
   columns: serverColumns,
   values: serverValues,
   layout: serverLayout,
@@ -149,6 +160,8 @@ export default function TaskTable({
   onUpdate: (todo: Todo, changes: QuickEdit) => void;
   /** Typed into the "+ New" row. */
   onAdd: (draft: { title: string; dueDate: string | null; categoryId: string | null }) => Promise<void>;
+  /** A row was dragged: every quest's id, in the table's new manual order. */
+  onReorder: (orderedIds: string[]) => void;
   /** The person's own columns, their values, and the saved layout. */
   columns: TableColumn[];
   values: ColumnValues;
@@ -158,7 +171,6 @@ export default function TaskTable({
   const [category, setCategory] = useState<string>("all");
   const [statuses, setStatuses] = useState<ReadonlySet<Status>>(DEFAULT_STATUSES);
   const [due, setDue] = useState<DueFilter>("any");
-  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: "due", dir: 1 });
   const [error, setError] = useState<string | null>(null);
 
   /* Custom columns, values and layout are edited here and saved behind the
@@ -180,6 +192,9 @@ export default function TaskTable({
     setVals(serverValues);
     if (serverLayout) setLayout(cleanLayout(serverLayout));
   }
+
+  const sort = layout.sort ?? DEFAULT_SORT;
+  const manual = sort.key === MANUAL;
 
   const catById = useMemo(() => new Map(categories.map((c, i) => [c.id, { c, i }])), [categories]);
   const defById = useMemo(() => new Map(defs.map((d) => [d.id, d])), [defs]);
@@ -235,9 +250,7 @@ export default function TaskTable({
       }
     });
 
-    const cmp = comparator(sort.key, { catById, defById, steps, vals });
-    // Ties fall back to deadline order, so every sort still reads sensibly.
-    return filtered.sort((a, b) => sort.dir * cmp(a, b) || byDeadline(a, b));
+    return sortRows(filtered, sort, { catById, defById, steps, vals });
   }, [todos, statuses, category, query, due, sort, catById, defById, steps, vals]);
 
   const filtering =
@@ -269,20 +282,26 @@ export default function TaskTable({
 
   function resize(key: string, width: number, save: boolean) {
     const next = {
+      ...layout,
       columns: layout.columns.map((c) => (c.key === key ? { ...c, width: clampWidth(width) } : c)),
     };
     if (save) persist(next);
     else setLayout(next);
   }
 
+  function setSort(next: TableSort) {
+    persist({ ...layout, sort: next });
+  }
+
   function hide(key: string) {
     if (LOCKED.has(key)) return;
-    persist({ columns: layout.columns.filter((c) => c.key !== key) });
+    persist({ ...layout, columns: layout.columns.filter((c) => c.key !== key) });
   }
 
   function show(key: string) {
     const b = BUILTINS.find((x) => x.key === key);
     persist({
+      ...layout,
       columns: [...layout.columns, { key, width: b?.width ?? DEFAULT_CUSTOM_WIDTH }],
     });
   }
@@ -292,7 +311,10 @@ export default function TaskTable({
     try {
       const col = await addColumn({ name, kind });
       setDefs((prev) => [...prev, col]);
-      persist({ columns: [...layout.columns, { key: customKey(col.id), width: DEFAULT_CUSTOM_WIDTH }] });
+      persist({
+        ...layout,
+        columns: [...layout.columns, { key: customKey(col.id), width: DEFAULT_CUSTOM_WIDTH }],
+      });
     } catch (e) {
       fail(e);
     }
@@ -314,7 +336,7 @@ export default function TaskTable({
       }
       return next;
     });
-    persist({ columns: layout.columns.filter((c) => c.key !== customKey(def.id)) });
+    persist({ ...layout, columns: layout.columns.filter((c) => c.key !== customKey(def.id)) });
     deleteColumn(def.id).catch(fail);
   }
 
@@ -341,12 +363,158 @@ export default function TaskTable({
     return option.id;
   }
 
+  /* ----------------------------------------------------------- dragging
+
+     By the grip only, so a row's cells stay clickable and a finger can still
+     scroll the page anywhere else. Pointer events with capture, like the
+     column resize: one path for a mouse, a pen or a finger — and the grip
+     keeps the cursor for the whole drag, wherever the pointer goes. Where the row
+     would land is read off the live row rects every frame, which also keeps
+     it right while the page auto-scrolls under a held row. */
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLTableSectionElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<{
+    id: string;
+    title: string;
+    /** Where the drop line sits, from the top of the table; null: no move. */
+    line: number | null;
+    start: { x: number; y: number };
+  } | null>(null);
+  /** Undoes a drag's listeners and frame loop. */
+  const stopDrag = useRef<(() => void) | null>(null);
+
+  // Nothing about a drag may outlive the table.
+  useEffect(() => () => stopDrag.current?.(), []);
+
+  /** The shown rows' ids, in the order they're on screen right now. */
+  function shownIds(): string[] {
+    return [...(bodyRef.current?.querySelectorAll<HTMLElement>("tr[data-row-id]") ?? [])].map(
+      (tr) => tr.dataset.rowId!
+    );
+  }
+
+  /**
+   * Moves a row to just before the `to`-th shown row (or the end), and saves
+   * the whole table's order. Rows hidden by a filter keep their places: the
+   * moved row is set next to its new neighbour among everything.
+   */
+  function move(shown: string[], id: string, to: number) {
+    const from = shown.indexOf(id);
+    if (from === -1 || to < 0 || to > shown.length || to === from || to === from + 1) return;
+    const next = shown.filter((x) => x !== id);
+    const at = to > from ? to - 1 : to;
+    next.splice(at, 0, id);
+
+    const all = sortRows(todos, sort, { catById, defById, steps, vals })
+      .map((t) => t.id)
+      .filter((x) => x !== id);
+    const before = next[at + 1];
+    const after = next[at - 1];
+    let i = before ? all.indexOf(before) : -1;
+    if (i === -1) {
+      const j = after ? all.indexOf(after) : -1;
+      i = j === -1 ? all.length : j + 1;
+    }
+    all.splice(i, 0, id);
+
+    if (!manual) setSort({ key: MANUAL, dir: 1 });
+    onReorder(all);
+  }
+
+  function startDrag(e: React.PointerEvent<HTMLButtonElement>, todo: Todo) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const grip = e.currentTarget;
+    grip.setPointerCapture(e.pointerId);
+
+    let pointer = { x: e.clientX, y: e.clientY };
+    let to: number | null = null;
+    setDrag({ id: todo.id, title: todo.title, line: null, start: pointer });
+
+    const track = (ev: PointerEvent) => {
+      pointer = { x: ev.clientX, y: ev.clientY };
+    };
+
+    let frame = 0;
+    const tick = () => {
+      if (ghostRef.current)
+        ghostRef.current.style.transform = `translate(${pointer.x + 14}px, ${pointer.y - 12}px)`;
+
+      // Near the top or bottom of the window, scroll it — faster the closer.
+      const EDGE = 56;
+      if (pointer.y < EDGE) window.scrollBy(0, -Math.ceil((EDGE - pointer.y) / 4));
+      else if (pointer.y > window.innerHeight - EDGE)
+        window.scrollBy(0, Math.ceil((pointer.y - (window.innerHeight - EDGE)) / 4));
+
+      const trs = [...(bodyRef.current?.querySelectorAll<HTMLElement>("tr[data-row-id]") ?? [])];
+      const wrap = wrapRef.current?.getBoundingClientRect();
+      if (trs.length && wrap) {
+        let i = trs.findIndex((tr) => {
+          const r = tr.getBoundingClientRect();
+          return pointer.y < r.top + r.height / 2;
+        });
+        if (i === -1) i = trs.length;
+        if (i !== to) {
+          to = i;
+          const from = trs.findIndex((tr) => tr.dataset.rowId === todo.id);
+          const edge =
+            i < trs.length
+              ? trs[i].getBoundingClientRect().top
+              : trs[trs.length - 1].getBoundingClientRect().bottom;
+          const line = i === from || i === from + 1 ? null : edge - wrap.top - 1;
+          setDrag((d) => d && { ...d, line });
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    const end = (drop: boolean) => {
+      stopDrag.current?.();
+      stopDrag.current = null;
+      setDrag(null);
+      if (drop && to !== null) move(shownIds(), todo.id, to);
+    };
+    const up = () => end(true);
+    const cancel = () => end(false);
+    const key = (ev: KeyboardEvent) => ev.key === "Escape" && end(false);
+
+    grip.addEventListener("pointermove", track);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", key);
+    stopDrag.current = () => {
+      grip.removeEventListener("pointermove", track);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", key);
+      cancelAnimationFrame(frame);
+    };
+  }
+
+  /** The grip's keyboard: arrows move the row one place, and focus follows. */
+  function gripKey(e: React.KeyboardEvent<HTMLButtonElement>, todo: Todo) {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const shown = shownIds();
+    const from = shown.indexOf(todo.id);
+    move(shown, todo.id, e.key === "ArrowUp" ? from - 1 : from + 2);
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-grip="${todo.id}"]`)?.focus()
+    );
+  }
+
   function centerOf(e: React.MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
-  const tableWidth = CHECK_W + PLUS_W + cols.reduce((sum, c) => sum + c.width, 0);
+  /** Whether any row has ever been dragged, so there's a manual order to go back to. */
+  const hasManual = todos.some((t) => t.table_position != null);
+
+  const tableWidth = GRIP_W + CHECK_W + PLUS_W + cols.reduce((sum, c) => sum + c.width, 0);
 
   return (
     <div className="panel overflow-hidden rounded-xl">
@@ -402,7 +570,29 @@ export default function TaskTable({
             );
           })}
         </div>
-        <span className="ml-auto whitespace-nowrap pl-1 text-[12px] text-mud-400">
+        {manual ? (
+          <span
+            className="ml-auto whitespace-nowrap rounded-md bg-grass-100 px-2 py-1 text-[12px] text-grass-700"
+            title="Rows are in the order you dragged them. Sort by a column from its header."
+          >
+            ↕ Manual order
+          </span>
+        ) : (
+          hasManual && (
+            <button
+              onClick={() => setSort({ key: MANUAL, dir: 1 })}
+              className="ml-auto whitespace-nowrap rounded-md px-2 py-1 text-[12px] text-mud-500 transition hover:bg-mud-100 hover:text-mud-800"
+              title="Back to the order you dragged the rows into"
+            >
+              ↕ Manual order
+            </button>
+          )
+        )}
+        <span
+          className={`whitespace-nowrap pl-1 text-[12px] text-mud-400 ${
+            manual || hasManual ? "" : "ml-auto"
+          }`}
+        >
           {rows.length} of {todos.length}
         </span>
         {filtering && (
@@ -434,12 +624,20 @@ export default function TaskTable({
           `relative` matters: the screen-reader-only header labels are
           absolutely positioned, and without a positioned ancestor inside the
           scroller they escape it and widen the whole page. */}
-      <div className="relative overflow-x-auto">
+      <div ref={wrapRef} className="relative overflow-x-auto">
+        {drag?.line != null && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-0 z-20 h-0.5 rounded bg-grass-500"
+            style={{ top: drag.line, width: tableWidth, minWidth: "100%" }}
+          />
+        )}
         <table
           className="table-fixed border-collapse text-left text-[13.5px] text-mud-900"
           style={{ width: tableWidth, minWidth: "100%" }}
         >
           <colgroup>
+            <col style={{ width: GRIP_W }} />
             <col style={{ width: CHECK_W }} />
             {cols.map((c) => (
               <col key={c.key} style={{ width: c.width }} />
@@ -448,6 +646,9 @@ export default function TaskTable({
           </colgroup>
           <thead>
             <tr className="text-[12px] text-mud-500">
+              <th className="border-b border-mud-200">
+                <span className="sr-only">Move</span>
+              </th>
               <th className={CELL}>
                 <span className="sr-only">Done</span>
               </th>
@@ -473,10 +674,10 @@ export default function TaskTable({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={bodyRef}>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={cols.length + 2} className="border-b border-mud-200 px-3 py-8 text-center text-[13px] text-mud-400">
+                <td colSpan={cols.length + 3} className="border-b border-mud-200 px-3 py-8 text-center text-[13px] text-mud-400">
                   {todos.length === 0 ? "No quests yet." : "Nothing matches these filters."}
                 </td>
               </tr>
@@ -484,7 +685,23 @@ export default function TaskTable({
             {rows.map((t) => {
               const done = statusOf(t) === "done";
               return (
-                <tr key={t.id} className="group hover:bg-mud-100/60">
+                <tr
+                  key={t.id}
+                  data-row-id={t.id}
+                  className={`group hover:bg-mud-100/60 ${drag?.id === t.id ? "opacity-40" : ""}`}
+                >
+                  <td className="border-b border-mud-200 align-middle">
+                    <button
+                      data-grip={t.id}
+                      onPointerDown={(e) => startDrag(e, t)}
+                      onKeyDown={(e) => gripKey(e, t)}
+                      aria-label={`Move "${t.title}". Drag, or use the up and down arrow keys.`}
+                      title="Drag to reorder"
+                      className={`mx-auto grid h-6 w-4 touch-none ${drag?.id === t.id ? "cursor-grabbing" : "cursor-grab"} place-items-center rounded text-mud-400 transition hover:bg-mud-200/70 hover:text-mud-700 focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
+                    >
+                      <GripIcon />
+                    </button>
+                  </td>
                   <td className={CELL}>
                     <button
                       onClick={(e) =>
@@ -524,13 +741,33 @@ export default function TaskTable({
               );
             })}
             <NewRow
-              span={cols.length + 2}
+              span={cols.length + 3}
               categoryId={category !== "all" && category !== "none" ? category : null}
               onAdd={onAdd}
             />
           </tbody>
         </table>
       </div>
+
+      {/* The held row's name, following the pointer. */}
+      {drag &&
+        createPortal(
+          <div
+            ref={ghostRef}
+            aria-hidden
+            style={{
+              position: "fixed",
+              left: 0,
+              top: 0,
+              zIndex: 90,
+              transform: `translate(${drag.start.x + 14}px, ${drag.start.y - 12}px)`,
+            }}
+            className="panel pointer-events-none max-w-64 truncate rounded-md px-2.5 py-1 text-[13px] text-mud-900 shadow-lg shadow-mud-900/20"
+          >
+            {drag.title}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
@@ -539,14 +776,27 @@ export default function TaskTable({
 /* Sorting                                                                    */
 /* ========================================================================== */
 
+type SortCtx = {
+  catById: Map<string, { c: Category; i: number }>;
+  defById: Map<string, TableColumn>;
+  steps: Record<string, Subtask[]>;
+  vals: ColumnValues;
+};
+
+/**
+ * Quests in the table's order. "Manual" is the dragged order, with anything
+ * never placed slotted in by deadline, as on the board. A column sort breaks
+ * ties by deadline, so every sort still reads sensibly.
+ */
+function sortRows(list: Todo[], sort: TableSort, ctx: SortCtx): Todo[] {
+  if (sort.key === MANUAL) return boardOrder(list, (t) => t.table_position);
+  const cmp = comparator(sort.key, ctx);
+  return [...list].sort((a, b) => sort.dir * cmp(a, b) || byDeadline(a, b));
+}
+
 function comparator(
   key: string,
-  ctx: {
-    catById: Map<string, { c: Category; i: number }>;
-    defById: Map<string, TableColumn>;
-    steps: Record<string, Subtask[]>;
-    vals: ColumnValues;
-  }
+  ctx: SortCtx
 ): (a: Todo, b: Todo) => number {
   const rank = (s: Status) => STATUSES.findIndex((x) => x.key === s);
   // Blanks sort after everything, in either direction's natural reading.
@@ -990,6 +1240,18 @@ function Tick() {
   );
 }
 
+/** Six dots: the handle a row is carried by. */
+function GripIcon() {
+  return (
+    <svg viewBox="0 0 10 16" className="h-3.5 w-2.5" aria-hidden fill="currentColor">
+      {[3, 8, 13].flatMap((y) => [
+        <circle key={`l${y}`} cx="2.5" cy={y} r="1.3" />,
+        <circle key={`r${y}`} cx="7.5" cy={y} r="1.3" />,
+      ])}
+    </svg>
+  );
+}
+
 function BuiltinCell({
   k,
   todo: t,
@@ -1012,7 +1274,7 @@ function BuiltinCell({
   switch (k) {
     case "title":
       return (
-        <div className="flex items-center gap-2">
+        <div className="group/name relative flex items-center gap-2">
           <div className="min-w-0 flex-1">
             {done ? (
               <span className="block truncate px-1 text-mud-400 line-through" title={t.title}>
@@ -1023,8 +1285,11 @@ function BuiltinCell({
             )}
           </div>
           {/* Row actions surface on hover, as in Notion; always there on a
-              touchscreen, which has no hover. */}
-          <div className="flex shrink-0 gap-0.5 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+              touchscreen, which has no hover. Where there is hover they float
+              over the end of the name rather than sitting beside it — merely
+              faded out, they'd still hold their space and cut every name
+              short of the column's edge. Out of the way while it's edited. */}
+          <div className="flex shrink-0 gap-0.5 transition sm:absolute sm:right-0 sm:top-1/2 sm:-translate-y-1/2 sm:rounded-md sm:bg-mud-50 sm:p-0.5 sm:opacity-0 sm:shadow-sm sm:ring-1 sm:ring-mud-200 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:group-has-[input:focus]/name:hidden">
             {!done && <RowAction onClick={() => handlers.onEdit(t)}>Open</RowAction>}
             {!done && (
               <RowAction onClick={(e) => handlers.onAbandon(t, centerOf(e))} danger>
