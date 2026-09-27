@@ -46,8 +46,8 @@ export default async function NotificationsPage() {
           <NotificationSettings initial={prefs} configured={PUSH_CONFIGURED} />
         ) : (
           <div className="panel rounded-2xl p-6 text-sm text-mud-700">
-            Your database is behind — run <code>db/migrations/025-notifications.sql</code> in the
-            Neon SQL Editor, then reload.
+            Your database is behind — run <code>db/migrations/025-notifications.sql</code> and{" "}
+            <code>026-village.sql</code> in the Neon SQL Editor, then reload.
           </div>
         )}
       </main>

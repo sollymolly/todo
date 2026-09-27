@@ -5,7 +5,12 @@ import { listFriends, listRequests, myKeys } from "@/lib/social-actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function FriendsPage() {
+export default async function FriendsPage({
+  searchParams,
+}: {
+  /** `?chat=<id>`: open that conversation (the village's Message button). */
+  searchParams: Promise<{ chat?: string }>;
+}) {
   const userId = await getUserId();
   if (!userId) redirect("/login");
 
@@ -26,6 +31,7 @@ export default async function FriendsPage() {
         meId={userId}
         myPublicKey={data.keys.publicKey}
         keyEscrowed={data.keys.escrowed}
+        initialChat={(await searchParams).chat ?? null}
       />
     );
   }

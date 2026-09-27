@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { unreadTotal } from "@/lib/social-actions";
 
 /* --------------------------------------------------------------------------
-   The phone's way around: four tabs along the bottom, where a thumb is.
+   The phone's way around: five tabs along the bottom, where a thumb is.
    Phones only (below `sm`); a wider screen keeps the header's buttons, which
    is where a mouse expects them.
 
@@ -24,6 +24,7 @@ export const TAB_PATHS = [
   "/notifications",
   "/updates",
   "/feedback",
+  "/village",
 ];
 
 const TABS: { href: string; label: string; icon: React.ReactNode }[] = [
@@ -39,6 +40,18 @@ const TABS: { href: string; label: string; icon: React.ReactNode }[] = [
       <>
         <path d="M19 9a7 7 0 1 0 .6 5" />
         <path d="M19 4v5h-5" />
+      </>
+    ),
+  },
+  {
+    href: "/village",
+    label: "Village",
+    icon: (
+      <>
+        <path d="M3 20h18" />
+        <path d="M5 20v-7l4-3.5 4 3.5v7" />
+        <path d="M13 20v-9l3.5-3 3.5 3v9" />
+        <path d="M8 20v-3h2v3" />
       </>
     ),
   },
@@ -80,7 +93,7 @@ export default function TabBar() {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-mud-200 bg-mud-50/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md sm:hidden"
     >
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {TABS.map((tab) => {
           const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           return (

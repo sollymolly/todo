@@ -227,6 +227,14 @@ export default function NotificationSettings({
             </div>
             <Toggle on={prefs.messages} label="Message notifications" onChange={(v) => update({ messages: v })} />
           </li>
+
+          <li className="flex items-center gap-3 py-3">
+            <div className="mr-auto min-w-0">
+              <p className="text-sm font-semibold text-mud-900">Nudges</p>
+              <p className="text-xs text-mud-500">Companions giving you a push from the village. Off means they can&apos;t nudge you at all.</p>
+            </div>
+            <Toggle on={prefs.nudges} label="Nudges" onChange={(v) => update({ nudges: v })} />
+          </li>
         </ul>
       </section>
     </div>

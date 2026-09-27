@@ -12,6 +12,8 @@ export type NotificationPrefs = {
   morningMinutes: number;
   /** A companion sent a message. */
   messages: boolean;
+  /** Companions may nudge you at all — in the app and as a notification (migration 026). */
+  nudges: boolean;
 };
 
 export const DEFAULT_PREFS: NotificationPrefs = {
@@ -20,6 +22,7 @@ export const DEFAULT_PREFS: NotificationPrefs = {
   morning: true,
   morningMinutes: 8 * 60,
   messages: true,
+  nudges: true,
 };
 
 export const LEAD_CHOICES: { minutes: number; label: string }[] = [
@@ -43,6 +46,7 @@ export function cleanPrefs(raw: Partial<NotificationPrefs> | null | undefined): 
     morningMinutes:
       Number.isFinite(morning) && morning >= 0 && morning < 1440 ? morning : DEFAULT_PREFS.morningMinutes,
     messages: typeof r.messages === "boolean" ? r.messages : DEFAULT_PREFS.messages,
+    nudges: typeof r.nudges === "boolean" ? r.nudges : DEFAULT_PREFS.nudges,
   };
 }
 

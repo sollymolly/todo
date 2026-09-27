@@ -43,8 +43,15 @@ export function formatWeek(week: string): string {
 export const UPDATES: Update[] = [
   {
     week: "2026-09-28",
-    title: "HabitKnight is an app now: install it, get reminders, make the table yours",
+    title: "A village for you and your companions, work sessions, and HabitKnight as an app",
     items: [
+      "New: the Village. Every companion has a house in it, and so do you. Walk around with the arrow keys or WASD, or tap where you want to go, and walk up to a door to visit. Companions who have the village open are out and about too — at home, at someone's house, or at the town hall.",
+      "Your house grows as you level up, from a tent to a keep, and its garden blooms with your habit streak. Pick your walls, roof colour and garden from My house; stone and brick unlock at levels 5 and 9.",
+      "Visit a companion's house to see how their day is going, pin a short note to their door, or message them. Notes on your own door wait inside for you.",
+      "Nudge a companion to get going — pick a line or write your own, and point it at one of their overdue or due-today quests if you like. They see only its category and deadline, never the title. One nudge per companion every three hours, and anyone can switch nudges off on the Notifications page.",
+      "Work sessions: start one from the town hall or the menu, and a timer runs wherever you are in the app. Companions can sit down at your table any time. Turn on shared focus rounds for 25 minutes of work and a 5-minute break, in step for everyone at the table.",
+      "Focus time earns XP: 3 for every 25 minutes at a table, 4 if someone's working with you, up to 12 a day. Your time is logged, and your companions can see today's and this week's totals on your house.",
+      "The privacy policy has been updated to cover the village and work sessions, and you'll be asked to agree to it once.",
       "Install HabitKnight on your phone or computer: open the menu and choose Install app. On an iPhone or iPad, tap Share in Safari, then Add to Home Screen. It opens in its own window with its own icon, and on Android, Windows and Mac, long-pressing or right-clicking the icon gives you shortcuts straight to a new quest or to Habits.",
       "Notifications: turn them on under Notifications in the menu, once on each device. You can get a reminder before each deadline (anywhere from 15 minutes to a day ahead — an hour unless you change it), a morning summary at a time you pick with what's due today, today's habits and anything past its deadline, and a nudge when a companion writes to you. On an iPhone or iPad they need the app added to your Home Screen first.",
       "A message notification only says who wrote, never what they wrote: messages stay sealed, and the server can't read them to put them in a notification.",

@@ -69,14 +69,23 @@ export async function sendToUser(userId: string, payload: PushPayload): Promise<
           // for a deadline long gone isn't.
           { TTL: 6 * 60 * 60, urgency: "normal", timeout: 10_000 }
         );
-        await sql`update push_subscriptions set last_ok_at = now() where id = ${s.id}::uuid`;
+        // Delivered: bookkeeping failing now mustn't turn this into a retry.
+        await sql`update push_subscriptions set last_ok_at = now() where id = ${s.id}::uuid`.catch(() => {});
         return 1;
       } catch (e) {
         // 404/410: the browser dropped this subscription (uninstalled,
         // permission revoked, signed out). It won't come back.
-        const status = (e as { statusCode?: number }).statusCode;
-        if (status === 404 || status === 410)
+        const err = e as { statusCode?: number; body?: string; message?: string };
+        if (err.statusCode === 404 || err.statusCode === 410)
           await sql`delete from push_subscriptions where id = ${s.id}::uuid`;
+        else
+          // Anything else is worth seeing in the logs: it was silent before,
+          // which is how a failed reminder went unnoticed.
+          console.error("push failed", {
+            host: new URL(s.endpoint).host,
+            status: err.statusCode ?? null,
+            body: String(err.body ?? err.message ?? "").slice(0, 200),
+          });
         return 0;
       }
     })

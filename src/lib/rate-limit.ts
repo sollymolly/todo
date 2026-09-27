@@ -45,6 +45,12 @@ export const LIMITS = {
   importScreenshot: { limit: 10, windowSeconds: 3600 },
   /** Per account. "Send a test" — each one buzzes every device they have. */
   testPush: { limit: 5, windowSeconds: 300 },
+  /** Per account. Notes pinned to friends' doors. */
+  doorNote: { limit: 20, windowSeconds: 3600 },
+  /** Per account, across everyone; each friend also has their own 3h gap. */
+  nudge: { limit: 20, windowSeconds: 3600 },
+  /** Per account. Starting, joining and leaving tables. */
+  session: { limit: 60, windowSeconds: 600 },
 } as const satisfies Record<string, Limit>;
 
 /**

@@ -34,6 +34,8 @@ import {
 } from "@/lib/actions";
 import { addHabit } from "@/lib/habit-actions";
 import { setIconBadge } from "@/lib/push-client";
+import { markNudgesSeen } from "@/lib/village-actions";
+import type { NudgeView } from "@/lib/village";
 import type { Habit } from "@/lib/habits";
 import type { Category, Profile, Subtask, Todo } from "@/lib/types";
 import type { Update } from "@/lib/updates";
@@ -54,6 +56,8 @@ export default function Dashboard(props: {
   tableValues: ColumnValues;
   sweptCount: number;
   unread: number;
+  /** Unseen nudges from companions. */
+  nudges?: NudgeView[];
   update: Update | null;
   /** Open the composer straight away — the app's "New quest" shortcut. */
   startComposing?: boolean;
@@ -75,6 +79,7 @@ function Inner({
   tableValues,
   sweptCount,
   unread,
+  nudges = [],
   update,
   startComposing = false,
 }: {
@@ -87,6 +92,8 @@ function Inner({
   tableValues: ColumnValues;
   sweptCount: number;
   unread: number;
+  /** Unseen nudges from companions. */
+  nudges?: NudgeView[];
   update: Update | null;
   /** Open the composer straight away — the app's "New quest" shortcut. */
   startComposing?: boolean;
@@ -132,6 +139,7 @@ function Inner({
       : null
   );
   const [error, setError] = useState<string | null>(null);
+  const [shownNudges, setShownNudges] = useState(nudges);
   const composerRef = useRef<HTMLDivElement>(null);
 
   // The server is authoritative. useState only seeds the first render, so
@@ -454,7 +462,14 @@ function Inner({
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          {/* On a phone these two are tabs along the bottom (TabBar). */}
+          {/* On a phone these are tabs along the bottom (TabBar). */}
+          <Link
+            href="/village"
+            title="Your village"
+            className="max-sm:hidden rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700"
+          >
+            Village
+          </Link>
           <Link
             href="/habits"
             title="Recurring habits"
@@ -490,6 +505,30 @@ function Inner({
       </header>
 
       <AnimatePresence>
+        {shownNudges.map((n) => (
+          <motion.div
+            key={n.id}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-3 overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-amber-100 px-4 py-2.5 text-sm text-amber-900 ring-1 ring-inset ring-amber-300">
+              <span>
+                <b>{n.fromName} nudged you:</b> “{n.body}”{n.about ? ` (${n.about})` : ""}
+              </span>
+              <button
+                onClick={() => {
+                  setShownNudges((x) => x.filter((y) => y.id !== n.id));
+                  void markNudgesSeen([n.id]);
+                }}
+                className="shrink-0 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-500"
+              >
+                On it
+              </button>
+            </div>
+          </motion.div>
+        ))}
         {banner && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}

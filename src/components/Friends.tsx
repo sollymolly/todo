@@ -53,6 +53,7 @@ export default function Friends({
   meId,
   myPublicKey,
   keyEscrowed,
+  initialChat = null,
 }: {
   friends: FriendSummary[];
   requests: PendingRequest[];
@@ -60,6 +61,8 @@ export default function Friends({
   myPublicKey: string | null;
   /** The server already holds this account's message key (migration 022). */
   keyEscrowed: boolean;
+  /** A friend whose conversation to open straight away. */
+  initialChat?: string | null;
 }) {
   const hasKeys = !!myPublicKey;
 
@@ -72,7 +75,9 @@ export default function Friends({
   const router = useRouter();
   // The id rather than the row: a refresh replaces the objects in `friends`,
   // and an open thread should follow the new one (its unread count resets).
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() =>
+    initialChat && friends.some((f) => f.user_id === initialChat) ? initialChat : null
+  );
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<FoundPerson | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -56,6 +56,16 @@ export default function PrivacyPage() {
               them. See below.
             </li>
             <li>
+              <B>The village</B> — where you last were in it (at home, at the
+              town hall, at a companion&apos;s house) and when; how your house
+              looks; notes pinned to doors, in plain text, not encrypted like
+              messages; and nudges sent and received.
+            </li>
+            <li>
+              <B>Work sessions</B> — when you joined and left each table, and
+              which of your quests you said you were working on.
+            </li>
+            <li>
               <B>Password reset links</B> — only a fingerprint of each link,
               never the link itself, kept until it is used or expires.
             </li>
@@ -103,6 +113,21 @@ export default function PrivacyPage() {
             <B>category names with the number of open quests in each</B>. Quest
             titles, notes and deadlines are never shared. Removing a companion
             deletes the conversation for both of you.
+          </p>
+          <p className="mt-3">
+            In the village, companions also see <B>whether you&apos;re there
+            and where</B>, your house, your best habit streak, how many quests
+            you finished today, and your work-session time today and this
+            week. When they nudge you, they can pick one of your overdue or
+            due-today quests, which they see — and you&apos;re reminded of —
+            only as <B>its category and deadline</B>, never its title. You can
+            turn nudges off on the Notifications page.
+          </p>
+          <p className="mt-3">
+            At a work-session table, <B>everyone at the table sees your
+            character and display name</B>, including people who aren&apos;t your
+            companions, and your time there. Only your companions see the
+            category of the quest you&apos;re working on.
           </p>
           <p className="mt-3">
             Anyone who knows your exact username or email can send you a

@@ -8,6 +8,8 @@ import { forgetPrivateKey } from "@/lib/crypto";
 import { useBackdropMotion } from "@/lib/motion-pref";
 import { forgetSavedPages, useInstall } from "@/lib/pwa";
 import { forgetPush } from "@/lib/push-client";
+import { useSessionStore } from "@/lib/session-store";
+import { StartSessionForm } from "@/components/village/SessionControls";
 
 /* --------------------------------------------------------------------------
    Everything that isn't a daily action, behind one button.
@@ -38,6 +40,8 @@ export default function HeaderMenu({
   const [dust, setDust] = useBackdropMotion();
   const install = useInstall();
   const [iosHelp, setIosHelp] = useState(false);
+  const { mine } = useSessionStore();
+  const [starting, setStarting] = useState(false);
   // Chromium can install on request; Safari on iOS only from its Share
   // sheet, so there the item explains how. Gone once it's installed.
   const canInstall = !install.installed && (install.canPrompt || install.ios);
@@ -104,6 +108,19 @@ export default function HeaderMenu({
               </Link>
             ))}
 
+            {!mine && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  setStarting(true);
+                }}
+                className="w-full px-3 py-2 text-left text-sm font-medium text-grass-700 transition hover:bg-grass-50"
+              >
+                Start a work session
+              </button>
+            )}
+
             <div className="my-1 h-px bg-mud-200" />
 
             {/* A matter of taste on this device, so it's a switch here rather
@@ -163,6 +180,18 @@ export default function HeaderMenu({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {starting && (
+        <div
+          className="sheet-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setStarting(false)}
+        >
+          <div className="sheet panel w-full max-w-sm rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-3 font-display text-lg font-bold text-mud-900">Work session</h2>
+            <StartSessionForm onDone={() => setStarting(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

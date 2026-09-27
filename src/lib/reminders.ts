@@ -15,16 +15,35 @@ import { sendToUser } from "@/lib/push";
    -------------------------------------------------------------------------- */
 
 /** due_ms is a bigint, which the driver hands back as a string. */
+/** Claims given back this run because the send failed; they'll be tried again. */
+let retrying = 0;
+
+/**
+ * A notification that reached no device is un-claimed, so the next run tries
+ * again — while it's still worth sending (the quest is still inside its lead
+ * time, or it's still the morning window). Without this, one failed request
+ * to a push service was a reminder lost for good.
+ */
+async function release(userId: string, kind: "due" | "morning", refs: string[]) {
+  if (!refs.length) return;
+  await sql`
+    delete from notification_log
+     where user_id = ${userId}::uuid and kind = ${kind} and ref = any(${refs}::text[])
+  `;
+  retrying += refs.length;
+}
+
 type DueRow = { user_id: string; todo_id: string; title: string; due_ms: string; ref: string };
 
-export async function runReminders(): Promise<{ due: number; morning: number; pruned: number }> {
+export async function runReminders(): Promise<{ due: number; morning: number; pruned: number; retrying: number }> {
   const pruned = (await sql`
     delete from notification_log where sent_at < now() - interval '3 days' returning 1
   `).length;
 
+  retrying = 0;
   const due = await dueSoon();
   const morning = await morningSummaries();
-  return { due, morning, pruned };
+  return { due, morning, pruned, retrying };
 }
 
 /* ------------------------------------------------------------ deadlines */
@@ -87,7 +106,8 @@ async function dueSoon(): Promise<number> {
             body: listTitles(rows.map((r) => r.title)),
             tag: "due-soon",
           };
-    if (await sendToUser(userId, { ...payload, url: "/", badge: badges.get(userId) ?? 0 })) sent++;
+    if (await sendToUser(userId, { ...payload, url: "/", badge: badges.get(userId) ?? 0 }).catch(() => 0)) sent++;
+    else await release(userId, "due", rows.map((r) => r.ref));
   }
   return sent;
 }
@@ -170,8 +190,9 @@ async function morningSummaries(): Promise<number> {
       url: "/",
       tag: "morning",
       badge: quests.length + habits.length,
-    });
+    }).catch(() => 0);
     if (reached) sent++;
+    else await release(p.user_id, "morning", [p.today]);
   }
   return sent;
 }

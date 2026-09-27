@@ -6,6 +6,8 @@ import { pruneFinished, sweepOverdue } from "@/lib/actions";
 import { signOut } from "@/lib/auth-actions";
 import { listHabits, syncHabits } from "@/lib/habit-actions";
 import { unreadTotal } from "@/lib/social-actions";
+import { unseenNudges } from "@/lib/village-server";
+import type { NudgeView } from "@/lib/village";
 import { loadTableData } from "@/lib/column-actions";
 import type { ColumnValues, TableColumn } from "@/lib/table-columns";
 import { latestUpdate, shouldShowUpdate } from "@/lib/updates";
@@ -90,6 +92,14 @@ export default async function Home({
     /* companions aren't set up yet */
   }
 
+  // Nudges from companions that haven't been seen (migration 026).
+  let nudges: NudgeView[] = [];
+  try {
+    nudges = await unseenNudges(userId);
+  } catch {
+    /* the village isn't set up yet */
+  }
+
   // Likewise for migration 015. Grouped here rather than passed down flat so
   // every row doesn't re-filter the whole set on each render.
   const steps: Record<string, Subtask[]> = {};
@@ -140,6 +150,7 @@ export default async function Home({
       tableValues={tableValues}
       sweptCount={sweptCount}
       unread={unread}
+      nudges={nudges}
       startComposing={(await searchParams).new === "1"}
       // Decided here rather than in the browser so "this week" means one thing
       // for everybody and the server and client agree on the first render.

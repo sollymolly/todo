@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { PUSH_CONFIGURED } from "@/lib/push";
 import { runReminders } from "@/lib/reminders";
+import { sweepSessions } from "@/lib/village-server";
 
 /* --------------------------------------------------------------------------
    Called every five minutes by an outside scheduler (cron-job.org), with
@@ -23,6 +24,12 @@ function authorised(request: Request): boolean {
 
 async function handle(request: Request) {
   if (!authorised(request)) return new Response("Unauthorized", { status: 401 });
+
+  // Work-session tables nobody's checked in at lately: close them, and pay
+  // what was earned. Runs whether or not push is set up.
+  await sweepSessions().catch(() => {
+    /* migration 026 not run yet */
+  });
   if (!PUSH_CONFIGURED) return Response.json({ skipped: "push keys not set" });
   try {
     return Response.json(await runReminders());
