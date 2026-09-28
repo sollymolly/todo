@@ -266,6 +266,7 @@ function ColorPicker({
           type="button"
           onClick={() => onChange(k)}
           aria-label={k}
+          title={k}
           aria-pressed={value === k}
           className={`size-6 rounded-full transition ${colorOf(k).dot} ${
             value === k

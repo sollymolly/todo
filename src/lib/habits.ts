@@ -25,25 +25,57 @@ export function describeDays(days: number[]): string {
   return d.map((n) => DAY_NAMES[n]).join(", ");
 }
 
+/**
+ * XP for the completion that brings a habit's streak to `streak`: 1% more per
+ * day of the run, compounding, rounded, and capped at 10 — so +1 until day 42,
+ * +10 from day 228. A miss costs 1 and resets the run. Mirrors habit_reward in
+ * migration 028 — change both.
+ */
+export const HABIT_MISS_XP = -1;
+export const HABIT_MAX_XP = 10;
+export function habitReward(streak: number): number {
+  return Math.min(
+    HABIT_MAX_XP,
+    Math.max(1, Math.round(Math.pow(1.01, Math.max(streak, 1) - 1)))
+  );
+}
+
+/** One settled day: a tick (done) or a miss, and the XP it moved. */
+export type HabitDay = { done: boolean; xp: number };
+
 export type Habit = {
   id: string;
   title: string;
   notes: string | null;
-  category_id: string | null;
   days: number[];
-  due_minutes: number;
   streak: number;
   best_streak: number;
-  last_done_on: string | null;
   active: boolean;
+  /** The first local day the habit could be ticked, YYYY-MM-DD. */
+  created_on: string;
   /** Optional stopping conditions; whichever comes first ends the habit. */
   ends_on: string | null;
   occurrences_limit: number | null;
+  /** Days logged so far, ticked or missed — what the limit counts. */
   occurrences_made: number;
   /** True once a stopping condition has been reached. */
   finished: boolean;
-  /** Whether today's instance is already ticked off. */
-  done_today: boolean;
-  /** Whether an instance exists for today at all (it may not be due). */
+  /** Whether today can be ticked: active, scheduled today and not over. */
   due_today: boolean;
+  /** Whether today is already ticked. */
+  done_today: boolean;
+  /** Logged days by local date, YYYY-MM-DD. */
+  log: Record<string, HabitDay>;
 };
+
+/** YYYY-MM-DD for a local date `offset` days from `day`. */
+export function shiftDay(day: string, offset: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+/** ISO weekday of a YYYY-MM-DD, Monday = 1. */
+export function isoWeekday(day: string): number {
+  return ((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+}

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import Habits from "@/components/Habits";
 import Backdrop from "@/components/Backdrop";
+import { FxProvider } from "@/components/Fx";
 import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
-import { listHabits, syncHabits } from "@/lib/habit-actions";
-import type { Category } from "@/lib/types";
+import { listHabits, syncHabits, type HabitBoard } from "@/lib/habit-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,19 +12,15 @@ export default async function HabitsPage() {
   const userId = await getUserId();
   if (!userId) redirect("/login");
 
-  let habits: Awaited<ReturnType<typeof listHabits>> = [];
-  let categories: Category[] = [];
+  let board: HabitBoard = { today: new Date().toISOString().slice(0, 10), habits: [] };
   let timezone: string | null = null;
   let failed = false;
 
   try {
-    // The same reconcile the dashboard runs, so arriving here directly still
-    // puts today's instances on the board.
+    // The same settle the dashboard runs, so days that ended unticked show
+    // as misses however you arrive.
     await syncHabits();
-    habits = await listHabits();
-    categories = (await sql`
-      select * from categories where user_id = ${userId}::uuid order by sort_order
-    `) as Category[];
+    board = await listHabits();
     const tz = (await sql`
       select timezone from profiles where id = ${userId}::uuid
     `) as { timezone: string | null }[];
@@ -43,7 +39,7 @@ export default async function HabitsPage() {
           <p className="mt-2 text-sm leading-relaxed text-mud-700">
             Habits need one more migration — run{" "}
             <code className="rounded bg-mud-800 px-1.5 py-0.5 text-mud-50">
-              db/migrations/013-habits.sql
+              db/migrations/028-habit-log.sql
             </code>{" "}
             in the Neon SQL Editor, then reload.
           </p>
@@ -55,7 +51,9 @@ export default async function HabitsPage() {
   return (
     <>
       <Backdrop />
-      <Habits habits={habits} categories={categories} timezone={timezone} />
+      <FxProvider>
+        <Habits habits={board.habits} today={board.today} timezone={timezone} />
+      </FxProvider>
     </>
   );
 }

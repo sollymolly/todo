@@ -3,22 +3,34 @@
 import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 import { requireUserId } from "@/lib/session";
-import { EVERY_DAY, type Habit } from "@/lib/habits";
+import { EVERY_DAY, type Habit, type HabitDay } from "@/lib/habits";
 
 export type { Habit };
 
 /* --------------------------------------------------------------------------
-   Habits: the recurring definitions, and the reconcile that keeps today's
-   instances in step.
+   Habits: the recurring definitions, and a daily log of ticks and misses.
 
-   Instances are ordinary todos, so nothing here touches XP — completing a
-   habit runs the same complete_quest as any other quest. All this file does is
-   define, list, and materialise.
+   A habit never puts anything on the quest board (migration 028). Today is
+   ticked straight from the Habits grid; any due day that ends without a tick
+   is settled as a miss by settle_habits, which is also what charges it.
    -------------------------------------------------------------------------- */
 
 export type HabitResult = { ok: true } | { ok: false; error: string };
 
+export type HabitBoard = {
+  /** The caller's local date, YYYY-MM-DD. */
+  today: string;
+  habits: Habit[];
+};
+
+export type HabitTick =
+  | { ok: true; done: boolean; delta: number; streak: number; xp: number }
+  | { ok: false; error: string };
+
 const MAX_HABITS = 40;
+
+/** How far back the grid can page. */
+const HISTORY_DAYS = 180;
 
 /** Only real ISO weekdays, deduped and sorted; at least one. */
 function cleanDays(days: number[]): number[] | null {
@@ -29,15 +41,15 @@ function cleanDays(days: number[]): number[] | null {
 }
 
 /**
- * Creates any missing instances for today and breaks streaks that lapsed.
- * Idempotent, so it runs on every dashboard load next to sweepOverdue.
+ * Settles every due day that has ended without a tick: -1 XP each, and the
+ * streak resets. Idempotent, so it runs on every load next to sweepOverdue.
+ * Returns the XP it moved (zero or negative).
  */
 export async function syncHabits(): Promise<number> {
   const userId = await requireUserId();
   try {
-    await sql`select break_stale_streaks(${userId}::uuid)`;
     const rows = (await sql`
-      select materialise_habits(${userId}::uuid) as n
+      select settle_habits(${userId}::uuid) as n
     `) as { n: number }[];
     return rows[0]?.n ?? 0;
   } catch {
@@ -46,58 +58,109 @@ export async function syncHabits(): Promise<number> {
   }
 }
 
-export async function listHabits(): Promise<Habit[]> {
+/** A date column as YYYY-MM-DD, whether the driver sent a Date or a string. */
+function isoDay(v: unknown): string | null {
+  if (!v) return null;
+  return (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+}
+
+export async function listHabits(): Promise<HabitBoard> {
   const userId = await requireUserId();
 
-  const rows = (await sql`
-    select h.*,
-           coalesce(t.status = 'done', false) as done_today,
-           (t.id is not null)                 as due_today,
-           habit_over(
-             h.ends_on, h.occurrences_limit, h.occurrences_made,
-             (now() at time zone coalesce(
-               (select timezone from profiles where id = ${userId}::uuid), 'UTC'
-             ))::date
-           ) as finished
-      from habits h
-      left join todos t
-        on t.habit_id = h.id
-       and (t.due_date at time zone coalesce(
-              (select timezone from profiles where id = ${userId}::uuid), 'UTC'
-            ))::date
-           = (now() at time zone coalesce(
-              (select timezone from profiles where id = ${userId}::uuid), 'UTC'
-            ))::date
-     where h.user_id = ${userId}::uuid
-     order by h.active desc, h.streak desc, h.title
-  `) as (Habit & Record<string, unknown>)[];
+  const [meRows, rows, logs] = await Promise.all([
+    sql`
+      select (now() at time zone coalesce(timezone, 'UTC'))::date::text as today
+        from profiles where id = ${userId}::uuid
+    `,
+    sql`
+      with me as (
+        select (now() at time zone coalesce(timezone, 'UTC'))::date as today,
+               coalesce(timezone, 'UTC') as zone
+          from profiles where id = ${userId}::uuid
+      )
+      select h.*,
+             (h.created_at at time zone me.zone)::date::text as created_on,
+             (select count(*)::int from habit_log l where l.habit_id = h.id) as logged,
+             exists (select 1 from habit_log l
+                      where l.habit_id = h.id and l.day = me.today and l.done) as done_today,
+             is_habit_due(h.days, me.today) as scheduled_today,
+             -- Today's own tick doesn't count against the limit, or ticking
+             -- the last occurrence would lock it the moment it was done.
+             habit_over(
+               h.ends_on, h.occurrences_limit,
+               (select count(*)::int from habit_log l
+                 where l.habit_id = h.id and l.day < me.today),
+               me.today
+             ) as finished
+        from habits h, me
+       where h.user_id = ${userId}::uuid
+       order by h.active desc, h.created_at
+    `,
+    sql`
+      select habit_id, day::text as day, done, xp
+        from habit_log
+       where user_id = ${userId}::uuid
+         and day > current_date - ${HISTORY_DAYS}::int
+    `,
+  ]);
 
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    notes: r.notes,
-    category_id: r.category_id,
-    days: (r.days ?? EVERY_DAY) as number[],
-    due_minutes: r.due_minutes,
-    streak: r.streak,
-    best_streak: r.best_streak,
-    last_done_on: r.last_done_on ? String(r.last_done_on).slice(0, 10) : null,
-    active: r.active,
-    ends_on: r.ends_on ? String(r.ends_on).slice(0, 10) : null,
-    occurrences_limit: r.occurrences_limit,
-    occurrences_made: r.occurrences_made,
-    finished: r.finished,
-    done_today: r.done_today,
-    due_today: r.due_today,
-  }));
+  const byHabit: Record<string, Record<string, HabitDay>> = {};
+  for (const l of logs as { habit_id: string; day: string; done: boolean; xp: number }[])
+    (byHabit[l.habit_id] ??= {})[l.day] = { done: l.done, xp: l.xp };
+
+  const today =
+    (meRows as { today: string }[])[0]?.today ?? new Date().toISOString().slice(0, 10);
+
+  return {
+    today,
+    habits: (rows as Record<string, unknown>[]).map((r) => {
+      const finished = r.finished as boolean;
+      return {
+        id: r.id as string,
+        title: r.title as string,
+        notes: r.notes as string | null,
+        days: (r.days ?? EVERY_DAY) as number[],
+        streak: r.streak as number,
+        best_streak: r.best_streak as number,
+        active: r.active as boolean,
+        created_on: r.created_on as string,
+        ends_on: isoDay(r.ends_on),
+        occurrences_limit: r.occurrences_limit as number | null,
+        occurrences_made: r.logged as number,
+        finished,
+        due_today: (r.active as boolean) && (r.scheduled_today as boolean) && !finished,
+        done_today: r.done_today as boolean,
+        log: byHabit[r.id as string] ?? {},
+      };
+    }),
+  };
+}
+
+/** Ticks today's habit, or un-ticks it (giving back what the tick paid). */
+export async function toggleHabit(id: string): Promise<HabitTick> {
+  const userId = await requireUserId();
+  try {
+    const rows = (await sql`
+      select toggle_habit(${userId}::uuid, ${id}::uuid) as result
+    `) as { result: { done: boolean; delta: number; streak: number; xp: number } }[];
+    revalidatePath("/habits");
+    revalidatePath("/");
+    return { ok: true, ...rows[0].result };
+  } catch (e) {
+    // The function's own exceptions are written for people; anything else
+    // isn't worth showing.
+    const msg = e instanceof Error ? e.message : "";
+    return {
+      ok: false,
+      error: /^That habit/.test(msg) ? msg : "Could not update that habit.",
+    };
+  }
 }
 
 export async function addHabit(input: {
   title: string;
   /** ISO weekdays it runs on, Monday = 1. */
   days: number[];
-  categoryId?: string | null;
-  dueMinutes?: number;
   /** Last date an occurrence may appear, YYYY-MM-DD. */
   endsOn?: string | null;
   /** Total number of occurrences before it stops. */
@@ -110,11 +173,6 @@ export async function addHabit(input: {
 
   const days = cleanDays(input.days ?? []);
   if (!days) return { ok: false, error: "Pick at least one day." };
-
-  const dueMinutes = Math.min(
-    1439,
-    Math.max(0, Math.trunc(input.dueMinutes ?? 1439))
-  );
 
   const endsOn =
     input.endsOn && /^\d{4}-\d{2}-\d{2}$/.test(input.endsOn) ? input.endsOn : null;
@@ -133,25 +191,22 @@ export async function addHabit(input: {
     if ((count[0]?.n ?? 0) >= MAX_HABITS)
       return { ok: false, error: `That's the limit of ${MAX_HABITS} habits.` };
 
-    // Same ownership check the quest actions use: a category id from the client
-    // is only accepted if it belongs to the caller.
+    // settled_through starts at yesterday: a habit made today owes nothing
+    // for the days before it existed.
     await sql`
       insert into habits
-        (user_id, title, days, due_minutes, category_id, ends_on, occurrences_limit)
+        (user_id, title, days, ends_on, occurrences_limit, settled_through)
       values (
         ${userId}::uuid,
         ${title.slice(0, 200)},
         ${days}::integer[],
-        ${dueMinutes},
-        (select id from categories
-          where id = ${input.categoryId || null}::uuid
-            and user_id = ${userId}::uuid),
         ${endsOn}::date,
-        ${limit}
+        ${limit},
+        (select (now() at time zone coalesce(timezone, 'UTC'))::date - 1
+           from profiles where id = ${userId}::uuid)
       )
     `;
 
-    await syncHabits();
     revalidatePath("/habits");
     revalidatePath("/");
     return { ok: true };
@@ -161,18 +216,31 @@ export async function addHabit(input: {
   }
 }
 
-/** Pausing keeps the streak and the history; it just stops materialising. */
+/**
+ * Pausing keeps the streak and the history; paused days are neither due nor
+ * missed. Days before the pause are settled first, and resuming moves the
+ * settled mark up to yesterday so the pause itself costs nothing.
+ */
 export async function setHabitActive(
   id: string,
   active: boolean
 ): Promise<HabitResult> {
   const userId = await requireUserId();
   try {
+    await syncHabits();
     await sql`
-      update habits set active = ${active}
+      update habits set
+        settled_through = case
+          when ${active} and not active then greatest(
+            settled_through,
+            (select (now() at time zone coalesce(timezone, 'UTC'))::date - 1
+               from profiles where id = ${userId}::uuid)
+          )
+          else settled_through
+        end,
+        active = ${active}
        where id = ${id}::uuid and user_id = ${userId}::uuid
     `;
-    if (active) await syncHabits();
     revalidatePath("/habits");
     revalidatePath("/");
     return { ok: true };
@@ -182,8 +250,8 @@ export async function setHabitActive(
 }
 
 /**
- * Deleting a habit takes its outstanding instances with it (the foreign key
- * cascades), but finished ones are already history and stay counted.
+ * Deleting a habit takes its log with it. XP it already paid or charged
+ * stays, as a deleted quest's ledger rows do.
  */
 export async function deleteHabit(id: string): Promise<HabitResult> {
   const userId = await requireUserId();

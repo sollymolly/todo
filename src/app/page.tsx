@@ -40,8 +40,8 @@ export default async function Home({
     // finished quests past the retention window are cleared out.
     sweptCount = (await sweepOverdue()).count;
     await pruneFinished();
-    // Puts today's habit instances on the board. Idempotent, so running it on
-    // every load is safe — see materialise_habits in migration 013.
+    // Settles habit days that ended unticked as misses. Idempotent, so it runs
+    // on every load — see settle_habits in migration 028.
     await syncHabits();
 
     const [profileRows, categoryRows, todoRows] = await Promise.all([
@@ -115,10 +115,6 @@ export default async function Home({
     /* steps aren't set up yet */
   }
 
-  // And for migrations 013/014. The habit *instances* are ordinary todos and
-  // already came back with the board above; these are the definitions behind
-  // them — the schedule and the streak, which is the part worth seeing next to
-  // today's quests rather than only on /habits.
   // And for migration 023: the table's custom columns and their values.
   let tableColumns: TableColumn[] = [];
   let tableValues: ColumnValues = {};
@@ -128,9 +124,11 @@ export default async function Home({
     /* custom columns aren't set up yet */
   }
 
+  // Habits and their log (migration 028), a section of their own.
   let habits: Habit[] = [];
+  let habitToday = new Date().toISOString().slice(0, 10);
   try {
-    habits = await listHabits();
+    ({ habits, today: habitToday } = await listHabits());
   } catch {
     /* habits aren't set up yet */
   }
@@ -146,6 +144,7 @@ export default async function Home({
       todos={todos}
       steps={steps}
       habits={habits}
+      habitToday={habitToday}
       tableColumns={tableColumns}
       tableValues={tableValues}
       sweptCount={sweptCount}

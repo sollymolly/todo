@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import CharacterCard from "@/components/CharacterCard";
-import HabitList from "@/components/HabitList";
+import HabitGrid from "@/components/HabitGrid";
 import CategoryBoard, { type InlineDraft } from "@/components/CategoryBoard";
 import Backdrop from "@/components/Backdrop";
 import CategoryManager from "@/components/CategoryManager";
@@ -50,8 +50,10 @@ export default function Dashboard(props: {
   categories: Category[];
   todos: Todo[];
   steps: Record<string, Subtask[]>;
-  /** The recurring definitions. Today's instances are already in `todos`. */
+  /** Habits and their recent log — a section of their own, not quests. */
   habits: Habit[];
+  /** The user's local date, YYYY-MM-DD, which is the only tickable column. */
+  habitToday: string;
   tableColumns: TableColumn[];
   tableValues: ColumnValues;
   sweptCount: number;
@@ -75,6 +77,7 @@ function Inner({
   todos: serverTodos,
   steps,
   habits,
+  habitToday,
   tableColumns,
   tableValues,
   sweptCount,
@@ -88,6 +91,7 @@ function Inner({
   todos: Todo[];
   steps: Record<string, Subtask[]>;
   habits: Habit[];
+  habitToday: string;
   tableColumns: TableColumn[];
   tableValues: ColumnValues;
   sweptCount: number;
@@ -171,9 +175,7 @@ function Inner({
     return m;
   }, [todos]);
 
-  // Habits whose instance is on the board and still unticked. Read off the
-  // habit rows rather than the todos, so "due today" means what the schedule
-  // says even when the instance has been moved or renamed.
+  // Habits due today and still unticked.
   const waitingToday = habits.filter(
     (h) => h.active && !h.finished && h.due_today && !h.done_today
   ).length;
@@ -235,12 +237,6 @@ function Inner({
     const after = levelFor(newXp);
     setXp(newXp);
     if (after > before) window.setTimeout(() => setLevelUp(after), 650);
-  }
-
-  /** Local wall-clock minutes past midnight, for a habit's daily cut-off. */
-  function minutesOfDay(iso: string): number {
-    const d = new Date(iso);
-    return d.getHours() * 60 + d.getMinutes();
   }
 
   function patch(id: string, next: Partial<Todo>) {
@@ -315,15 +311,11 @@ function Inner({
 
   const handleAdd = async (draft: QuestDraft) => {
     if (draft.repeatDays) {
-      // A repeating quest is a habit, not a todo. The server creates the
-      // definition and materialises today's instance, so there is nothing
-      // sensible to add optimistically — refresh and let it appear.
+      // A repeating quest is a habit, not a todo: it goes to the Habits
+      // section, not onto the board, so just refresh and let it appear there.
       const res = await addHabit({
         title: draft.title,
         days: draft.repeatDays,
-        categoryId: draft.categoryId,
-        // Only the time matters to a habit; a repeating thing has no one date.
-        dueMinutes: draft.dueDate ? minutesOfDay(draft.dueDate) : undefined,
         endsOn: draft.endsOn,
         occurrencesLimit: draft.occurrencesLimit,
       });
@@ -743,16 +735,20 @@ function Inner({
               >
                 {habits.length === 0 ? (
                   <p className="panel rounded-2xl px-4 py-3 text-xs leading-relaxed text-mud-500">
-                    Nothing recurring yet. Add a quest with a repeat and it
-                    becomes a habit — a fresh quest appears on the board each
-                    day it&apos;s due, and the streak is counted here.
+                    Nothing recurring yet. Add one from New habit (or a quest
+                    with a repeat) and tick it off here each day it&apos;s due.
                   </p>
                 ) : (
-                  <HabitList
+                  <HabitGrid
                     habits={habits}
-                    categories={categories}
-                    compact
+                    today={habitToday}
+                    span={7}
                     onChanged={() => startTransition(() => router.refresh())}
+                    onTicked={({ delta, xp, origin }) => {
+                      if (delta !== 0)
+                        celebrate({ ...origin, xp: delta, label: delta > 0 ? "habit kept" : undefined });
+                      applyXp(xp);
+                    }}
                   />
                 )}
               </motion.div>

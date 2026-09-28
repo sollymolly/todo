@@ -154,17 +154,32 @@ async function morningSummaries(): Promise<number> {
   for (const p of people) {
     if (!claimed.has(p.user_id)) continue;
 
-    // What opening the app would do first: today's habits become today's
-    // quests, so the summary can count them. Both are idempotent.
+    // What opening the app would do first: settle yesterday's habits, so
+    // today's count starts from an honest streak. Idempotent.
+    let habitCount = 0;
     try {
-      await sql`select break_stale_streaks(${p.user_id}::uuid)`;
-      await sql`select materialise_habits(${p.user_id}::uuid)`;
+      await sql`select settle_habits(${p.user_id}::uuid)`;
+      const h = (await sql`
+        select count(*)::int as n
+          from habits h
+         where h.user_id = ${p.user_id}::uuid
+           and h.active
+           and is_habit_due(h.days, ${p.today}::date)
+           and not habit_over(
+                 h.ends_on, h.occurrences_limit,
+                 (select count(*)::int from habit_log l
+                   where l.habit_id = h.id and l.day < ${p.today}::date),
+                 ${p.today}::date)
+           and not exists (select 1 from habit_log l
+                            where l.habit_id = h.id and l.day = ${p.today}::date)
+      `) as { n: number }[];
+      habitCount = h[0]?.n ?? 0;
     } catch {
       /* habits not set up: the summary just won't count them */
     }
 
     const rows = (await sql`
-      select t.title, t.habit_id is not null as habit,
+      select t.title,
              (t.due_date at time zone ${p.tz})::date < ${p.today}::date as late
         from todos t
        where t.user_id = ${p.user_id}::uuid
@@ -172,16 +187,15 @@ async function morningSummaries(): Promise<number> {
          and t.due_date is not null
          and (t.due_date at time zone ${p.tz})::date <= ${p.today}::date
        order by t.due_date
-    `) as { title: string; habit: boolean; late: boolean }[];
+    `) as { title: string; late: boolean }[];
 
-    const quests = rows.filter((r) => !r.habit && !r.late);
-    const habits = rows.filter((r) => r.habit && !r.late);
+    const quests = rows.filter((r) => !r.late);
     const late = rows.filter((r) => r.late);
 
     const parts: string[] = [];
     if (quests.length)
       parts.push(`${quests.length} due today: ${listTitles(quests.map((q) => q.title))}.`);
-    if (habits.length) parts.push(`${habits.length} habit${habits.length === 1 ? "" : "s"} to keep.`);
+    if (habitCount) parts.push(`${habitCount} habit${habitCount === 1 ? "" : "s"} to keep.`);
     if (late.length) parts.push(`${late.length} past deadline.`);
 
     const reached = await sendToUser(p.user_id, {
@@ -189,7 +203,7 @@ async function morningSummaries(): Promise<number> {
       body: parts.length ? parts.join(" ") : "Nothing due today. A good day to get ahead.",
       url: "/",
       tag: "morning",
-      badge: quests.length + habits.length,
+      badge: quests.length + habitCount,
     }).catch(() => 0);
     if (reached) sent++;
     else await release(p.user_id, "morning", [p.today]);

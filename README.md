@@ -220,32 +220,27 @@ week that is entirely next month, which most months don't need.
 
 ### Recurring habits
 
-A habit is a *definition*, not a quest. Each day it's due, one ordinary todo is
-materialised from it — earning the usual XP, sortable by deadline, prunable when
-finished. `/habits` manages the definitions and shows streaks.
+Habits are their own section, separate from the quest board (migration 028).
+`/habits` and the dashboard both show a grid: one row per habit, one column per
+day, a green check for a day kept and a red x for a day missed. Only today's
+cell can be pressed.
 
-Creating one: the quest form has a **Repeat** row directly under Deadline —
-Once / Every day / Weekdays / Weekly. Anything but "Once" creates a habit rather
-than a todo, and the deadline's **time** becomes each occurrence's cut-off while
-its date is ignored, because a repeating thing has no single date. With no time
-set it's the end of the day.
+Creating one: the Habits page, or the quest form's **Repeat** row (anything but
+"Once" creates a habit rather than a todo). Habits have no category and no time
+of day — a day ends at local midnight.
 
-The row is hidden when *editing*. A quest and a habit are different rows, so
-flipping an existing one would leave the original orphaned; an instance that came
-from a habit instead shows a link to the Habits page.
+**XP, 1% better every day.** A tick pays `round(1.01 ^ (streak - 1))`, capped at
+10: +1 until day 42, +10 from day 228. A due day that ends unticked is a miss:
+−1 XP, and that habit's streak resets so the next tick is +1 again. Un-ticking
+today gives back exactly what the tick paid. `habit_reward` (SQL) and
+`habitReward` ([`src/lib/habits.ts`](src/lib/habits.ts)) must agree.
 
-**Materialising on read, not spawning on completion.** "Create tomorrow's copy
-when today's is ticked" breaks the instant someone un-ticks it: you either
-double up or lose the next occurrence. `materialise_habits` instead asks "does
-today already have one?" and makes it if not — idempotent, so it runs on every
-page load beside `sweepOverdue` and `prune_finished` and survives any amount of
-toggling.
-
-Streaks move through `record_habit_completion` / `record_habit_uncompletion`,
-both keyed on the local date, so ticking twice can't inflate a streak and
-un-ticking rolls it back. `break_stale_streaks` zeroes anything that has gone
-past a due day, walking back to the previous *due* day so a weekend can't break
-a weekdays-only run.
+**Settling.** `settle_habits` walks each active habit from the day after
+`settled_through` to yesterday and writes a miss for every due day with no log
+row. Idempotent, so it runs on every page load beside `sweepOverdue`. Paused
+days are never settled: resuming moves `settled_through` up to yesterday.
+XP moves through `habit_move_xp`, with the same level floor and ratchet as
+quests.
 
 **Timezone, and how to remove it.** "The next day" only means something in a
 place, so `profiles.timezone` holds an IANA name reported by the browser. Every
@@ -254,7 +249,7 @@ read of it goes through `coalesce(timezone, 'UTC')`. To drop the feature: delete
 `alter table profiles drop column timezone`. Every query stays valid and habits
 roll over at UTC midnight for everyone. It's worth knowing the difference is
 real — while UTC says the 10th, Auckland is already on the 11th, so a UTC-only
-version would put the instance on the wrong day for a third of the world.
+version would count the day on the wrong date for a third of the world.
 
 ### Retention, and why the metrics are counters
 

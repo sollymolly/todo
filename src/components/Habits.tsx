@@ -3,25 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import HabitList from "@/components/HabitList";
+import HabitGrid from "@/components/HabitGrid";
+import { useFx } from "@/components/Fx";
 import { addHabit } from "@/lib/habit-actions";
 import {
   EVERY_DAY,
+  HABIT_MAX_XP,
   WEEKDAYS_ONLY,
   WEEKEND_ONLY,
   type Habit,
 } from "@/lib/habits";
-import type { Category } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
    The recurring habits page.
 
-   Each habit is a definition; the quest you tick lives on the board with
-   everything else. This page is for the shape of the commitment — how often,
-   in which category, how long the run is — not for doing today's.
-
-   The list itself is HabitList, shared with the dashboard so both places show
-   the same rows; what's unique here is the composer above it.
+   Habits are their own section, apart from the quest board: ticked here (or
+   in the dashboard's copy of the grid), never turned into quests. What's
+   unique to this page is the composer and the pause/delete controls.
    -------------------------------------------------------------------------- */
 
 /** Shortcuts that just fill in the day set; "Custom" leaves it to the chips. */
@@ -48,21 +46,21 @@ function sameDays(a: number[], b: number[]): boolean {
 
 export default function Habits({
   habits,
-  categories,
+  today,
   timezone,
 }: {
   habits: Habit[];
-  categories: Category[];
+  today: string;
   timezone: string | null;
 }) {
   const router = useRouter();
+  const { celebrate } = useFx();
   const [title, setTitle] = useState("");
   const [days, setDays] = useState<number[]>(EVERY_DAY);
   const [custom, setCustom] = useState(false);
   const [stop, setStop] = useState<"never" | "on" | "after">("never");
   const [endsOn, setEndsOn] = useState("");
   const [times, setTimes] = useState("10");
-  const [categoryId, setCategoryId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,7 +74,6 @@ export default function Habits({
     const res = await addHabit({
       title,
       days,
-      categoryId: categoryId || null,
       endsOn: stop === "on" ? endsOn || null : null,
       occurrencesLimit: stop === "after" ? Number(times) || null : null,
     });
@@ -98,7 +95,7 @@ export default function Habits({
           <p className="text-xs font-semibold text-mud-600">
             {active.length === 0
               ? "Things you mean to do again and again."
-              : `${active.length} running · a fresh quest appears each time one is due.`}
+              : `${active.length} running · tick today's off below.`}
           </p>
         </div>
         <Link
@@ -233,21 +230,6 @@ export default function Habits({
             </label>
           )}
 
-          {categories.length > 0 && (
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="field mt-3 w-full rounded-xl px-3 py-2 text-sm"
-            >
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          )}
-
           {error && (
             <p className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-sm font-semibold text-red-800 ring-1 ring-red-300">
               {error}
@@ -264,19 +246,24 @@ export default function Habits({
         </form>
 
         <p className="mt-3 text-[10px] leading-relaxed text-mud-400">
-          Due at the end of the day
-          {timezone ? ` in ${timezone.replace(/_/g, " ")}` : " (UTC)"}. Each one
-          becomes a normal quest on the board, worth the usual XP.
+          A tick is worth +1 XP, growing 1% for every day of the streak (up to
+          +{HABIT_MAX_XP}). A due day that ends without a tick is a miss: −1 XP,
+          the streak resets, and the day can&apos;t be ticked later. Days end at
+          midnight{timezone ? ` in ${timezone.replace(/_/g, " ")}` : " (UTC)"}.
         </p>
       </section>
 
       {/* --------------------------------------------------------- running */}
       {habits.length > 0 && (
         <div className="mt-6">
-          <HabitList
+          <HabitGrid
             habits={habits}
-            categories={categories}
+            today={today}
+            manage
             onChanged={refresh}
+            onTicked={({ delta, origin }) =>
+              delta !== 0 && celebrate({ ...origin, xp: delta, label: delta > 0 ? "habit kept" : undefined })
+            }
           />
         </div>
       )}
