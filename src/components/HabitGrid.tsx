@@ -309,6 +309,18 @@ function Cell({
       </span>
     );
 
+  // Not on the schedule at all: a faded box, so the gap reads as a rest day
+  // rather than something missing.
+  if (!h.days.includes(isoWeekday(day)))
+    return (
+      <span
+        className={`${box} border-dashed border-mud-200 bg-mud-100/50 text-xs text-mud-300`}
+        title="Rest day"
+      >
+        –
+      </span>
+    );
+
   // Coming up: an empty box on each day it is due, pressable once it is today.
   if (day > today) {
     const upcoming =
@@ -323,14 +335,10 @@ function Cell({
     );
   }
 
-  // Not scheduled, not yet started, after it ended, or a day that was paused.
-  const scheduled =
-    h.days.includes(isoWeekday(day)) && day >= h.created_on && day < today;
+  // A scheduled day that wasn't tracked: before the habit existed, while it
+  // was paused, or after it ended.
   return (
-    <span
-      className={`${box} border-transparent ${scheduled ? "text-mud-300" : "text-mud-200"}`}
-      title={scheduled ? "Not tracked" : "Rest day"}
-    >
+    <span className={`${box} border-transparent text-mud-300`} title="Not tracked">
       ·
     </span>
   );
