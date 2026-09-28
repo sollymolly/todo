@@ -29,7 +29,7 @@ async function handle(request: Request) {
   // Work-session tables nobody's checked in at lately: close them, and pay
   // what was earned. Runs whether or not push is set up.
   await sweepSessions().catch(() => {
-    /* migration 026 not run yet */
+    /* db/schema.sql not run yet */
   });
   // Talk is only kept for an hour; challenges nobody answered expire; a duel
   // both fighters walked away from is closed with no winner.

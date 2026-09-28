@@ -17,7 +17,7 @@ import type { Appearance, Equipped } from "@/lib/types";
         user id is never enough to see anything.
      2. Message bodies are opaque here. This file moves base64 around and
         never decrypts anything. (The account's key *is* held in escrow — see
-        migration 022 — but only ever handed back to that same account.)
+        src/lib/escrow.ts — but only ever handed back to that same account.)
    -------------------------------------------------------------------------- */
 
 export type PublicProfile = {
@@ -352,7 +352,7 @@ export async function listRequests(): Promise<PendingRequest[]> {
 export async function myKeys(): Promise<{
   publicKey: string | null;
   wrappedPrivateKey: string | null;
-  /** The server already holds this account's key (migration 022). */
+  /** The server already holds this account's key. */
   escrowed: boolean;
 }> {
   const me = await requireUserId();
@@ -367,7 +367,7 @@ export async function myKeys(): Promise<{
   };
 }
 
-/** Own query, so a database without migration 022 still loads Messages. */
+/** Own query, so a database without the escrow column still loads Messages. */
 async function hasEscrow(me: string): Promise<boolean> {
   try {
     const rows = (await sql`
@@ -405,7 +405,7 @@ export async function escrowMyKey(privateKey: string): Promise<boolean> {
     `) as unknown[];
     return rows.length > 0;
   } catch {
-    return false; // migration 022 not run yet
+    return false; // db/schema.sql not run yet
   }
 }
 
@@ -584,7 +584,7 @@ export type InboxEntry = {
   unread: number;
   /** When they last read something I sent them: what "Seen" is based on. */
   seen_at: string | null;
-  /** Walking around the village right now (migration 026). */
+  /** Walking around the village right now. */
   in_village: boolean;
 };
 
@@ -669,7 +669,7 @@ async function notifyMessage(recipientId: string, senderId: string) {
       tag: `msg-${senderId}`,
     });
   } catch {
-    /* notifications not set up (migration 025): the message still went */
+    /* notifications not set up: the message still went */
   }
 }
 
@@ -677,7 +677,7 @@ async function notifyMessage(recipientId: string, senderId: string) {
 function msg(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   if (/relation .* does not exist|column .* does not exist|function .* does not exist/i.test(m))
-    return "Run the migrations in db/migrations first.";
+    return "Run db/schema.sql first.";
   console.error("[social]", e);
   return "Something went wrong. Please try again.";
 }

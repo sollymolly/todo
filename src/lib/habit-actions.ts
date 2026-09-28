@@ -10,7 +10,7 @@ export type { Habit };
 /* --------------------------------------------------------------------------
    Habits: the recurring definitions, and a daily log of ticks and misses.
 
-   A habit never puts anything on the quest board (migration 028). Today is
+   A habit never puts anything on the quest board. Today is
    ticked straight from the Habits grid; any due day that ends without a tick
    is settled as a miss by settle_habits, which is also what charges it.
    -------------------------------------------------------------------------- */
@@ -53,7 +53,7 @@ export async function syncHabits(): Promise<number> {
     `) as { n: number }[];
     return rows[0]?.n ?? 0;
   } catch {
-    // A missing migration must not take the whole board down with it.
+    // An out-of-date database must not take the whole board down with it.
     return 0;
   }
 }

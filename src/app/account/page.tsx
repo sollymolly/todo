@@ -28,7 +28,7 @@ export default async function AccountPage() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-mud-700">
           {/column .* does not exist/i.test(message)
-            ? "Your database is behind — run db/migrations/002-social.sql in the Neon SQL Editor, then reload."
+            ? "Your database is behind — run db/schema.sql in the Neon SQL Editor, then reload."
             : "Could not load your account."}
         </p>
         {message && (

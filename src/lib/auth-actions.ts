@@ -314,7 +314,7 @@ const RESET_MINUTES = 30;
 const RESET_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const RESET_GONE = "This link has expired or has already been used. Ask for a new one.";
 
-/** What's stored in place of a token. See migration 021. */
+/** What's stored in place of a token. See db/schema.sql. */
 function resetHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -583,9 +583,9 @@ function friendly(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
 
   // Setup problems are worth naming: they're about *your* deployment, not a
-  // user's data, and the fix is a migration.
+  // user's data, and the fix is in db/schema.sql.
   if (/column .* does not exist/i.test(msg))
-    return "Your database is behind — run the migrations in db/migrations.";
+    return "Your database is behind — bring it up to date with db/schema.sql.";
   if (/relation .* does not exist/i.test(msg))
     return "The database tables aren't set up yet — run db/schema.sql.";
   if (/SESSION_SECRET/.test(msg)) return "The server is missing SESSION_SECRET.";

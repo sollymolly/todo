@@ -24,10 +24,10 @@ On the project dashboard hit **Connect** and copy the connection string. Use the
 In the Neon console open the **SQL Editor**, paste the entire contents of
 [`db/schema.sql`](db/schema.sql), and run it.
 
-If you set the database up earlier, also run everything in
-[`db/migrations/`](db/migrations) in filename order. `create table if not
-exists` skips tables that already exist, so it will never add a new **column**
-to a database you already have — that's what the migrations are for.
+It's safe to re-run. `create table if not exists` skips tables that already
+exist, though, so it won't add a new **column** to a database you already
+have; for that, run the matching `alter table ... add column if not exists`
+by hand.
 
 That creates the tables, the `bootstrap_user` function (which gives every new
 account a profile and four starter categories), and the XP functions.
@@ -220,7 +220,7 @@ week that is entirely next month, which most months don't need.
 
 ### Recurring habits
 
-Habits are their own section, separate from the quest board (migration 028).
+Habits are their own section, separate from the quest board.
 `/habits` and the dashboard both show a grid: one row per habit, one column per
 day, a green check for a day kept and a red x for a day missed. Only today's
 cell can be pressed.
@@ -575,8 +575,7 @@ See [`/privacy`](src/app/privacy/page.tsx) for the user-facing version.
 ## Layout
 
 ```
-db/schema.sql              tables, bootstrap, XP functions
-db/migrations/             run these on databases created before a change
+db/schema.sql              the whole database: tables and SQL functions
 src/proxy.ts               auth gate; verifies the session cookie
 src/lib/db.ts              lazy Neon client
 src/lib/session.ts         JWT cookie sign/verify

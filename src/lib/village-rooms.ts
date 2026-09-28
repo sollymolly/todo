@@ -4,7 +4,7 @@ import type { Appearance, Equipped } from "@/lib/types";
 import type { ChatLine, DuelView, Place, Pos, RoomPerson } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
-   Shared rooms, talk and duels (migration 027) — the server side. Used by
+   Shared rooms, talk and duels — the server side. Used by
    the check-in (village-server.ts) and the actions (village-actions.ts).
 
    Who's visible where:

@@ -8,7 +8,7 @@ import {
 } from "node:crypto";
 
 /* --------------------------------------------------------------------------
-   The server's copy of each account's message key — see migration 022.
+   The server's copy of each account's message key — see db/schema.sql.
 
    Server-only. The escrow is sealed with AES-256-GCM under a key derived from
    MESSAGE_KEY_SECRET, which lives in the environment and never in the

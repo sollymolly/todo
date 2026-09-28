@@ -23,7 +23,7 @@ import {
 } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
-   What you can do in the village (migration 026). Every statement is scoped
+   What you can do in the village. Every statement is scoped
    by user_id; anything touching another person checks the friendship first,
    on the server, whatever the page thinks.
    -------------------------------------------------------------------------- */

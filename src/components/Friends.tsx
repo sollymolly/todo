@@ -104,7 +104,7 @@ export default function Friends({
   requests: PendingRequest[];
   meId: string;
   myPublicKey: string | null;
-  /** The server already holds this account's message key (migration 022). */
+  /** The server already holds this account's message key. */
   keyEscrowed: boolean;
   /** Read from the URL instead; kept so the page's call site stays simple. */
   initialChat?: string | null;

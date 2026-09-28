@@ -1,7 +1,7 @@
 import type { Appearance, Equipped } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
-   The village (migration 026): what's shared by the page, the server and the
+   The village: what's shared by the page, the server and the
    check-in route, so everything is judged by the same rules.
    -------------------------------------------------------------------------- */
 
@@ -154,7 +154,7 @@ export type Neighbour = Villager & {
   doneToday: number;
   house: HouseLook;
   categories: { name: string; color: string; open: number }[];
-  /** Duels won and lost (migration 027). */
+  /** Duels won and lost. */
   duels?: { wins: number; losses: number };
 };
 

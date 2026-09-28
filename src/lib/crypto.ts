@@ -18,7 +18,7 @@
      masterKey   = PBKDF2(password, "questline-key|" + email)    -> never
                    leaves the browser. Wraps the user's ECDH private key.
 
-   The private key itself is also held by the server in escrow (migration 022,
+   The private key itself is also held by the server in escrow (see
    src/lib/escrow.ts), sealed under a server-side secret, so that messages
    belong to the account and survive a forgotten password. The password is one
    way to the key; being signed in is the other.

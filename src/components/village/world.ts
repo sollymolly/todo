@@ -64,7 +64,7 @@ export type World = {
   h: number;
   plots: Plot[];
   hall: { body: Rect; door: { x: number; y: number }; plaza: Rect };
-  /** The arena's gatehouse; its door leads in (migration 027). */
+  /** The arena's gatehouse; its door leads in. */
   arena: { body: Rect; door: { x: number; y: number } };
   tables: Table[];
   streets: Rect[];

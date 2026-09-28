@@ -50,10 +50,9 @@ export default async function FriendsPage({
           <p className="mt-2 text-sm leading-relaxed text-mud-700">
             {needsMigration ? (
               <>
-                Companions need one more migration. Open the Neon SQL Editor,
-                paste{" "}
+                Your database is behind. Open the Neon SQL Editor, paste{" "}
                 <code className="rounded bg-mud-800 px-1.5 py-0.5 text-mud-50">
-                  db/migrations/002-social.sql
+                  db/schema.sql
                 </code>{" "}
                 and run it, then reload.
               </>

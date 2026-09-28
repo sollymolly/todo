@@ -2,7 +2,7 @@ import { COLOR_KEYS } from "./game";
 
 /* --------------------------------------------------------------------------
    The table view's columns: the built-in ones every quest has, and the
-   custom ones a person adds themselves (migration 023) — Notion's
+   custom ones a person adds themselves — Notion's
    "properties".
 
    Shared by the browser and the server, so a layout or a value is checked by
@@ -70,7 +70,7 @@ export const LOCKED: ReadonlySet<string> = new Set(["title"]);
  * custom column as "custom:<id>". Anything not listed is hidden.
  *
  * And how the rows are sorted: by a column's key, or "manual" for the order
- * they were dragged into (migration 024). Saved so a hand-made order is still
+ * they were dragged into. Saved so a hand-made order is still
  * the one showing next time.
  */
 export type LayoutColumn = { key: string; width: number };

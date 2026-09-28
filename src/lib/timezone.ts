@@ -15,7 +15,7 @@ import { requireUserId } from "@/lib/session";
    ----------------------
    Delete this file, drop <TimezoneSync /> from the dashboard, and
    `alter table profiles drop column timezone`. Nothing else needs touching:
-   the coalesce in migration 013 means every query stays valid and habits simply
+   the coalesce in db/schema.sql means every query stays valid and habits simply
    roll over at UTC midnight for everyone.
    -------------------------------------------------------------------------- */
 

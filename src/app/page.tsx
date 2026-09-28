@@ -41,7 +41,7 @@ export default async function Home({
     sweptCount = (await sweepOverdue()).count;
     await pruneFinished();
     // Settles habit days that ended unticked as misses. Idempotent, so it runs
-    // on every load — see settle_habits in migration 028.
+    // on every load — see settle_habits in db/schema.sql.
     await syncHabits();
 
     const [profileRows, categoryRows, todoRows] = await Promise.all([
@@ -83,7 +83,7 @@ export default async function Home({
 
   if (!profile) return <SetupNotice message="Could not create your profile." />;
 
-  // Its own try/catch: this is the only read here that needs migration 002, and
+  // Its own try/catch: this is the only read here that needs the social tables, and
   // a missing badge is not a reason to withhold the whole board.
   let unread = 0;
   try {
@@ -92,7 +92,7 @@ export default async function Home({
     /* companions aren't set up yet */
   }
 
-  // Nudges from companions that haven't been seen (migration 026).
+  // Nudges from companions that haven't been seen.
   let nudges: NudgeView[] = [];
   try {
     nudges = await unseenNudges(userId);
@@ -100,7 +100,7 @@ export default async function Home({
     /* the village isn't set up yet */
   }
 
-  // Likewise for migration 015. Grouped here rather than passed down flat so
+  // Likewise for subtasks. Grouped here rather than passed down flat so
   // every row doesn't re-filter the whole set on each render.
   const steps: Record<string, Subtask[]> = {};
   try {
@@ -115,7 +115,7 @@ export default async function Home({
     /* steps aren't set up yet */
   }
 
-  // And for migration 023: the table's custom columns and their values.
+  // And for the table's custom columns and their values.
   let tableColumns: TableColumn[] = [];
   let tableValues: ColumnValues = {};
   try {
@@ -124,7 +124,7 @@ export default async function Home({
     /* custom columns aren't set up yet */
   }
 
-  // Habits and their log (migration 028), a section of their own.
+  // Habits and their log, a section of their own.
   let habits: Habit[] = [];
   let habitToday = new Date().toISOString().slice(0, 10);
   try {
@@ -155,7 +155,7 @@ export default async function Home({
       // for everybody and the server and client agree on the first render.
       //
       // The `in` check distinguishes "column exists, never seen" (null, so
-      // show it) from "migration 008 hasn't run" (absent). Without it, the
+      // show it) from "the column isn't there" (absent). Without it, the
       // dot on "What's new" could never be cleared. It's only a dot now: the
       // changelog used to open itself over the board, and the board is what
       // people come here for.
@@ -198,28 +198,17 @@ function StaleSessionNotice() {
 }
 
 function SetupNotice({ message }: { message: string }) {
-  const noTables = /relation .* does not exist|function .* does not exist/i.test(
-    message
-  );
-  // A missing column means the tables exist but a migration hasn't been run.
-  const needsMigration = /column .* does not exist/i.test(message);
+  const noTables =
+    /relation .* does not exist|column .* does not exist|function .* does not exist/i.test(
+      message
+    );
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-6">
       <div className="panel max-w-lg rounded-2xl p-7">
         <h1 className="font-display text-2xl text-amber-200">Almost there</h1>
         <p className="mt-2 text-sm leading-relaxed text-parch-300/75">
-          {needsMigration ? (
-            <>
-              Your database is one migration behind. Open the Neon SQL Editor,
-              paste{" "}
-              <code className="rounded bg-black/40 px-1.5 py-0.5 text-amber-200">
-                db/migrations/001-quest-order.sql
-              </code>{" "}
-              and run it, then reload. It only adds a column and backfills it —
-              nothing is dropped.
-            </>
-          ) : noTables ? (
+          {noTables ? (
             <>
               Your database is connected, but the tables aren&apos;t set up yet.
               Open the Neon SQL Editor, paste the contents of{" "}

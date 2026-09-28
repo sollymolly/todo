@@ -23,7 +23,7 @@ import {
    The password never leaves this component. It becomes two derived values in
    the browser: an auth secret for the server, and — from a different salt —
    the key that unwraps the private key used for encrypted messages. That
-   private key is then filed in escrow (migration 022), which is what lets
+   private key is then filed in escrow, which is what lets
    messages survive a forgotten password.
    -------------------------------------------------------------------------- */
 

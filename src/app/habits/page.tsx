@@ -37,9 +37,9 @@ export default async function HabitsPage() {
             Almost there
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-mud-700">
-            Habits need one more migration — run{" "}
+            Your database is behind — run{" "}
             <code className="rounded bg-mud-800 px-1.5 py-0.5 text-mud-50">
-              db/migrations/028-habit-log.sql
+              db/schema.sql
             </code>{" "}
             in the Neon SQL Editor, then reload.
           </p>

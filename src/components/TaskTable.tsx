@@ -54,14 +54,14 @@ import type { Category, Subtask, Todo } from "@/lib/types";
    header's edge to resize it; open its menu to sort, rename, hide or delete
    it; "+" adds a column of your own — text, number, checkbox, select or date
    — or brings back a hidden one. The layout is saved to the account, so it's
-   the same on every device (migration 023).
+   the same on every device.
 
    Sorting and filtering happen on the quests already loaded, so they cost no
    request.
 
    Rows can be dragged by the grip at their left edge — or moved with the
    arrow keys once it has focus — into an order of the table's own, apart
-   from the board's (migration 024). Dragging switches the sort to "Manual",
+   from the board's. Dragging switches the sort to "Manual",
    starting from the order that was showing.
    -------------------------------------------------------------------------- */
 

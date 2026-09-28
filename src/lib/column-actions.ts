@@ -14,7 +14,7 @@ import {
 } from "@/lib/table-columns";
 
 /* --------------------------------------------------------------------------
-   Custom table columns and the table's layout — see migration 023.
+   Custom table columns and the table's layout — see db/schema.sql.
 
    Every statement is scoped by user_id, like everything in actions.ts. A
    value is only written after it has been checked against its column's kind,

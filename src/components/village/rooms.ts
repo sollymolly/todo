@@ -3,7 +3,7 @@ import type { Tier } from "@/lib/village";
 import type { Grid } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
-   The two kinds of shared room (migration 027): inside a house, and the
+   The two kinds of shared room: inside a house, and the
    arena. Unlike the village outside, each is laid out the same for everyone
    in it, so positions mean the same thing on every screen.
 

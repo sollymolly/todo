@@ -7,7 +7,7 @@ import { PUSH_CONFIGURED, sendToUser } from "@/lib/push";
 import { cleanPrefs, DEFAULT_PREFS, isPushEndpoint, type NotificationPrefs } from "@/lib/notify";
 
 /* --------------------------------------------------------------------------
-   Notification settings and this device's subscription (migration 025).
+   Notification settings and this device's subscription.
    Every statement is scoped by user_id, like everything in actions.ts.
    -------------------------------------------------------------------------- */
 

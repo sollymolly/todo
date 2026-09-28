@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
-   Notification settings (migration 025), shared by the settings page and the
+   Notification settings, shared by the settings page and the
    server so both read and check them by the same rules.
    -------------------------------------------------------------------------- */
 
@@ -12,7 +12,7 @@ export type NotificationPrefs = {
   morningMinutes: number;
   /** A companion sent a message. */
   messages: boolean;
-  /** Companions may nudge you at all — in the app and as a notification (migration 026). */
+  /** Companions may nudge you at all — in the app and as a notification. */
   nudges: boolean;
 };
 

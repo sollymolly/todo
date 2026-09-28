@@ -7,7 +7,7 @@
    -------------------------------------------------------------------------- */
 
 /* Scheduling is a set of ISO weekdays (Monday = 1). Every cadence is just a
-   particular set, so "Mon/Wed/Fri" needs no special case â€” see migration 014. */
+   particular set, so "Mon/Wed/Fri" needs no special case â€” see db/schema.sql. */
 export const EVERY_DAY = [1, 2, 3, 4, 5, 6, 7];
 export const WEEKDAYS_ONLY = [1, 2, 3, 4, 5];
 export const WEEKEND_ONLY = [6, 7];
@@ -27,9 +27,9 @@ export function describeDays(days: number[]): string {
 
 /**
  * XP for the completion that brings a habit's streak to `streak`: 1% more per
- * day of the run, compounding, rounded, and capped at 10 — so +1 until day 42,
+ * day of the run, compounding, rounded, and capped at 10 â€” so +1 until day 42,
  * +10 from day 228. A miss costs 1 and resets the run. Mirrors habit_reward in
- * migration 028 — change both.
+ * db/schema.sql â€” change both.
  */
 export const HABIT_MISS_XP = -1;
 export const HABIT_MAX_XP = 10;
@@ -56,7 +56,7 @@ export type Habit = {
   /** Optional stopping conditions; whichever comes first ends the habit. */
   ends_on: string | null;
   occurrences_limit: number | null;
-  /** Days logged so far, ticked or missed — what the limit counts. */
+  /** Days logged so far, ticked or missed â€” what the limit counts. */
   occurrences_made: number;
   /** True once a stopping condition has been reached. */
   finished: boolean;

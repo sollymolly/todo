@@ -15,7 +15,7 @@ import {
 
    One row per habit, one column per day: a green check for a day kept, a red
    x for a day missed. Only today's cell can be pressed — once a day is over it
-   is settled one way or the other and stays that way (migration 028).
+   is settled one way or the other and stays that way.
    -------------------------------------------------------------------------- */
 
 export type HabitTicked = {

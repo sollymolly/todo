@@ -192,7 +192,7 @@ export async function uncompleteTodo(id: string): Promise<XpResult> {
 /**
  * Giving up on a quest: the penalty is charged, the missed deadline is recorded
  * against the category, and the quest itself is deleted. Only the counter
- * survives — see migration 018 for why the miss has to outlive the row.
+ * survives — see db/schema.sql for why the miss has to outlive the row.
  */
 export async function abandonTodo(id: string): Promise<XpResult> {
   const userId = await requireUserId();
@@ -258,7 +258,7 @@ export async function placeTodo(
 }
 
 /**
- * Dragging a row in the table view (migration 024). `orderedIds` is the whole
+ * Dragging a row in the table view. `orderedIds` is the whole
  * table in its new order, renumbered for the same reason placeTodo takes a
  * whole box: unplaced quests only have an order on screen until it's written.
  *
@@ -300,7 +300,7 @@ export async function reorderCategories(orderedIds: string[]) {
 
 /**
  * Deletes completed quests past the retention window, folding their counts into
- * the durable totals first. Irreversible by design — see migration 009.
+ * the durable totals first. Irreversible by design — see db/schema.sql.
  */
 export async function pruneFinished(): Promise<number> {
   const userId = await requireUserId();

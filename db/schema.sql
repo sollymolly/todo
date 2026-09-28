@@ -1,29 +1,63 @@
 -- ===========================================================================
 --  Questline — schema (plain PostgreSQL, tested on Neon)
---  Run once in the Neon SQL Editor, or: psql "$DATABASE_URL" -f db/schema.sql
+--  Run in the Neon SQL Editor, or: psql "$DATABASE_URL" -f db/schema.sql
 --  Safe to re-run: everything is idempotent.
+--
+--  This is the whole database. Changes are made here, in place; there is no
+--  separate migrations folder. When a change touches an existing database
+--  (a new column, a changed default), write the matching `alter table ... if
+--  not exists` and run it once by hand — `create table if not exists` will not
+--  add columns to a table that is already there.
 -- ===========================================================================
 
 create extension if not exists "pgcrypto";
 create extension if not exists "citext";
 
+-- ===========================================================================
+-- Accounts
+-- ===========================================================================
+
 -- ---------------------------------------------------------------------------
--- users: credentials only. Passwords are scrypt hashes written by the app.
+-- users: credentials, handle, and key material for end-to-end encrypted DMs.
+--
+--   public_key            SPKI, base64. Published to friends.
+--   wrapped_private_key   PKCS8 sealed with a key derived from the password in
+--                         the browser. The server never sees it unwrapped.
+--   escrowed_private_key  The same key sealed with AES-256-GCM under
+--                         MESSAGE_KEY_SECRET (environment, never the database),
+--                         so a password reset doesn't lose message history.
+--                         Whoever holds both the database and the secret can
+--                         read messages; the privacy policy says so.
+--   auth_version          1 = legacy (server received the raw password)
+--                         2 = the browser derives an auth secret; the raw
+--                             password never leaves it
+--   privacy_version       The accepted policy version; 0 routes the account
+--                         through the consent gate.
 -- ---------------------------------------------------------------------------
 create table if not exists users (
-  id             uuid primary key default gen_random_uuid(),
-  email          citext not null unique,
-  password_hash  text not null,
-  created_at     timestamptz not null default now()
+  id                    uuid primary key default gen_random_uuid(),
+  email                 citext not null unique,
+  username              citext not null unique,
+  password_hash         text not null,
+  auth_version          integer not null default 2,
+  public_key            text,
+  wrapped_private_key   text,
+  escrowed_private_key  text,
+  privacy_version       integer not null default 0,
+  privacy_accepted_at   timestamptz,
+  created_at            timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
--- profiles: XP and the character's look, one row per user.
+-- profiles: XP, level and the character's look, one row per user.
 -- ---------------------------------------------------------------------------
 create table if not exists profiles (
   id            uuid primary key references users(id) on delete cascade,
   display_name  text not null default 'Adventurer',
   xp            integer not null default 0,
+  -- A high-water mark: a rank once reached is kept, and XP is floored at the
+  -- bottom of it rather than at zero. So level_for_xp(xp) = level always.
+  level         integer not null default 1,
   appearance    jsonb not null default '{
                    "body": "male",
                    "skin": "fair",
@@ -32,8 +66,7 @@ create table if not exists profiles (
                    "eyes": "blue"
                  }'::jsonb,
   -- Gear ids, plus the chosen dye per dyeable slot. An absent or unrecognised
-  -- dye falls back to the item's own default, so `dyes` may be empty and rows
-  -- written before dyes existed need no backfill. See migration 016.
+  -- dye falls back to the item's own default, so `dyes` may be empty.
   equipped      jsonb not null default '{
                    "torso": "rags",
                    "weapon": "stick",
@@ -42,94 +75,31 @@ create table if not exists profiles (
                    "offhand": "none",
                    "dyes": {}
                  }'::jsonb,
+  -- IANA name. Everything reads it through coalesce(timezone, 'UTC').
+  timezone      text,
   -- Week key (Monday, YYYY-MM-DD, UTC) of the last changelog entry shown.
   -- Text, not date: a date column comes back through the session timezone and
-  -- makes week comparisons lie. See migration 008.
+  -- makes week comparisons lie.
   updates_seen  text,
+  -- The table view's layout (columns shown, order, widths, sort). Null means
+  -- the default layout.
+  table_layout  jsonb,
   -- Completed quests are deleted after a week, so their contribution to the
   -- metrics is folded in here on the way out. Every total the app shows is
-  -- "archived counter + live count". See migration 009.
+  -- "archived counter + live count".
   archived_done     integer not null default 0,
   archived_on_time  integer not null default 0,
   archived_late     integer not null default 0,
   -- Deadlines that were missed and then removed by abandoning the quest. The
-  -- row is gone, so this counter is the whole record. See migration 018.
+  -- row is gone, so this counter is the whole record.
   archived_missed   integer not null default 0,
   created_at    timestamptz not null default now()
 );
-
--- ---------------------------------------------------------------------------
--- categories: user-defined buckets (Work, Fitness, Music, ...)
--- ---------------------------------------------------------------------------
-create table if not exists categories (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references users(id) on delete cascade,
-  name        text not null,
-  -- Legacy. Categories are identified by name and colour; nothing reads this.
-  icon        text not null default '',
-  color       text not null default 'amber',
-  sort_order  integer not null default 0,
-  -- Pruned finished quests, split by outcome, for the Strengths figure. Kept
-  -- as counters because completed quests are deleted after a week.
-  archived_done     integer not null default 0,
-  archived_on_time  integer not null default 0,
-  archived_late     integer not null default 0,
-  -- Abandoned quests, which are deleted rather than kept. See migration 018.
-  archived_missed   integer not null default 0,
-  created_at  timestamptz not null default now()
-);
-create index if not exists categories_user_idx on categories(user_id, sort_order);
-
--- ---------------------------------------------------------------------------
--- todos ("quests").  status: open | done | failed
--- ---------------------------------------------------------------------------
-create table if not exists todos (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references users(id) on delete cascade,
-  category_id   uuid references categories(id) on delete set null,
-  title         text not null,
-  notes         text,
-  due_date      timestamptz,
-  status        text not null default 'open' check (status in ('open','done','failed')),
-  completed_at  timestamptz,
-  xp_awarded    integer not null default 0,
-  -- Legacy. Quests are ordered by due_date now, so nothing reads this.
-  position      double precision,
-  created_at    timestamptz not null default now()
-);
-create index if not exists todos_user_idx on todos(user_id, status, due_date);
-create index if not exists todos_position_idx on todos(user_id, position);
-
--- ---------------------------------------------------------------------------
--- feedback
---
--- `user_id` is nullable, and that nullability *is* the anonymity. When someone
--- ticks "send anonymously" no identifier is written at all — there is no
--- `anonymous` flag sitting next to a user id that the reader could simply
--- ignore. If the column is null, the link genuinely does not exist and cannot
--- be recovered.
---
--- `created_at` is rounded to the hour for anonymous submissions. Full-precision
--- timestamps are a correlation handle: whoever reads the inbox can also see who
--- was active, and a to-the-second stamp on a short user list often identifies
--- the author. The hour is plenty to know when something was said.
---
--- Named feedback keeps `on delete set null`, so deleting an account leaves the
--- feedback but drops the attribution rather than destroying the message.
--- ---------------------------------------------------------------------------
-create table if not exists feedback (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid references users(id) on delete set null,
-  body        text not null,
-  created_at  timestamptz not null default now()
-);
-
-create index if not exists feedback_created_idx on feedback(created_at desc);
 
 -- ---------------------------------------------------------------------------
 -- policy_acceptances: append-only record of agreement to the privacy policy.
 -- Answers "who agreed, to which version, when"; the text of each version is
--- in git. Deliberately does not record IP or user agent — see migration 006.
+-- in git. Deliberately does not record IP or user agent.
 -- ---------------------------------------------------------------------------
 create table if not exists policy_acceptances (
   id           uuid primary key default gen_random_uuid(),
@@ -155,7 +125,177 @@ create table if not exists rate_limits (
 create index if not exists rate_limits_window_idx on rate_limits(window_start);
 
 -- ---------------------------------------------------------------------------
--- xp_events: append-only ledger so the character's history is auditable
+-- password_resets: only the SHA-256 of each 256-bit token is stored, so a read
+-- of this table yields nothing usable. 30 minutes, single use, and asking for
+-- a new link kills older ones.
+-- ---------------------------------------------------------------------------
+create table if not exists password_resets (
+  token_hash  text primary key,
+  user_id     uuid not null references users(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null,
+  used_at     timestamptz
+);
+create index if not exists password_resets_user_idx on password_resets(user_id);
+
+-- ---------------------------------------------------------------------------
+-- feedback
+--
+-- `user_id` is nullable, and that nullability *is* the anonymity: "send
+-- anonymously" writes no identifier at all, rather than a flag next to one.
+-- `created_at` is rounded to the hour for anonymous submissions, because a
+-- to-the-second stamp on a short user list often identifies the author.
+-- ---------------------------------------------------------------------------
+create table if not exists feedback (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references users(id) on delete set null,
+  body        text not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists feedback_created_idx on feedback(created_at desc);
+
+-- ===========================================================================
+-- Quests
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- categories: user-defined buckets (Work, Fitness, Music, ...)
+-- ---------------------------------------------------------------------------
+create table if not exists categories (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users(id) on delete cascade,
+  name        text not null,
+  color       text not null default 'amber',
+  sort_order  integer not null default 0,
+  -- Pruned and abandoned quests, split by outcome, for the Strengths figure.
+  -- Counters because those rows are deleted.
+  archived_done     integer not null default 0,
+  archived_on_time  integer not null default 0,
+  archived_late     integer not null default 0,
+  archived_missed   integer not null default 0,
+  created_at  timestamptz not null default now()
+);
+create index if not exists categories_user_idx on categories(user_id, sort_order);
+
+-- ---------------------------------------------------------------------------
+-- habits: a schedule of ISO weekdays, ticked from the Habits grid. Each due
+-- day ends up as one habit_log row (done or missed); habits never put
+-- anything on the quest board.
+-- ---------------------------------------------------------------------------
+create table if not exists habits (
+  id                 uuid primary key default gen_random_uuid(),
+  user_id            uuid not null references users(id) on delete cascade,
+  title              text not null,
+  notes              text,
+  days               integer[] not null default '{1,2,3,4,5,6,7}'::integer[],
+  streak             integer not null default 0,
+  best_streak        integer not null default 0,
+  active             boolean not null default true,
+  -- Optional stopping conditions; whichever is reached first ends the habit.
+  -- The occurrence count is the number of habit_log rows.
+  ends_on            date,
+  occurrences_limit  integer,
+  -- Every due day up to here has a log row. Only moves forward.
+  settled_through    date,
+  created_at         timestamptz not null default now(),
+  -- cardinality(), not array_length(): array_length('{}', 1) is null, and a
+  -- CHECK only rejects false, so that spelling lets an empty set through.
+  constraint habits_days_valid check (
+    cardinality(days) between 1 and 7
+    and days <@ '{1,2,3,4,5,6,7}'::integer[]
+  )
+);
+create index if not exists habits_user_idx on habits(user_id, active);
+
+create table if not exists habit_log (
+  habit_id   uuid not null references habits(id) on delete cascade,
+  user_id    uuid not null references users(id) on delete cascade,
+  /* The habit owner's local date. */
+  day        date not null,
+  done       boolean not null,
+  /* What actually moved on the profile: +reward for a tick, -1 (or less, at
+     the level floor) for a miss. Un-ticking gives this back. */
+  xp         integer not null default 0,
+  /* The streak this row left the habit on. 0 for a miss. */
+  streak     integer not null default 0,
+  created_at timestamptz not null default now(),
+  primary key (habit_id, day)
+);
+create index if not exists habit_log_user_idx on habit_log(user_id, day desc);
+
+-- ---------------------------------------------------------------------------
+-- todos ("quests").  status: open | done | failed
+-- ---------------------------------------------------------------------------
+create table if not exists todos (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references users(id) on delete cascade,
+  category_id     uuid references categories(id) on delete set null,
+  -- Legacy: habits used to create quests. Nothing sets it any more.
+  habit_id        uuid references habits(id) on delete cascade,
+  title           text not null,
+  notes           text,
+  due_date        timestamptz,
+  status          text not null default 'open' check (status in ('open','done','failed')),
+  completed_at    timestamptz,
+  -- The net XP this quest has moved, so no transition can pay or charge twice.
+  xp_awarded      integer not null default 0,
+  -- Manual order within the category box on the board. Null = slotted in by
+  -- deadline; editing the deadline or category clears it.
+  position        double precision,
+  -- Manual order in the table view, one flat list across categories.
+  table_position  double precision,
+  created_at      timestamptz not null default now()
+);
+create index if not exists todos_user_idx on todos(user_id, status, due_date);
+create index if not exists todos_position_idx on todos(user_id, position);
+
+-- ---------------------------------------------------------------------------
+-- subtasks: steps within a quest. Deliberately not rows in todos (every quest
+-- query would need a parent filter, and missing one in sweep_overdue would
+-- charge a penalty per step), and deliberately worth no XP (splitting a quest
+-- would pay several times for the same work).
+-- ---------------------------------------------------------------------------
+create table if not exists subtasks (
+  id         uuid primary key default gen_random_uuid(),
+  todo_id    uuid not null references todos(id) on delete cascade,
+  -- Denormalised from the parent so every write can be scoped by owner.
+  user_id    uuid not null references users(id) on delete cascade,
+  title      text not null check (length(btrim(title)) between 1 and 200),
+  done       boolean not null default false,
+  position   integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists subtasks_todo_idx on subtasks (todo_id, position);
+create index if not exists subtasks_user_idx on subtasks (user_id);
+
+-- ---------------------------------------------------------------------------
+-- Custom table-view columns (like Notion properties) and their per-quest
+-- values. Values are jsonb, validated against the column's kind in
+-- src/lib/table-columns.ts before they're written.
+-- ---------------------------------------------------------------------------
+create table if not exists table_columns (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users(id) on delete cascade,
+  name        text not null check (length(name) between 1 and 40),
+  kind        text not null check (kind in ('text', 'number', 'checkbox', 'select', 'date')),
+  /* For select columns: [{ "id", "label", "color" }]. Empty otherwise. */
+  options     jsonb not null default '[]'::jsonb,
+  created_at  timestamptz not null default now()
+);
+create index if not exists table_columns_user_idx on table_columns(user_id);
+
+create table if not exists todo_values (
+  todo_id    uuid not null references todos(id) on delete cascade,
+  column_id  uuid not null references table_columns(id) on delete cascade,
+  /* Denormalised owner, so every read and write can be scoped by it. */
+  user_id    uuid not null references users(id) on delete cascade,
+  value      jsonb not null,
+  primary key (todo_id, column_id)
+);
+create index if not exists todo_values_user_idx on todo_values(user_id);
+
+-- ---------------------------------------------------------------------------
+-- xp_events: append-only ledger so the character's history is auditable.
 -- ---------------------------------------------------------------------------
 create table if not exists xp_events (
   id          uuid primary key default gen_random_uuid(),
@@ -167,10 +307,250 @@ create table if not exists xp_events (
 );
 create index if not exists xp_events_user_idx on xp_events(user_id, created_at desc);
 
+-- ---------------------------------------------------------------------------
+-- ranks: the level curve. Same numbers as RANKS in src/lib/game.ts — change
+-- both. Past the last named rank each level costs 1000.
+-- ---------------------------------------------------------------------------
+create table if not exists ranks (
+  level integer primary key,
+  xp    integer not null
+);
+
+insert into ranks (level, xp) values
+  (1, 0), (2, 20), (3, 50), (4, 100), (5, 170),
+  (6, 260), (7, 380), (8, 530), (9, 720), (10, 950),
+  (11, 1220), (12, 1540), (13, 1910), (14, 2340), (15, 2830),
+  (16, 3380), (17, 4000), (18, 4690), (19, 5460), (20, 6310)
+on conflict (level) do update set xp = excluded.xp;
+
 -- ===========================================================================
--- Bootstrap: give a brand-new user a profile and starter categories.
--- Called by the app immediately after inserting the user row.
+-- Social
 -- ===========================================================================
+
+-- friendships: one row per pair, stored with the requester first.
+create table if not exists friendships (
+  id            uuid primary key default gen_random_uuid(),
+  requester_id  uuid not null references users(id) on delete cascade,
+  addressee_id  uuid not null references users(id) on delete cascade,
+  status        text not null default 'pending'
+                  check (status in ('pending', 'accepted', 'declined')),
+  created_at    timestamptz not null default now(),
+  responded_at  timestamptz,
+  constraint friendship_pair unique (requester_id, addressee_id),
+  constraint friendship_not_self check (requester_id <> addressee_id)
+);
+create index if not exists friendships_requester_idx on friendships(requester_id, status);
+create index if not exists friendships_addressee_idx on friendships(addressee_id, status);
+-- The pair is unique whichever way round it is stored, so two people pressing
+-- "add" at the same instant can't create both (A,B) and (B,A).
+create unique index if not exists friendships_pair_uniq
+  on friendships (least(requester_id, addressee_id), greatest(requester_id, addressee_id));
+
+-- messages: ciphertext only. `iv` and `body` are base64 AES-GCM under a key
+-- derived by ECDH between the two users' keypairs, so both ends decrypt the
+-- same row.
+create table if not exists messages (
+  id            uuid primary key default gen_random_uuid(),
+  sender_id     uuid not null references users(id) on delete cascade,
+  recipient_id  uuid not null references users(id) on delete cascade,
+  iv            text not null,
+  body          text not null,
+  created_at    timestamptz not null default now(),
+  read_at       timestamptz
+);
+create index if not exists messages_pair_idx
+  on messages(least(sender_id, recipient_id), greatest(sender_id, recipient_id), created_at);
+create index if not exists messages_inbox_idx on messages(recipient_id, read_at);
+
+-- ---------------------------------------------------------------------------
+-- Push notifications.
+--
+--   push_subscriptions  One row per device that said yes. A device the push
+--                       service reports gone (404/410) is deleted when found.
+--   notification_prefs  Per person, for all their devices. No row = defaults.
+--   notification_log    What's been sent, so the five-minute job never sends
+--                       the same thing twice. A deadline reminder is keyed by
+--                       quest *and* deadline; a morning summary by local date.
+-- ---------------------------------------------------------------------------
+create table if not exists push_subscriptions (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users(id) on delete cascade,
+  endpoint    text not null unique check (length(endpoint) <= 1000),
+  p256dh      text not null check (length(p256dh) <= 200),
+  auth        text not null check (length(auth) <= 100),
+  created_at  timestamptz not null default now(),
+  last_ok_at  timestamptz
+);
+create index if not exists push_subscriptions_user_idx on push_subscriptions(user_id);
+
+create table if not exists notification_prefs (
+  user_id         uuid primary key references users(id) on delete cascade,
+  /* A reminder this long before each quest's deadline. */
+  due_soon        boolean not null default true,
+  lead_minutes    integer not null default 60
+                    check (lead_minutes in (15, 30, 60, 120, 240, 1440)),
+  /* One summary each morning, at this local time (minutes past midnight). */
+  morning         boolean not null default true,
+  morning_minutes integer not null default 480
+                    check (morning_minutes between 0 and 1439),
+  /* A new message from a companion. */
+  messages        boolean not null default true,
+  /* Receiving nudges at all, in the app and as notifications. */
+  nudges          boolean not null default true,
+  updated_at      timestamptz not null default now()
+);
+
+create table if not exists notification_log (
+  user_id  uuid not null references users(id) on delete cascade,
+  kind     text not null check (kind in ('due', 'morning')),
+  ref      text not null,
+  sent_at  timestamptz not null default now(),
+  primary key (user_id, kind, ref)
+);
+create index if not exists notification_log_sent_idx on notification_log(sent_at);
+
+-- ===========================================================================
+-- The village
+--
+-- Everyone's village is laid out differently — it holds *their* friends — so
+-- presence outside is a place, not a coordinate. Inside a house or in the
+-- arena the layout is shared, so presence there carries a position. A row is
+-- refreshed every few seconds while the village is open; a stale `seen_at` is
+-- what "gone home" means.
+-- ===========================================================================
+create table if not exists village_presence (
+  user_id  uuid primary key references users(id) on delete cascade,
+  place    text not null default 'home'
+             constraint village_presence_place_check
+             check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena')),
+  /* place = 'house' or 'inside': whose house. */
+  host_id  uuid references users(id) on delete set null,
+  x        real,
+  y        real,
+  facing   smallint,
+  seen_at  timestamptz not null default now()
+);
+
+-- A house's size follows its owner's level and is never stored. `interior`
+-- holds wallpaper, floor and furniture; null is the default room.
+create table if not exists houses (
+  user_id     uuid primary key references users(id) on delete cascade,
+  style       text not null default 'timber' check (style in ('timber', 'stone', 'brick')),
+  roof        text not null default 'red' check (length(roof) <= 20),
+  garden      text not null default 'flowers' check (garden in ('flowers', 'vegetables', 'hedges')),
+  interior    jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+-- Door notes are short plain text — unlike messages, not encrypted.
+create table if not exists door_notes (
+  id         uuid primary key default gen_random_uuid(),
+  owner_id   uuid not null references users(id) on delete cascade,
+  author_id  uuid not null references users(id) on delete cascade,
+  body       text not null check (length(body) between 1 and 140),
+  created_at timestamptz not null default now(),
+  read_at    timestamptz
+);
+create index if not exists door_notes_owner_idx on door_notes(owner_id, created_at desc);
+
+-- A nudge may point at one of the recipient's own quests; only its category
+-- and deadline are ever shown (quest_hint). Frequency is enforced by the app.
+create table if not exists nudges (
+  id         uuid primary key default gen_random_uuid(),
+  from_id    uuid not null references users(id) on delete cascade,
+  to_id      uuid not null references users(id) on delete cascade,
+  body       text not null check (length(body) between 1 and 80),
+  todo_id    uuid references todos(id) on delete set null,
+  created_at timestamptz not null default now(),
+  seen_at    timestamptz
+);
+create index if not exists nudges_to_idx on nudges(to_id, created_at desc);
+create index if not exists nudges_pair_idx on nudges(from_id, to_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Work sessions: a table at the town hall. Membership is kept as intervals, so
+-- time worked is their sum. A member silent for two minutes is taken off as of
+-- their last check-in; a session ends when its last member leaves. With focus
+-- on, everyone shares one 25/5 clock counted from `focus_from`.
+-- ---------------------------------------------------------------------------
+create table if not exists work_sessions (
+  id          uuid primary key default gen_random_uuid(),
+  host_id     uuid not null references users(id) on delete cascade,
+  focus       boolean not null default false,
+  focus_from  timestamptz,
+  started_at  timestamptz not null default now(),
+  ended_at    timestamptz
+);
+create index if not exists work_sessions_open_idx on work_sessions(ended_at) where ended_at is null;
+
+create table if not exists session_members (
+  id              uuid primary key default gen_random_uuid(),
+  session_id      uuid not null references work_sessions(id) on delete cascade,
+  user_id         uuid not null references users(id) on delete cascade,
+  /* What they're working on. Only its category is ever shown to others. */
+  todo_id         uuid references todos(id) on delete set null,
+  joined_at       timestamptz not null default now(),
+  last_seen       timestamptz not null default now(),
+  left_at         timestamptz,
+  /* Whole 25-minute stretches of this stay already paid for. */
+  rounds_paid     integer not null default 0
+);
+create index if not exists session_members_session_idx on session_members(session_id) where left_at is null;
+create index if not exists session_members_user_idx on session_members(user_id, joined_at desc);
+/* One table at a time. */
+create unique index if not exists session_members_one_open
+  on session_members(user_id) where left_at is null;
+
+-- Talk in a shared space. Short, plain text, deleted after an hour.
+create table if not exists space_chat (
+  id         uuid primary key default gen_random_uuid(),
+  /* 'inside:<owner id>', 'arena' or 'hall' */
+  space      text not null check (length(space) <= 60),
+  author_id  uuid not null references users(id) on delete cascade,
+  body       text not null check (length(body) between 1 and 140),
+  created_at timestamptz not null default now()
+);
+create index if not exists space_chat_space_idx on space_chat(space, created_at desc);
+
+-- Duels: each round both pick strike, guard or feint; it resolves when both
+-- have picked or time runs out. Gear sets the numbers at the start. No XP
+-- changes hands.
+create table if not exists duels (
+  id          uuid primary key default gen_random_uuid(),
+  a_id        uuid not null references users(id) on delete cascade, -- challenger
+  b_id        uuid not null references users(id) on delete cascade,
+  status      text not null default 'pending'
+                check (status in ('pending', 'active', 'done', 'declined', 'expired', 'cancelled')),
+  /* Fixed at the start from each side's gear. */
+  a_hp        integer, b_hp integer,
+  a_max       integer, b_max integer,
+  a_atk       integer, b_atk integer,
+  a_def       integer, b_def integer,
+  round       integer not null default 0,
+  a_move      text check (a_move in ('strike', 'guard', 'feint')),
+  b_move      text check (b_move in ('strike', 'guard', 'feint')),
+  round_ends  timestamptz,
+  winner      uuid references users(id) on delete set null,
+  /* Every resolved round: [{ r, a, b, ad, bd }] — moves and damage taken. */
+  log         jsonb not null default '[]'::jsonb,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  check (a_id <> b_id)
+);
+create index if not exists duels_open_idx on duels(status) where status in ('pending', 'active');
+create index if not exists duels_a_idx on duels(a_id, created_at desc);
+create index if not exists duels_b_idx on duels(b_id, created_at desc);
+
+-- ===========================================================================
+-- Functions. Defined after every table: SQL-language bodies are checked
+-- against the tables they name when they're created.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- bootstrap_user — a brand-new user's profile and starter categories. Called
+-- by the app right after inserting the user row. New accounts start caught up
+-- on the changelog.
+-- ---------------------------------------------------------------------------
 create or replace function bootstrap_user(p_user uuid, p_name text)
 returns void
 language plpgsql
@@ -196,18 +576,93 @@ begin
 end;
 $$;
 
+-- are_friends(a, b) — gates every social read.
+create or replace function are_friends(p_a uuid, p_b uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1 from friendships
+     where status = 'accepted'
+       and ((requester_id = p_a and addressee_id = p_b)
+         or (requester_id = p_b and addressee_id = p_a))
+  );
+$$;
+
+-- ---------------------------------------------------------------------------
+-- reset_password — spends a token and replaces the credential, atomically.
+-- Returns the account's id, or null when the token is unknown, spent or
+-- expired; the first UPDATE claims the token, so a double submit is harmless.
+--
+-- The browser brings back the escrowed key re-sealed under the new password,
+-- with the same public key, and messages carry on. Only when it had to make a
+-- new keypair (no escrow) are the old messages deleted: no key opens them.
+-- ---------------------------------------------------------------------------
+create or replace function reset_password(
+  p_token_hash  text,
+  p_hash        text,
+  p_public_key  text,
+  p_wrapped     text,
+  p_escrow      text
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_user     uuid;
+  v_old_key  text;
+begin
+  update password_resets
+     set used_at = now()
+   where token_hash = p_token_hash
+     and used_at is null
+     and expires_at > now()
+  returning user_id into v_user;
+
+  if v_user is null then return null; end if;
+
+  select public_key into v_old_key from users where id = v_user for update;
+
+  update users set
+    password_hash        = p_hash,
+    auth_version         = 2,
+    public_key           = p_public_key,
+    wrapped_private_key  = p_wrapped,
+    -- A new escrow if one came with the reset; otherwise keep the old one only
+    -- while it still belongs to this keypair.
+    escrowed_private_key = case
+                             when p_escrow is not null then p_escrow
+                             when v_old_key is not distinct from p_public_key
+                               then escrowed_private_key
+                             else null
+                           end
+  where id = v_user;
+
+  -- Any other link still in someone's inbox dies with this one.
+  update password_resets
+     set used_at = now()
+   where user_id = v_user and used_at is null;
+
+  if v_old_key is distinct from p_public_key then
+    delete from messages where sender_id = v_user or recipient_id = v_user;
+  end if;
+
+  return v_user;
+end;
+$$;
+
 -- ===========================================================================
 -- XP economy. All arithmetic lives here so a compromised client cannot
--- inflate its own score, and every mutation is one atomic statement.
---
--- Every function takes p_user explicitly and filters on it, so a quest id
--- belonging to someone else simply will not match.
+-- inflate its own score, and every mutation is one atomic statement. Every
+-- function takes p_user explicitly and filters on it, so a quest id belonging
+-- to someone else simply will not match.
 -- ===========================================================================
 
 -- Awards for finishing a quest. Mirrored in XP in src/lib/game.ts.
---   no due date       → +5   (minimal, per the honour system)
---   due date, on time → +10  (early counts the same as on time)
---   due date, late    → +3   (partial credit for finishing at all)
+--   no due date       → +5
+--   due date, on time → +10
+--   due date, late    → +3
 create or replace function quest_xp(p_due timestamptz, p_done timestamptz)
 returns integer language sql immutable as $$
   select case
@@ -217,13 +672,15 @@ returns integer language sql immutable as $$
   end;
 $$;
 
--- Penalty for a quest that was promised with a deadline and not delivered.
+-- A deadline that went by: -10. Calling a quest off yourself: -5.
 create or replace function quest_penalty()
 returns integer language sql immutable as $$ select -10; $$;
 
--- ---------------------------------------------------------------------------
--- What a quest should be contributing, given its current state.
--- ---------------------------------------------------------------------------
+create or replace function quest_abandon_penalty()
+returns integer language sql immutable as $$ select -5; $$;
+
+-- What a quest should be contributing, given its state. Every transition moves
+-- `target - xp_awarded`, so repeating one moves nothing the second time.
 create or replace function quest_target_xp(
   p_status    text,
   p_due       timestamptz,
@@ -237,20 +694,33 @@ language sql immutable as $$
   end;
 $$;
 
--- ---------------------------------------------------------------------------
--- What a quest's ledger says it has actually moved. Used only by the backfill;
--- from here on todos.xp_awarded carries the same number.
--- ---------------------------------------------------------------------------
-create or replace function quest_applied_xp(p_todo uuid)
+create or replace function xp_for_level(p_level integer)
 returns integer
 language sql stable as $$
-  select coalesce(sum(delta), 0)::integer from xp_events where todo_id = p_todo;
+  select case
+    when p_level <= 1 then 0
+    else coalesce(
+      (select r.xp from ranks r where r.level = p_level),
+      (select max(r.xp) + (p_level - max(r.level)) * 1000 from ranks r)
+    )
+  end;
 $$;
 
--- ===========================================================================
--- The single place a quest changes state. Every action below funnels through
--- it, which is what makes the accounting impossible to double up.
--- ===========================================================================
+create or replace function level_for_xp(p_xp integer)
+returns integer
+language sql stable as $$
+  with top as (select max(level) as level, max(xp) as xp from ranks)
+  select case
+    when p_xp >= (select xp from top)
+      then (select level from top) + ((p_xp - (select xp from top)) / 1000)
+    else coalesce((select max(r.level) from ranks r where r.xp <= p_xp), 1)
+  end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- quest_transition — the single place a quest changes state. Every action
+-- funnels through it, which is what makes the accounting impossible to double.
+-- ---------------------------------------------------------------------------
 create or replace function quest_transition(
   p_user      uuid,
   p_todo      uuid,
@@ -265,6 +735,8 @@ declare
   v_target  integer;
   v_delta   integer;
   v_before  integer;
+  v_level   integer;
+  v_floor   integer;
   v_applied integer;
   v_xp      integer;
 begin
@@ -276,14 +748,16 @@ begin
   v_target := quest_target_xp(p_status, v_todo.due_date, p_completed);
   v_delta  := v_target - v_todo.xp_awarded;
 
-  select xp into v_before from profiles where id = p_user for update;
+  select xp, level into v_before, v_level from profiles where id = p_user for update;
   if v_before is null then raise exception 'Profile not found'; end if;
 
-  -- XP is floored at zero, so a penalty bigger than the balance is only partly
-  -- charged. Recording what actually *moved* rather than what was intended is
-  -- what keeps this reconcilable: the next transition sees the true figure and
-  -- corrects from there, instead of refunding XP that was never taken.
-  v_applied := greatest(0, v_before + v_delta) - v_before;
+  -- A rank already reached is kept, so XP stops at the bottom of it.
+  v_floor := xp_for_level(v_level);
+
+  -- Record what actually *moved*, not what was intended: a penalty bigger than
+  -- the room above the floor is only partly charged, and the next transition
+  -- has to see the true figure or it will refund XP that was never taken.
+  v_applied := greatest(v_floor, v_before + v_delta) - v_before;
 
   update todos set
     status       = p_status,
@@ -294,6 +768,11 @@ begin
   update profiles set xp = v_before + v_applied
    where id = p_user
   returning xp into v_xp;
+
+  -- Ratchet, never reverse.
+  if level_for_xp(v_xp) > v_level then
+    update profiles set level = level_for_xp(v_xp) where id = p_user;
+  end if;
 
   -- A no-op transition leaves no trace, so the ledger stays readable.
   if v_applied <> 0 then
@@ -312,8 +791,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- complete_quest — works from 'open' *or* 'failed'. Completing a missed quest
--- refunds the penalty and pays the late award in one move; redemption is
--- always available and is worth exactly the same as any other late finish.
+-- refunds the penalty and pays the late award in one move.
 -- ---------------------------------------------------------------------------
 create or replace function complete_quest(p_user uuid, p_todo uuid)
 returns json
@@ -339,13 +817,10 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- uncomplete_quest — puts the quest back exactly where it would have been had
--- it never been completed: missed if the deadline is already past the grace
--- period, open otherwise.
---
--- Going straight to 'failed' matters. Returning it to 'open' with a long-past
--- deadline is what caused the double charge: the refund landed immediately and
--- the penalty came back on the next page load, reading as XP vanishing twice.
+-- uncomplete_quest — back to exactly where it would have been: missed if the
+-- deadline is past the grace period, open otherwise. Going straight to
+-- 'failed' matters; reopening a long-overdue quest would let the next sweep
+-- charge the penalty a second time.
 -- ---------------------------------------------------------------------------
 create or replace function uncomplete_quest(p_user uuid, p_todo uuid)
 returns json
@@ -370,32 +845,127 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- abandon_quest — give up on a deadline by hand.
+-- abandon_quest — call off anything unfinished: record the miss and remove it.
 --
--- Superseded by migration 018: abandoning now costs -5, records the miss on the
--- archived_missed counters and deletes the quest. This version is left here as
--- the shape of the original; the migration replaces it.
+-- Costs whichever is worse, -5 or what the quest already took — never a
+-- refund. Reconciling a missed quest (-10) up to -5 would make abandoning
+-- every miss on sight the winning move.
+--
+-- The xp_events row is written before the delete; its todo_id is nulled on
+-- the way out, which is why the title goes into the reason.
 -- ---------------------------------------------------------------------------
 create or replace function abandon_quest(p_user uuid, p_todo uuid)
 returns json
 language plpgsql
 as $$
 declare
-  v_todo todos%rowtype;
+  v_todo    todos%rowtype;
+  v_before  integer;
+  v_level   integer;
+  v_floor   integer;
+  v_target  integer;
+  v_delta   integer;
+  v_applied integer;
+  v_xp      integer;
 begin
-  select * into v_todo from todos where id = p_todo and user_id = p_user;
+  select * into v_todo from todos
+    where id = p_todo and user_id = p_user
+    for update;
   if not found then raise exception 'Quest not found'; end if;
-  if v_todo.status <> 'open' then raise exception 'Quest is not open'; end if;
+  if v_todo.status = 'done' then
+    raise exception 'Quest is already finished';
+  end if;
 
-  return quest_transition(p_user, p_todo, 'failed', null, 'abandoned the quest');
+  select xp, level into v_before, v_level from profiles where id = p_user for update;
+  if v_before is null then raise exception 'Profile not found'; end if;
+
+  v_floor   := xp_for_level(v_level);
+  v_target  := least(quest_abandon_penalty(), v_todo.xp_awarded);
+  v_delta   := v_target - v_todo.xp_awarded;
+  v_applied := greatest(v_floor, v_before + v_delta) - v_before;
+
+  update profiles set xp = v_before + v_applied
+   where id = p_user
+  returning xp into v_xp;
+
+  if v_applied <> 0 then
+    insert into xp_events (user_id, todo_id, delta, reason)
+    values (p_user, p_todo, v_applied,
+            'abandoned "' || left(v_todo.title, 60) || '"');
+  end if;
+
+  -- A quest with no deadline promised nothing, so it is left out of both sides
+  -- of the Strengths figure rather than counted as a miss.
+  if v_todo.due_date is not null then
+    update categories set archived_missed = archived_missed + 1
+     where id = v_todo.category_id and user_id = p_user;
+    update profiles set archived_missed = archived_missed + 1
+     where id = p_user;
+  end if;
+
+  delete from todos where id = p_todo and user_id = p_user;
+
+  return json_build_object(
+    'delta', v_applied, 'awarded', 0, 'xp', v_xp, 'reason', 'oath broken'
+  );
 end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- sweep_overdue — auto-fail anything more than 24h past its deadline.
---
--- Only picks status = 'open', so an already-missed quest is never re-swept.
--- Even if it were, the transition would move zero XP.
+-- delete_quest — remove a quest as though it had never been written down.
+-- Nothing is counted and whatever XP it moved is put back (floor permitting),
+-- which is what makes delete the tool for mistakes and abandon the one for
+-- giving up.
+-- ---------------------------------------------------------------------------
+create or replace function delete_quest(p_user uuid, p_todo uuid)
+returns json
+language plpgsql
+as $$
+declare
+  v_todo    todos%rowtype;
+  v_before  integer;
+  v_level   integer;
+  v_floor   integer;
+  v_applied integer;
+  v_xp      integer;
+begin
+  select * into v_todo from todos
+    where id = p_todo and user_id = p_user
+    for update;
+  -- Already gone is a success: the board can be a click behind the database.
+  if not found then
+    select xp into v_xp from profiles where id = p_user;
+    return json_build_object('delta', 0, 'awarded', 0, 'xp', coalesce(v_xp, 0),
+                             'reason', 'quest deleted');
+  end if;
+
+  select xp, level into v_before, v_level from profiles where id = p_user for update;
+  if v_before is null then raise exception 'Profile not found'; end if;
+
+  v_floor   := xp_for_level(v_level);
+  v_applied := greatest(v_floor, v_before - v_todo.xp_awarded) - v_before;
+
+  update profiles set xp = v_before + v_applied
+   where id = p_user
+  returning xp into v_xp;
+
+  if v_applied <> 0 then
+    insert into xp_events (user_id, todo_id, delta, reason)
+    values (p_user, p_todo, v_applied,
+            'deleted "' || left(v_todo.title, 60) || '"');
+  end if;
+
+  delete from todos where id = p_todo and user_id = p_user;
+
+  return json_build_object(
+    'delta', v_applied, 'awarded', 0, 'xp', v_xp, 'reason', 'quest deleted'
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- sweep_overdue — auto-fail anything more than 24h past its deadline. Only
+-- picks 'open', and a repeat transition would move zero XP anyway.
 -- ---------------------------------------------------------------------------
 create or replace function sweep_overdue(p_user uuid)
 returns json
@@ -436,8 +1006,9 @@ $$;
 -- prune_finished — delete completed quests past the retention window, folding
 -- them into the counters on the way out. Returns how many were removed.
 --
--- Missed quests are deliberately untouched: they are still completable, so they
--- are not finished, and deleting them would take away the chance to redeem one.
+-- One statement, so the delete and every counter move commit together; a row
+-- can only be deleted once, so it can only be counted once. Missed quests are
+-- untouched: they can still be redeemed.
 -- ---------------------------------------------------------------------------
 create or replace function prune_finished(p_user uuid, p_days integer default 7)
 returns integer
@@ -499,244 +1070,316 @@ begin
 end;
 $$;
 
--- ===========================================================================
--- Recurring habits (see migration 013 for the reasoning)
--- ===========================================================================
-alter table profiles add column if not exists timezone text;
-
-create table if not exists habits (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users(id) on delete cascade,
-  title        text not null,
-  notes        text,
-  category_id  uuid references categories(id) on delete set null,
-  cadence      text not null default 'daily'
-                 check (cadence in ('daily', 'weekdays', 'weekly')),
-  /* For 'weekly': ISO day of week, 1 = Monday. Ignored otherwise. */
-  weekday      integer not null default 1 check (weekday between 1 and 7),
-  /* Local time the day's instance is due, minutes past midnight. */
-  due_minutes  integer not null default 1439 check (due_minutes between 0 and 1439),
-  streak       integer not null default 0,
-  best_streak  integer not null default 0,
-  /* Local date of the last completion — what the streak is measured against. */
-  last_done_on date,
-  active       boolean not null default true,
-  created_at   timestamptz not null default now()
-);
-
-create index if not exists habits_user_idx on habits(user_id, active);
-
--- A quest that came from a habit. `on delete cascade` so deleting a habit takes
--- its outstanding instances with it; finished ones are already history.
-alter table todos add column if not exists habit_id uuid
-  references habits(id) on delete cascade;
-
-create index if not exists todos_habit_idx on todos(habit_id, due_date desc);
-
--- A habit day cleared by hand: today's instance was abandoned or deleted, so
--- materialisation must not put it back. See migration 018.
-create table if not exists habit_skips (
-  habit_id   uuid not null references habits(id) on delete cascade,
-  day        date not null,
-  created_at timestamptz not null default now(),
-  primary key (habit_id, day)
-);
-
 -- ---------------------------------------------------------------------------
--- is_habit_due(cadence, weekday, day) — whether a habit runs on a given date.
+-- add_subtask — append a step, enforcing ownership and the cap of twenty in
+-- one statement so neither can be raced. Returns nothing if the quest isn't
+-- the caller's or is full.
 -- ---------------------------------------------------------------------------
-create or replace function is_habit_due(
-  p_cadence text,
-  p_weekday integer,
-  p_day     date
+create or replace function add_subtask(
+  p_user  uuid,
+  p_todo  uuid,
+  p_title text
+) returns setof subtasks
+language sql
+as $$
+  insert into subtasks (todo_id, user_id, title, position)
+  select t.id,
+         t.user_id,
+         btrim(p_title),
+         coalesce((select max(s.position) + 1 from subtasks s where s.todo_id = t.id), 0)
+    from todos t
+   where t.id = p_todo
+     and t.user_id = p_user
+     and btrim(p_title) <> ''
+     and (select count(*) from subtasks s where s.todo_id = t.id) < 20
+  returning *;
+$$;
+
+-- ===========================================================================
+-- Habits — "1% better every day"
+--
+-- A tick pays round(1.01 ^ (streak - 1)), capped at 10, where streak counts
+-- this tick: +1 until day 42, +10 from day 228. A miss costs -1 and resets the
+-- streak. Mirrored in habitReward() in src/lib/habits.ts — change both.
+-- ===========================================================================
+
+create or replace function is_habit_due(p_days integer[], p_day date)
+returns boolean
+language sql immutable as $$
+  select extract(isodow from p_day)::integer = any(p_days);
+$$;
+
+create or replace function habit_over(
+  p_ends_on date,
+  p_limit    integer,
+  p_made     integer,
+  p_today    date
 ) returns boolean
 language sql immutable as $$
-  select case p_cadence
-    when 'daily'    then true
-    when 'weekdays' then extract(isodow from p_day) between 1 and 5
-    when 'weekly'   then extract(isodow from p_day) = p_weekday
-    else false
-  end;
+  select (p_ends_on is not null and p_today > p_ends_on)
+      or (p_limit   is not null and p_made >= p_limit);
+$$;
+
+create or replace function habit_reward(p_streak integer)
+returns integer
+language sql immutable as $$
+  select least(10, greatest(1, round(power(1.01, greatest(p_streak, 1) - 1))::integer));
+$$;
+
+-- habit_move_xp — add (or take) XP with the same floor and ratchet as
+-- quest_transition. Returns what actually moved.
+create or replace function habit_move_xp(
+  p_user   uuid,
+  p_delta  integer,
+  p_reason text
+) returns integer
+language plpgsql
+as $$
+declare
+  v_before  integer;
+  v_level   integer;
+  v_applied integer;
+  v_xp      integer;
+begin
+  if p_delta = 0 then return 0; end if;
+
+  select xp, level into v_before, v_level from profiles where id = p_user for update;
+  if v_before is null then raise exception 'Profile not found'; end if;
+
+  v_applied := greatest(xp_for_level(v_level), v_before + p_delta) - v_before;
+  if v_applied = 0 then return 0; end if;
+
+  update profiles set xp = v_before + v_applied where id = p_user
+  returning xp into v_xp;
+
+  if level_for_xp(v_xp) > v_level then
+    update profiles set level = level_for_xp(v_xp) where id = p_user;
+  end if;
+
+  insert into xp_events (user_id, todo_id, delta, reason)
+  values (p_user, null, v_applied, p_reason);
+
+  return v_applied;
+end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- materialise_habits — make sure every active, due habit has today's instance.
--- Returns how many were created. Safe to call on every page load.
---
--- The guard is "does an instance already exist for this habit on this local
--- day", which is what makes it idempotent: completing, un-completing and
--- missing all leave that instance in place, so nothing is ever duplicated.
+-- settle_habits — write a miss for every due day that ended without a tick.
+-- Returns the XP moved (zero or negative). Idempotent (a logged day is
+-- skipped, settled_through only moves forward), so it runs on every page load.
+-- Paused habits aren't settled; resuming moves settled_through to yesterday.
 -- ---------------------------------------------------------------------------
-create or replace function materialise_habits(p_user uuid)
+create or replace function settle_habits(p_user uuid)
 returns integer
 language plpgsql
 as $$
 declare
-  v_zone    text;
-  v_today   date;
-  v_made    integer := 0;
-  h         habits%rowtype;
-  v_due     timestamptz;
+  v_zone   text;
+  v_today  date;
+  v_to     date;
+  v_day    date;
+  v_logged integer;
+  v_moved  integer;
+  v_total  integer := 0;
+  h        habits%rowtype;
 begin
   select coalesce(timezone, 'UTC') into v_zone from profiles where id = p_user;
   if v_zone is null then return 0; end if;
-
   v_today := (now() at time zone v_zone)::date;
 
   for h in
     select * from habits
      where user_id = p_user and active
+       and (settled_through is null or settled_through < v_today - 1)
+     for update
   loop
-    if not is_habit_due(h.cadence, h.weekday, v_today) then
-      continue;
-    end if;
+    v_day := coalesce(h.settled_through + 1, (h.created_at at time zone v_zone)::date);
+    v_to  := v_today - 1;
+    if h.ends_on is not null and h.ends_on < v_to then v_to := h.ends_on; end if;
 
-    -- Already have today's? Then there is nothing to do, however that instance
-    -- has since been completed, un-completed or missed.
-    if exists (
-      select 1 from todos t
-       where t.habit_id = h.id
-         and (t.due_date at time zone v_zone)::date = v_today
-    ) then
-      continue;
-    end if;
+    select count(*)::integer into v_logged from habit_log where habit_id = h.id;
 
-    -- Local wall-clock time, converted back to an instant.
-    v_due := (v_today + make_interval(mins => h.due_minutes)) at time zone v_zone;
+    while v_day <= v_to loop
+      exit when h.occurrences_limit is not null and v_logged >= h.occurrences_limit;
 
-    insert into todos (user_id, title, notes, due_date, category_id, habit_id)
-    values (p_user, h.title, h.notes, v_due, h.category_id, h.id);
+      if is_habit_due(h.days, v_day)
+         and not exists (select 1 from habit_log l where l.habit_id = h.id and l.day = v_day)
+      then
+        v_moved := habit_move_xp(p_user, -1, 'missed habit: ' || h.title);
+        insert into habit_log (habit_id, user_id, day, done, xp, streak)
+        values (h.id, p_user, v_day, false, v_moved, 0);
+        h.streak := 0;
+        v_logged := v_logged + 1;
+        v_total  := v_total + v_moved;
+      end if;
 
-    v_made := v_made + 1;
-  end loop;
-
-  return v_made;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- record_habit_completion — advance the streak.
---
--- Idempotent for the same day: ticking, un-ticking and re-ticking today's
--- instance counts once, because the streak only moves when last_done_on
--- actually changes. A gap of more than one due day restarts at 1.
--- ---------------------------------------------------------------------------
-create or replace function record_habit_completion(p_user uuid, p_habit uuid)
-returns integer
-language plpgsql
-as $$
-declare
-  v_zone  text;
-  v_today date;
-  h       habits%rowtype;
-  v_prev  date;
-  v_next  integer;
-begin
-  select coalesce(p.timezone, 'UTC') into v_zone from profiles p where p.id = p_user;
-
-  select * into h from habits
-   where id = p_habit and user_id = p_user
-   for update;
-  if not found then return 0; end if;
-
-  v_today := (now() at time zone v_zone)::date;
-  if h.last_done_on = v_today then
-    return h.streak; -- already counted today
-  end if;
-
-  -- Walk back to the previous day this habit was actually due. Missing a
-  -- Saturday shouldn't break a weekdays-only streak.
-  v_prev := v_today - 1;
-  while v_prev > v_today - 8 and not is_habit_due(h.cadence, h.weekday, v_prev) loop
-    v_prev := v_prev - 1;
-  end loop;
-
-  v_next := case when h.last_done_on = v_prev then h.streak + 1 else 1 end;
-
-  update habits set
-    streak       = v_next,
-    best_streak  = greatest(best_streak, v_next),
-    last_done_on = v_today
-  where id = p_habit;
-
-  return v_next;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- break_stale_streaks — zero the streak of any habit that has gone past a due
--- day without being completed. Called alongside materialisation.
--- ---------------------------------------------------------------------------
-create or replace function break_stale_streaks(p_user uuid)
-returns void
-language plpgsql
-as $$
-declare
-  v_zone  text;
-  v_today date;
-  h       habits%rowtype;
-  v_prev  date;
-begin
-  select coalesce(p.timezone, 'UTC') into v_zone from profiles p where p.id = p_user;
-  v_today := (now() at time zone v_zone)::date;
-
-  for h in select * from habits where user_id = p_user and active and streak > 0
-  loop
-    v_prev := v_today - 1;
-    while v_prev > v_today - 8 and not is_habit_due(h.cadence, h.weekday, v_prev) loop
-      v_prev := v_prev - 1;
+      v_day := v_day + 1;
     end loop;
 
-    -- Never completed, or last completed before the previous due day: broken.
-    if h.last_done_on is null or h.last_done_on < v_prev then
-      update habits set streak = 0 where id = h.id;
-    end if;
+    update habits set
+      streak          = h.streak,
+      settled_through = v_today - 1
+    where id = h.id;
   end loop;
+
+  return v_total;
 end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- record_habit_uncompletion — undo today's tick.
---
--- Without this a streak could be banked and then kept by un-ticking, which
--- would make the number a claim rather than a record. Walking last_done_on back
--- to the previous due day is what lets tomorrow's check behave correctly.
+-- toggle_habit — tick today, or un-tick it. Settles first so the streak the
+-- reward is priced on is already honest about any miss.
 -- ---------------------------------------------------------------------------
-create or replace function record_habit_uncompletion(p_user uuid, p_habit uuid)
+create or replace function toggle_habit(p_user uuid, p_habit uuid)
+returns json
+language plpgsql
+as $$
+declare
+  v_zone   text;
+  v_today  date;
+  v_logged integer;
+  v_streak integer;
+  v_moved  integer;
+  v_log    habit_log%rowtype;
+  h        habits%rowtype;
+begin
+  perform settle_habits(p_user);
+
+  select coalesce(timezone, 'UTC') into v_zone from profiles where id = p_user;
+  v_today := (now() at time zone v_zone)::date;
+
+  select * into h from habits where id = p_habit and user_id = p_user for update;
+  if not found then raise exception 'Habit not found'; end if;
+
+  select * into v_log from habit_log where habit_id = h.id and day = v_today;
+
+  if found then
+    -- Un-tick: give back exactly what the tick moved.
+    v_moved := habit_move_xp(p_user, -v_log.xp, 'un-ticked habit: ' || h.title);
+    delete from habit_log where habit_id = h.id and day = v_today;
+    v_streak := greatest(0, h.streak - 1);
+    update habits set streak = v_streak where id = h.id;
+    return json_build_object(
+      'done', false, 'delta', v_moved, 'streak', v_streak,
+      'xp', (select xp from profiles where id = p_user)
+    );
+  end if;
+
+  if not h.active then raise exception 'That habit is paused.'; end if;
+  if not is_habit_due(h.days, v_today) then raise exception 'That habit isn''t due today.'; end if;
+  select count(*)::integer into v_logged from habit_log where habit_id = h.id;
+  if habit_over(h.ends_on, h.occurrences_limit, v_logged, v_today) then
+    raise exception 'That habit has finished.';
+  end if;
+
+  v_streak := h.streak + 1;
+  v_moved  := habit_move_xp(p_user, habit_reward(v_streak), 'habit: ' || h.title);
+
+  insert into habit_log (habit_id, user_id, day, done, xp, streak)
+  values (h.id, p_user, v_today, true, v_moved, v_streak);
+
+  update habits set
+    streak      = v_streak,
+    best_streak = greatest(best_streak, v_streak)
+  where id = h.id;
+
+  return json_build_object(
+    'done', true, 'delta', v_moved, 'streak', v_streak,
+    'xp', (select xp from profiles where id = p_user)
+  );
+end;
+$$;
+
+-- ===========================================================================
+-- Village
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- award_focus_xp — pays for whole 25-minute stretches a member has sat
+-- through since last paid: +3, or +4 if anyone was there with them, at most
+-- 12 a day in their own timezone. Returns the XP just added.
+-- ---------------------------------------------------------------------------
+create or replace function award_focus_xp(p_member uuid)
 returns integer
 language plpgsql
 as $$
 declare
-  v_zone  text;
-  v_today date;
-  h       habits%rowtype;
-  v_prev  date;
-  v_next  integer;
+  m          session_members%rowtype;
+  v_zone     text;
+  v_rounds   integer;
+  v_today    integer;
+  v_total    integer := 0;
+  v_amount   integer;
+  v_together boolean;
+  v_before   integer;
 begin
-  select coalesce(p.timezone, 'UTC') into v_zone from profiles p where p.id = p_user;
-
-  select * into h from habits
-   where id = p_habit and user_id = p_user
-   for update;
+  select * into m from session_members where id = p_member for update;
   if not found then return 0; end if;
 
-  v_today := (now() at time zone v_zone)::date;
-  if h.last_done_on is distinct from v_today then
-    return h.streak; -- today was never counted, so nothing to undo
-  end if;
+  v_rounds := floor(extract(epoch from (coalesce(m.left_at, m.last_seen) - m.joined_at)) / 1500)::integer;
+  if v_rounds <= m.rounds_paid then return 0; end if;
 
-  v_prev := v_today - 1;
-  while v_prev > v_today - 8 and not is_habit_due(h.cadence, h.weekday, v_prev) loop
-    v_prev := v_prev - 1;
+  select coalesce((select name from pg_timezone_names where name = p.timezone), 'UTC')
+    into v_zone from profiles p where p.id = m.user_id;
+  v_zone := coalesce(v_zone, 'UTC');
+
+  select coalesce(sum(delta), 0) into v_today from xp_events
+   where user_id = m.user_id and reason like 'focus%'
+     and (created_at at time zone v_zone)::date = (now() at time zone v_zone)::date;
+
+  -- Was anyone else at the table during this stay?
+  select exists (
+    select 1 from session_members o
+     where o.session_id = m.session_id and o.user_id <> m.user_id
+       and o.joined_at < coalesce(m.left_at, m.last_seen)
+       and coalesce(o.left_at, o.last_seen) > m.joined_at
+  ) into v_together;
+
+  for i in (m.rounds_paid + 1)..v_rounds loop
+    v_amount := least(case when v_together then 4 else 3 end, greatest(0, 12 - v_today));
+    exit when v_amount <= 0;
+    select xp into v_before from profiles where id = m.user_id for update;
+    update profiles set xp = v_before + v_amount where id = m.user_id;
+    insert into xp_events (user_id, todo_id, delta, reason)
+    values (m.user_id, null, v_amount,
+            case when v_together then 'focus round, together' else 'focus round' end);
+    v_today := v_today + v_amount;
+    v_total := v_total + v_amount;
   end loop;
 
-  v_next := greatest(0, h.streak - 1);
-
-  update habits set
-    streak       = v_next,
-    last_done_on = case when v_next > 0 then v_prev else null end
-  where id = p_habit;
-
-  return v_next;
+  -- Rounds past the cap still count as paid: they aren't owed tomorrow.
+  update session_members set rounds_paid = v_rounds where id = p_member;
+  return v_total;
 end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- quest_hint — a quest described without its title: its category and when
+-- it's due, in its owner's timezone. "your Work quest due 5:00 PM", or with
+-- 'their' for the person nudging. Titles never leave their owner.
+-- ---------------------------------------------------------------------------
+create or replace function quest_hint(p_todo uuid, p_whose text default 'your')
+returns text
+language sql
+stable
+as $$
+  select p_whose || ' ' || coalesce(c.name || ' ', '') || 'quest ' ||
+    case
+      when t.due_date is null then 'with no deadline'
+      when t.due_date < now()
+           and (t.due_date at time zone z.tz)::date = (now() at time zone z.tz)::date
+        then 'that was due at ' || to_char(t.due_date at time zone z.tz, 'FMHH12:MI AM')
+      when t.due_date < now()
+        then 'that was due ' || to_char(t.due_date at time zone z.tz, 'Mon FMDD')
+      when (t.due_date at time zone z.tz)::date = (now() at time zone z.tz)::date
+        then 'due at ' || to_char(t.due_date at time zone z.tz, 'FMHH12:MI AM')
+      else 'due ' || to_char(t.due_date at time zone z.tz, 'Mon FMDD')
+    end
+  from todos t
+  left join categories c on c.id = t.category_id
+  cross join lateral (
+    select coalesce((select name from pg_timezone_names where name = pr.timezone), 'UTC') as tz
+      from profiles pr where pr.id = t.user_id
+  ) z
+  where t.id = p_todo
 $$;

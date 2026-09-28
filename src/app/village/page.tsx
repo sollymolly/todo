@@ -25,7 +25,7 @@ export default async function VillagePage() {
         <div className="panel max-w-lg rounded-2xl p-7">
           <h1 className="font-display text-2xl font-bold text-mud-900">The village isn&apos;t built yet</h1>
           <p className="mt-2 text-sm leading-relaxed text-mud-700">
-            Run <code>db/migrations/026-village.sql</code> in the Neon SQL Editor, then reload.
+            Run <code>db/schema.sql</code> in the Neon SQL Editor, then reload.
           </p>
           <Link href="/" className="mt-4 inline-block text-sm font-semibold text-grass-700">
             ← Back to quests

@@ -10,7 +10,7 @@ import {
    The one place the app gets the key that reads messages.
 
    This tab's copy if it has one; otherwise the account's copy from escrow
-   (migration 022). That second step is what makes messages belong to the
+  . That second step is what makes messages belong to the
    account: a new device, or a sign-in that never typed a password here, still
    opens every thread.
    -------------------------------------------------------------------------- */

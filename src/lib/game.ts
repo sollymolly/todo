@@ -49,7 +49,7 @@ export function previewXp(due: string | null): number {
  * for a missed quest: the deadline charged the full penalty when it went by, and
  * giving up afterwards is never allowed to hand any of that back.
  *
- * Mirrors the least() in abandon_quest (migration 019) — change both.
+ * Mirrors the least() in abandon_quest — change both.
  */
 export function abandonCost(xpAwarded: number): number {
   return Math.min(XP.abandon, xpAwarded) - xpAwarded;
@@ -67,7 +67,7 @@ export type Rank = { level: number; title: string; xp: number };
  * at XP.onTime, which is why they moved when the awards did — the pace of the
  * game is unchanged, only the units it is counted in.
  *
- * Mirrored in the `ranks` table (migration 017) — change both.
+ * Mirrored in the `ranks` table — change both.
  */
 export const RANKS: Rank[] = [
   { level: 1, title: "Ragged Peasant", xp: 0 },

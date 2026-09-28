@@ -16,7 +16,7 @@ import {
 } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
-   The village's queries (migration 026), shared by the page, its actions and
+   The village's queries, shared by the page, its actions and
    the check-in route. Server-only; every read of another person is limited
    to accepted friends — except the knight and name of someone sharing a
    work-session table, which is what sitting at one means.
@@ -181,7 +181,7 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
   const friends = await friendIdsOf(me);
   const known = new Set([me, ...friends]);
 
-  // Inside a house or in the arena is migration 027's. If that hasn't run,
+  // Inside a house or in the arena needs newer columns. If they're missing,
   // keep the outdoor village working and count them as out on the square.
   let shared = false;
   if (place && (place.kind === "inside" || place.kind === "arena")) {
@@ -230,7 +230,7 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
       };
     duels = await duelsFor(me, place?.kind === "arena" && shared, known);
   } catch {
-    /* migration 027 not run yet */
+    /* db/schema.sql not run yet */
   }
 
   return {
@@ -348,7 +348,7 @@ export async function loadVillage(me: string): Promise<VillageData> {
   try {
     records = await duelRecords(ids);
   } catch {
-    /* no duels yet (migration 027) */
+    /* no duels yet */
   }
   meView.duels = records.get(me) ?? { wins: 0, losses: 0 };
   for (const n of neighbours) n.duels = records.get(n.id) ?? { wins: 0, losses: 0 };

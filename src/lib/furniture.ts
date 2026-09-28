@@ -1,7 +1,7 @@
 import type { Tier } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
-   Inside a house (migration 027): how big the room is, what it can hold, and
+   Inside a house: how big the room is, what it can hold, and
    the rules a layout must follow. Shared by the decorating screen and the
    server, which re-checks everything before saving.
 

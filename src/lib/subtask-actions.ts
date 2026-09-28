@@ -9,7 +9,7 @@ import type { Subtask } from "@/lib/types";
 /* --------------------------------------------------------------------------
    Steps within a quest.
 
-   Nothing here touches XP, and that is the point — see migration 015. A step is
+   Nothing here touches XP, and that is the point — see db/schema.sql. A step is
    a title and a tick. The quest keeps its single award.
 
    Same rule as actions.ts: every statement is scoped by user_id. Never drop the

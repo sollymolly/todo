@@ -3,7 +3,7 @@ import type { Equipped } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
    Duel rules — pure, shared by the server (which decides) and the page
-   (which explains). See migration 027.
+   (which explains). See db/schema.sql.
 
    Every round both fighters choose at once:
 
