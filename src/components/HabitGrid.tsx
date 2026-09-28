@@ -83,13 +83,13 @@ export default function HabitGrid({
   const days = Array.from({ length: span }, (_, i) => shiftDay(start, i));
   const earliest = shiftDay(today, -179);
 
-  async function tick(h: Habit, e: React.MouseEvent) {
-    if (busy) return;
+  async function tick(h: Habit, day: string, e: React.MouseEvent) {
+    if (busy || day > today) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const origin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     setBusy(h.id);
     setError(null);
-    const res = await toggleHabit(h.id);
+    const res = await toggleHabit(h.id, day);
     setBusy(null);
     if (!res.ok) {
       setError(res.error);
@@ -100,12 +100,13 @@ export default function HabitGrid({
       prev.map((x) => {
         if (x.id !== h.id) return x;
         const log = { ...x.log };
-        if (res.done) log[today] = { done: true, xp: res.delta };
-        else delete log[today];
+        // Un-ticking today clears the day; a past day stays settled, as a miss.
+        if (res.done || day !== today) log[day] = { done: res.done, xp: res.dayXp };
+        else delete log[day];
         return {
           ...x,
           log,
-          done_today: res.done,
+          done_today: day === today ? res.done : x.done_today,
           streak: res.streak,
           best_streak: Math.max(x.best_streak, res.streak),
         };
@@ -239,7 +240,7 @@ export default function HabitGrid({
                       day={d}
                       today={today}
                       busy={busy === h.id}
-                      onTick={(e) => tick(h, e)}
+                      onTick={(e) => tick(h, d, e)}
                     />
                   </td>
                 ))}
@@ -295,19 +296,36 @@ function Cell({
     );
   }
 
-  if (entry?.done)
+  // A past day that was settled either way can still be changed: a miss
+  // ticked late, or a tick taken back. Days to come never get here.
+  if (entry && day < today) {
+    const label = new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    });
     return (
-      <span className={`${box} border-grass-700 bg-grass-600 text-white`} title={`Kept (+${entry.xp} XP)`}>
-        ✓
-      </span>
+      <button
+        onClick={onTick}
+        disabled={busy}
+        aria-pressed={entry.done}
+        aria-label={`${entry.done ? "Un-tick" : "Tick"} ${h.title} for ${label}`}
+        title={
+          entry.done
+            ? `Kept (+${entry.xp} XP) — press to undo`
+            : `Missed (${entry.xp} XP) — press if you did it after all`
+        }
+        className={`${box} transition ${
+          entry.done
+            ? "border-grass-700 bg-grass-600 text-white hover:bg-grass-500"
+            : "border-red-600 bg-red-500 text-white hover:border-grass-500 hover:bg-red-400"
+        } ${busy ? "animate-pulse" : ""}`}
+      >
+        {entry.done ? "✓" : "✕"}
+      </button>
     );
-
-  if (entry)
-    return (
-      <span className={`${box} border-red-600 bg-red-500 text-white`} title={`Missed (${entry.xp} XP)`}>
-        ✕
-      </span>
-    );
+  }
 
   // Not on the schedule at all: a faded box, so the gap reads as a rest day
   // rather than something missing.

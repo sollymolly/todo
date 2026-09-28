@@ -1290,6 +1290,108 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- restreak_habit — rewrite the streak on every log row from p_from on, given
+-- the streak going into that day, and leave the habit on the last one. Only
+-- the stored streaks move; XP already paid for later days stays as it is.
+-- ---------------------------------------------------------------------------
+create or replace function restreak_habit(p_habit uuid, p_from date, p_seed integer)
+returns integer
+language plpgsql
+as $$
+declare
+  r     record;
+  v_run integer := p_seed;
+begin
+  for r in
+    select day, done, streak from habit_log
+     where habit_id = p_habit and day >= p_from
+     order by day
+  loop
+    v_run := case when r.done then v_run + 1 else 0 end;
+    if r.streak <> v_run then
+      update habit_log set streak = v_run where habit_id = p_habit and day = r.day;
+    end if;
+  end loop;
+
+  update habits set
+    streak      = v_run,
+    best_streak = greatest(best_streak, v_run)
+  where id = p_habit;
+
+  return v_run;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- toggle_habit_day — tick or un-tick any day up to today. Today is
+-- toggle_habit. A past day has already been settled, so it flips between
+-- kept and missed rather than disappearing: ticking a miss late refunds the
+-- -1 and pays the reward the streak up to that day earns; un-ticking a past
+-- day charges it as a miss again. Days to come can't be ticked.
+-- ---------------------------------------------------------------------------
+create or replace function toggle_habit_day(p_user uuid, p_habit uuid, p_day date)
+returns json
+language plpgsql
+as $$
+declare
+  v_zone   text;
+  v_today  date;
+  v_seed   integer;
+  v_undo   integer;
+  v_moved  integer;
+  v_streak integer;
+  v_log    habit_log%rowtype;
+  h        habits%rowtype;
+begin
+  perform settle_habits(p_user);
+
+  select coalesce(timezone, 'UTC') into v_zone from profiles where id = p_user;
+  v_today := (now() at time zone v_zone)::date;
+
+  if p_day is null or p_day = v_today then
+    return toggle_habit(p_user, p_habit);
+  end if;
+  if p_day > v_today then raise exception 'That day hasn''t happened yet.'; end if;
+
+  select * into h from habits where id = p_habit and user_id = p_user for update;
+  if not found then raise exception 'Habit not found'; end if;
+
+  -- Only a settled day can change; a day with no row was never on the
+  -- schedule, or fell before the habit, in a pause or after it ended.
+  select * into v_log from habit_log where habit_id = h.id and day = p_day for update;
+  if not found then raise exception 'That habit wasn''t due that day.'; end if;
+
+  -- The streak going into this day. Rows written when habits moved to the log
+  -- carry streak 0, so a kept one counts as at least 1.
+  select case when l.done then greatest(l.streak, 1) else 0 end into v_seed
+    from habit_log l
+   where l.habit_id = h.id and l.day < p_day
+   order by l.day desc
+   limit 1;
+  v_seed := coalesce(v_seed, 0);
+
+  -- Give back whatever this day moved, then charge or pay its new state.
+  if v_log.done then
+    v_undo  := habit_move_xp(p_user, -v_log.xp, 'un-ticked habit: ' || h.title);
+    v_moved := habit_move_xp(p_user, -1, 'missed habit: ' || h.title);
+  else
+    v_undo  := habit_move_xp(p_user, -v_log.xp, 'miss refunded: ' || h.title);
+    v_moved := habit_move_xp(p_user, habit_reward(v_seed + 1), 'habit, ticked late: ' || h.title);
+  end if;
+
+  update habit_log set done = not v_log.done, xp = v_moved
+   where habit_id = h.id and day = p_day;
+
+  v_streak := restreak_habit(h.id, p_day, v_seed);
+
+  return json_build_object(
+    'done', not v_log.done, 'delta', v_undo + v_moved, 'day_xp', v_moved,
+    'streak', v_streak, 'xp', (select xp from profiles where id = p_user)
+  );
+end;
+$$;
+
 -- ===========================================================================
 -- Village
 -- ===========================================================================

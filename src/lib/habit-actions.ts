@@ -24,7 +24,16 @@ export type HabitBoard = {
 };
 
 export type HabitTick =
-  | { ok: true; done: boolean; delta: number; streak: number; xp: number }
+  | {
+      ok: true;
+      done: boolean;
+      /** Everything that moved on the profile. */
+      delta: number;
+      /** What the day's log row now holds: its reward, or the miss. */
+      dayXp: number;
+      streak: number;
+      xp: number;
+    }
   | { ok: false; error: string };
 
 const MAX_HABITS = 40;
@@ -136,23 +145,34 @@ export async function listHabits(): Promise<HabitBoard> {
   };
 }
 
-/** Ticks today's habit, or un-ticks it (giving back what the tick paid). */
-export async function toggleHabit(id: string): Promise<HabitTick> {
+/**
+ * Ticks a day, or un-ticks it. Today works as it always has; a past day that
+ * was settled as a miss can be ticked late (the miss is refunded), and a past
+ * tick can be taken back (it becomes a miss). Days to come are refused.
+ */
+export async function toggleHabit(id: string, day: string): Promise<HabitTick> {
   const userId = await requireUserId();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: "Could not update that habit." };
   try {
     const rows = (await sql`
-      select toggle_habit(${userId}::uuid, ${id}::uuid) as result
-    `) as { result: { done: boolean; delta: number; streak: number; xp: number } }[];
+      select toggle_habit_day(${userId}::uuid, ${id}::uuid, ${day}::date) as result
+    `) as {
+      result: { done: boolean; delta: number; day_xp?: number; streak: number; xp: number };
+    }[];
     revalidatePath("/habits");
     revalidatePath("/");
-    return { ok: true, ...rows[0].result };
+    const r = rows[0].result;
+    // Today's toggle reports only what moved, which is also the row's XP.
+    return { ok: true, ...r, dayXp: r.day_xp ?? r.delta };
   } catch (e) {
     // The function's own exceptions are written for people; anything else
     // isn't worth showing.
     const msg = e instanceof Error ? e.message : "";
+    if (/toggle_habit_day.* does not exist/i.test(msg))
+      return { ok: false, error: "Run db/schema.sql to tick past days." };
     return {
       ok: false,
-      error: /^That habit/.test(msg) ? msg : "Could not update that habit.",
+      error: /^That (habit|day)/.test(msg) ? msg : "Could not update that habit.",
     };
   }
 }
