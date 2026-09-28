@@ -1,6 +1,6 @@
 import { getUserId } from "@/lib/session";
 import { pulse } from "@/lib/village-server";
-import type { Place } from "@/lib/village";
+import type { Place, Pos } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    The village's check-in: "I'm here" in, "here's everyone" out. Polled every
@@ -22,17 +22,29 @@ function readPlace(raw: unknown): Place | null {
     case "hall":
       return { kind: p.kind };
     case "house":
-      return typeof p.hostId === "string" && UUID.test(p.hostId) ? { kind: "house", hostId: p.hostId } : null;
+    case "inside":
+      return typeof p.hostId === "string" && UUID.test(p.hostId) ? { kind: p.kind, hostId: p.hostId } : null;
+    case "arena":
+      return { kind: "arena" };
     default:
       return null;
   }
+}
+
+function readPos(raw: unknown): Pos | null {
+  const p = raw as { x?: unknown; y?: unknown; facing?: unknown } | null;
+  const x = Number(p?.x);
+  const y = Number(p?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 200 || Math.abs(y) > 200) return null;
+  const f = Number(p?.facing);
+  return { x, y, facing: (Number.isInteger(f) && f >= 0 && f <= 3 ? f : 2) as Pos["facing"] };
 }
 
 export async function POST(request: Request) {
   const me = await getUserId();
   if (!me) return Response.json({ error: "signed out" }, { status: 401 });
 
-  let body: { place?: unknown } = {};
+  let body: { place?: unknown; pos?: unknown } = {};
   try {
     body = await request.json();
   } catch {
@@ -40,7 +52,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return Response.json(await pulse(me, readPlace(body.place)), {
+    return Response.json(await pulse(me, readPlace(body.place), readPos(body.pos)), {
       headers: { "cache-control": "no-store" },
     });
   } catch (e) {

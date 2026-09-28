@@ -51,6 +51,10 @@ export const LIMITS = {
   nudge: { limit: 20, windowSeconds: 3600 },
   /** Per account. Starting, joining and leaving tables. */
   session: { limit: 60, windowSeconds: 600 },
+  /** Per account. Talking in a shared space. */
+  say: { limit: 30, windowSeconds: 60 },
+  /** Per account. Challenges sent. */
+  duel: { limit: 20, windowSeconds: 600 },
 } as const satisfies Record<string, Limit>;
 
 /**

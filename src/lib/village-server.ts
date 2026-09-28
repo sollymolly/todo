@@ -2,12 +2,15 @@ import { sql } from "@/lib/db";
 import { levelFor } from "@/lib/game";
 import { listFriends } from "@/lib/social-actions";
 import type { Appearance, Equipped } from "@/lib/types";
+import { duelRecords, duelsFor, roomPeople, spaceChat, touchRoomPresence } from "@/lib/village-rooms";
 import {
   cleanHouse,
+  spaceOf,
   type HouseLook,
   type Neighbour,
   type NudgeView,
   type Place,
+  type Pos,
   type Pulse,
   type SessionView,
 } from "@/lib/village";
@@ -173,13 +176,19 @@ export async function unseenNudges(me: string): Promise<NudgeView[]> {
 /* ------------------------------------------------------------------ pulse */
 
 /** One check-in: where I am, and what the village looks like from here. */
-export async function pulse(me: string, place: Place | null): Promise<Pulse> {
+export async function pulse(me: string, place: Place | null, pos: Pos | null = null): Promise<Pulse> {
   await sweepSessions();
-  await touchPresence(me, place);
-  const focusXp = await sessionHeartbeat(me);
-
   const friends = await friendIdsOf(me);
   const known = new Set([me, ...friends]);
+
+  // Inside a house or in the arena is migration 027's. If that hasn't run,
+  // keep the outdoor village working and count them as out on the square.
+  let shared = false;
+  if (place && (place.kind === "inside" || place.kind === "arena")) {
+    shared = await touchRoomPresence(me, place, pos, known).catch(() => false);
+    if (!shared) await touchPresence(me, { kind: "square" });
+  } else await touchPresence(me, place);
+  const focusXp = await sessionHeartbeat(me);
 
   const presenceRows = (await sql`
     select user_id, place, host_id, seen_at from village_presence
@@ -191,7 +200,11 @@ export async function pulse(me: string, place: Place | null): Promise<Pulse> {
     const p: Place =
       r.place === "house" && r.host_id
         ? { kind: "house", hostId: r.host_id }
-        : r.place === "hall"
+        : r.place === "inside" && r.host_id
+          ? { kind: "inside", hostId: r.host_id }
+          : r.place === "arena"
+            ? { kind: "arena" }
+            : r.place === "hall"
           ? { kind: "hall" }
           : r.place === "square"
             ? { kind: "square" }
@@ -204,6 +217,22 @@ export async function pulse(me: string, place: Place | null): Promise<Pulse> {
     select session_id from session_members where user_id = ${me}::uuid and left_at is null
   `) as { session_id: string }[];
 
+  // The shared space I'm in: who's there, and what's been said.
+  let room: Pulse["room"] = null;
+  let duels: Pulse["duels"] = [];
+  const space = shared || place?.kind === "hall" ? spaceOf(place) : null;
+  try {
+    if (space && place)
+      room = {
+        space,
+        people: place.kind === "hall" ? [] : await roomPeople(me, place, known),
+        chat: await spaceChat(space, known),
+      };
+    duels = await duelsFor(me, place?.kind === "arena" && shared, known);
+  } catch {
+    /* migration 027 not run yet */
+  }
+
   return {
     now: Date.now(),
     me,
@@ -212,6 +241,8 @@ export async function pulse(me: string, place: Place | null): Promise<Pulse> {
     mySessionId: mine[0]?.session_id ?? null,
     focusXp,
     nudges: await unseenNudges(me),
+    room,
+    duels,
   };
 }
 
@@ -291,6 +322,7 @@ export async function loadVillage(me: string): Promise<VillageData> {
     categories: [],
     focusToday: totals.get(me)?.today ?? 0,
     focusWeek: totals.get(me)?.week ?? 0,
+    duels: { wins: 0, losses: 0 },
   };
 
   const neighbours = friends.map((f) => {
@@ -308,8 +340,18 @@ export async function loadVillage(me: string): Promise<VillageData> {
       categories: f.categories,
       focusToday: totals.get(f.user_id)?.today ?? 0,
       focusWeek: totals.get(f.user_id)?.week ?? 0,
+      duels: { wins: 0, losses: 0 },
     };
   });
+
+  let records = new Map<string, { wins: number; losses: number }>();
+  try {
+    records = await duelRecords(ids);
+  } catch {
+    /* no duels yet (migration 027) */
+  }
+  meView.duels = records.get(me) ?? { wins: 0, losses: 0 };
+  for (const n of neighbours) n.duels = records.get(n.id) ?? { wins: 0, losses: 0 };
 
   const noteRows = (await sql`
     select n.id, p.display_name as author, n.body, n.created_at, n.read_at is not null as read

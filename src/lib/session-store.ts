@@ -52,12 +52,12 @@ export function serverNow(skew: number) {
 }
 
 /** One check-in. `place` null: don't move me, just keep my seat. */
-export async function checkIn(place: unknown): Promise<Pulse | null> {
+export async function checkIn(place: unknown, pos: unknown = null): Promise<Pulse | null> {
   try {
     const res = await fetch("/api/village/pulse", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ place }),
+      body: JSON.stringify({ place, pos }),
       cache: "no-store",
     });
     if (!res.ok) return null;

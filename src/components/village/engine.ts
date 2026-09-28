@@ -1,4 +1,4 @@
-import { findPath, nearestOpen, T, tileAt, walkable, type Facing, type World } from "@/components/village/world";
+import { findPath, nearestOpen, T, tileAt, walkable, type Facing, type Grid } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    Everyone who walks: you, and friends strolling about where they are.
@@ -55,7 +55,7 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
 export const PLAYER_SPEED = RUN_SPEED;
 
 /** Walk to a tile along the streets; true if there's a way there. */
-export function walkTo(world: World, a: Agent, tx: number, ty: number, onArrive?: () => void): boolean {
+export function walkTo(world: Grid, a: Agent, tx: number, ty: number, onArrive?: () => void): boolean {
   const from = nearestOpen(world, Math.floor(a.x / T), Math.floor((a.y - 8) / T));
   const to = nearestOpen(world, tx, ty);
   const path = findPath(world, from, to);
@@ -71,7 +71,7 @@ function faceToward(dx: number, dy: number): Facing {
 }
 
 /** Moves one walker along its path by dt seconds. */
-export function step(world: World, a: Agent, dt: number, now: number) {
+export function step(world: Grid, a: Agent, dt: number, now: number) {
   if (a.seat) {
     // Walk to the seat first, then stay put, facing the table.
     const sx = a.seat.x * T + T / 2;
@@ -123,7 +123,7 @@ export function step(world: World, a: Agent, dt: number, now: number) {
 }
 
 /** Moves the player directly (keys), sliding along walls. */
-export function nudgePlayer(world: World, a: Agent, vx: number, vy: number, dt: number) {
+export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: number) {
   const len = Math.hypot(vx, vy);
   if (!len) {
     if (!a.path.length) a.moving = false;

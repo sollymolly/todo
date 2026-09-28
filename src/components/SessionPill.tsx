@@ -53,7 +53,9 @@ export default function SessionPill() {
 
   return (
     <div
-      className={`fixed left-3 z-40 max-w-[calc(100%-6rem)] sm:bottom-4 sm:left-4 ${
+      // In Messages on a phone it would sit on the message box; the timer
+      // keeps running and shows again on any other page.
+      className={`fixed left-3 z-40 max-w-[calc(100%-6rem)] sm:bottom-4 sm:left-4 ${pathname === "/friends" ? "max-sm:hidden" : ""} ${
         inVillage ? "bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.75rem)] sm:bottom-4" : "bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.75rem)]"
       }`}
     >

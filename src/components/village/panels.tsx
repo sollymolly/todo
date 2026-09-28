@@ -82,7 +82,7 @@ export function Face({ sheet, size = 32 }: { sheet: string | undefined; size?: n
         height: size,
         backgroundImage: sheet ? `url(${sheet})` : undefined,
         backgroundSize: `${576 * s}px ${256 * s}px`,
-        backgroundPosition: `${-16 * s}px ${-(128 + 10) * s}px`,
+        backgroundPosition: `${-16 * s}px ${-(128 + 7) * s}px`,
         imageRendering: "pixelated",
       }}
     />

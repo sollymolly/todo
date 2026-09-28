@@ -66,6 +66,12 @@ export default function PrivacyPage() {
               which of your quests you said you were working on.
             </li>
             <li>
+              <B>Inside houses and the arena</B> — where you&apos;re standing
+              while you&apos;re in one, how you&apos;ve decorated your own house,
+              and what you say out loud there, in plain text, deleted after an
+              hour. Duels: the moves, the outcome, and your win/loss record.
+            </li>
+            <li>
               <B>Password reset links</B> — only a fingerprint of each link,
               never the link itself, kept until it is used or expires.
             </li>
@@ -128,6 +134,15 @@ export default function PrivacyPage() {
             character and display name</B>, including people who aren&apos;t your
             companions, and your time there. Only your companions see the
             category of the quest you&apos;re working on.
+          </p>
+          <p className="mt-3">
+            Inside a companion&apos;s house it&apos;s the same: everyone in the
+            room sees your character, name and where you stand, and hears what
+            you say — including their other companions you may not know. Only
+            your own companions can come into your house. In the arena and at
+            the town hall, you&apos;re seen and heard by your companions only,
+            and the person you&apos;re duelling. Your duel record is visible to
+            your companions.
           </p>
           <p className="mt-3">
             Anyone who knows your exact username or email can send you a

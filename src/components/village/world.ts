@@ -56,11 +56,16 @@ export type Prop = {
 
 export type Facing = 0 | 1 | 2 | 3; // LPC rows: up, left, down, right
 
+/** Anything that can be walked around: the village, a room, the arena. */
+export type Grid = { w: number; h: number; blocked: boolean[][] };
+
 export type World = {
   w: number;
   h: number;
   plots: Plot[];
   hall: { body: Rect; door: { x: number; y: number }; plaza: Rect };
+  /** The arena's gatehouse; its door leads in (migration 027). */
+  arena: { body: Rect; door: { x: number; y: number } };
   tables: Table[];
   streets: Rect[];
   props: Prop[];
@@ -181,8 +186,9 @@ export function buildWorld(meId: string, friendIds: string[]): World {
   };
   addTable(centreX + 1, bandTop(0) + 5);
   addTable(centreX + 10, bandTop(0) + 5);
-  addTable(centreX + 1, bandTop(1) + 2);
-  addTable(centreX + 10, bandTop(1) + 2);
+  // Band 1, west of the road: the arena's gatehouse.
+  const arena = { body: { x: centreX, y: bandTop(1) + 1, w: 5, h: 4 }, door: { x: centreX + 2, y: bandTop(1) + 5 } };
+  block(arena.body);
 
   // Plots.
   const plots: Plot[] = [];
@@ -198,6 +204,8 @@ export function buildWorld(meId: string, friendIds: string[]): World {
       // Garden beds either side of the path to the door.
       block({ x: x + 1, y: top + 6, w: 2, h: 1 });
       block({ x: x + 5, y: top + 6, w: 2, h: 1 });
+      // The signpost with the owner's name, on the grass to the left.
+      block({ x, y: top + 6, w: 1, h: 1 });
     }
     plots.push(plot);
   });
@@ -235,7 +243,7 @@ export function buildWorld(meId: string, friendIds: string[]): World {
   }
   // A little green on the road's shoulders.
   for (let b = 1; b < bands; b++) {
-    place("sapling", centreX + 2, bandTop(b) + 5);
+    if (b > 1) place("sapling", centreX + 2, bandTop(b) + 5);
     place("sapling", centreX + 11, bandTop(b) + 5);
   }
 
@@ -246,18 +254,19 @@ export function buildWorld(meId: string, friendIds: string[]): World {
   for (const t of tables) block({ x: t.x, y: t.y, w: t.w, h: 1 });
   for (const p of plots) if (blocked[p.door.y]) blocked[p.door.y][p.door.x] = false;
   blocked[hall.door.y][hall.door.x] = false;
+  blocked[arena.door.y][arena.door.x] = false;
 
-  return { w, h, plots, hall, tables, streets, props, blocked };
+  return { w, h, plots, hall, arena, tables, streets, props, blocked };
 }
 
 /* ------------------------------------------------------------ pathfinding */
 
-export function walkable(world: World, x: number, y: number): boolean {
+export function walkable(world: Grid, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < world.w && y < world.h && !world.blocked[y][x];
 }
 
 /** Nearest walkable tile to (x, y), searching outward. */
-export function nearestOpen(world: World, x: number, y: number): { x: number; y: number } {
+export function nearestOpen(world: Grid, x: number, y: number): { x: number; y: number } {
   const tx = Math.round(x);
   const ty = Math.round(y);
   for (let r = 0; r < 12; r++)
@@ -275,7 +284,7 @@ export function nearestOpen(world: World, x: number, y: number): { x: number; y:
  * no way.
  */
 export function findPath(
-  world: World,
+  world: Grid,
   from: { x: number; y: number },
   to: { x: number; y: number }
 ): { x: number; y: number }[] {

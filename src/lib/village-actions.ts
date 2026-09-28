@@ -6,13 +6,20 @@ import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { sendToUser } from "@/lib/push";
 import { friendIdsOf, leaveTable } from "@/lib/village-server";
+import { advanceDuel, duelById, inSpace, isMove } from "@/lib/village-rooms";
+import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
+import { INVITE_MS, statsFor } from "@/lib/duel";
+import type { Equipped } from "@/lib/types";
 import {
   cleanHouse,
   cleanLine,
   NOTE_MAX,
   NUDGE_EVERY_MS,
   NUDGE_MAX,
+  SAY_MAX,
+  tierFor,
   type HouseLook,
+  type Tier,
 } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
@@ -238,5 +245,129 @@ export async function setFocusRounds(on: boolean): Promise<void> {
     update work_sessions s set focus = ${!!on}, focus_from = case when ${!!on} then now() end
      where s.ended_at is null
        and s.id = (select session_id from session_members where user_id = ${me}::uuid and left_at is null)
+  `;
+}
+
+/* ------------------------------------------------------------ interiors */
+
+/** A house's inside, as everyone who walks in sees it. Owner or companions only. */
+export async function loadInterior(hostId: string): Promise<{ interior: Interior; tier: Tier; level: number; name: string } | null> {
+  const me = await requireUserId();
+  if (!UUID.test(hostId) || (hostId !== me && !(await areFriends(me, hostId)))) return null;
+  const rows = (await sql`
+    select p.display_name, p.xp, h.interior
+      from profiles p left join houses h on h.user_id = p.id
+     where p.id = ${hostId}::uuid
+  `) as { display_name: string; xp: number; interior: unknown }[];
+  const r = rows[0];
+  if (!r) return null;
+  const level = levelFor(r.xp);
+  const tier = tierFor(level).tier;
+  return { interior: r.interior ? cleanInterior(r.interior, tier, level) : defaultInterior(tier), tier, level, name: r.display_name };
+}
+
+export async function saveInterior(raw: Interior): Promise<Interior> {
+  const me = await requireUserId();
+  const rows = (await sql`select xp from profiles where id = ${me}::uuid`) as { xp: number }[];
+  const level = levelFor(rows[0]?.xp ?? 0);
+  const clean = cleanInterior(raw, tierFor(level).tier, level);
+  await sql`
+    insert into houses (user_id, interior, updated_at) values (${me}::uuid, ${JSON.stringify(clean)}::jsonb, now())
+    on conflict (user_id) do update set interior = excluded.interior, updated_at = now()
+  `;
+  return clean;
+}
+
+/* ------------------------------------------------------------------ talk */
+
+export async function say(space: string, text: string): Promise<Result> {
+  const me = await requireUserId();
+  const body = cleanLine(text, SAY_MAX);
+  if (!body) return { ok: false, error: "Say something first." };
+  if (typeof space !== "string" || space.length > 60) return { ok: false, error: "You're not anywhere to talk." };
+  if (!(await inSpace(me, space))) return { ok: false, error: "You've wandered off: nobody here to hear it." };
+  if (await rateLimited("say", me)) return { ok: false, error: TOO_MANY };
+  await sql`insert into space_chat (space, author_id, body) values (${space}, ${me}::uuid, ${body})`;
+  return { ok: true };
+}
+
+/* ----------------------------------------------------------------- duels */
+
+async function openDuelOf(userId: string): Promise<string | null> {
+  const rows = (await sql`
+    select id from duels where status in ('pending', 'active') and (a_id = ${userId}::uuid or b_id = ${userId}::uuid)
+      and not (status = 'pending' and created_at < now() - interval '60 seconds')
+     limit 1
+  `) as { id: string }[];
+  return rows[0]?.id ?? null;
+}
+
+export async function challenge(opponentId: string): Promise<Result> {
+  const me = await requireUserId();
+  if (!(await areFriends(me, opponentId))) return { ok: false, error: "You can only duel companions." };
+  if (!(await inSpace(me, "arena")) || !(await inSpace(opponentId, "arena")))
+    return { ok: false, error: "You both need to be in the arena." };
+  if (await openDuelOf(me)) return { ok: false, error: "Finish the duel you're in first." };
+  if (await openDuelOf(opponentId)) return { ok: false, error: "They're already in a duel." };
+  if (await rateLimited("duel", me)) return { ok: false, error: TOO_MANY };
+  await sql`insert into duels (a_id, b_id) values (${me}::uuid, ${opponentId}::uuid)`;
+  return { ok: true };
+}
+
+export async function answerDuel(duelId: string, accept: boolean): Promise<Result> {
+  const me = await requireUserId();
+  if (!UUID.test(duelId)) return { ok: false, error: "That challenge isn't there any more." };
+  const d = await duelById(duelId);
+  const age = d ? Date.now() - new Date(d.created_at as string | Date).getTime() : Infinity;
+  if (!d || d.b_id !== me || d.status !== "pending" || age > INVITE_MS)
+    return { ok: false, error: "That challenge has expired." };
+  if (!accept) {
+    await sql`update duels set status = 'declined', updated_at = now() where id = ${duelId}::uuid and status = 'pending'`;
+    return { ok: true };
+  }
+  const gear = (await sql`
+    select id, equipped from profiles where id = any(${[d.a_id, d.b_id]}::uuid[])
+  `) as { id: string; equipped: Equipped }[];
+  const a = statsFor(gear.find((g) => g.id === d.a_id)?.equipped ?? ({} as Equipped));
+  const b = statsFor(gear.find((g) => g.id === d.b_id)?.equipped ?? ({} as Equipped));
+  const rows = (await sql`
+    update duels set status = 'active', round = 1, round_ends = now() + interval '15 seconds',
+           a_hp = ${a.hp}, a_max = ${a.max}, a_atk = ${a.atk}, a_def = ${a.def},
+           b_hp = ${b.hp}, b_max = ${b.max}, b_atk = ${b.atk}, b_def = ${b.def}, updated_at = now()
+     where id = ${duelId}::uuid and status = 'pending'
+    returning id
+  `) as unknown[];
+  return rows.length ? { ok: true } : { ok: false, error: "That challenge has expired." };
+}
+
+export async function duelMove(duelId: string, move: string): Promise<Result> {
+  const me = await requireUserId();
+  if (!UUID.test(duelId) || !isMove(move)) return { ok: false, error: "That's not a move." };
+  const rows = (await sql`
+    update duels set
+      a_move = case when a_id = ${me}::uuid and a_move is null then ${move} else a_move end,
+      b_move = case when b_id = ${me}::uuid and b_move is null then ${move} else b_move end,
+      updated_at = now()
+     where id = ${duelId}::uuid and status = 'active' and (a_id = ${me}::uuid or b_id = ${me}::uuid)
+       and round_ends > now()
+    returning id
+  `) as unknown[];
+  if (!rows.length) return { ok: false, error: "Too late for that round." };
+  // Both in? Settle it now rather than at the next check-in.
+  const d = await duelById(duelId);
+  if (d?.a_move && d.b_move) await advanceDuel(d);
+  return { ok: true };
+}
+
+export async function yieldDuel(duelId: string): Promise<void> {
+  const me = await requireUserId();
+  if (!UUID.test(duelId)) return;
+  await sql`
+    update duels set
+      winner = case when status = 'active' then (case when a_id = ${me}::uuid then b_id else a_id end) end,
+      status = case when status = 'pending' then 'cancelled' else 'done' end,
+      round_ends = null, updated_at = now()
+     where id = ${duelId}::uuid and status in ('pending', 'active')
+       and (a_id = ${me}::uuid or b_id = ${me}::uuid)
   `;
 }

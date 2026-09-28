@@ -577,6 +577,71 @@ export async function listMessages(
   }));
 }
 
+export type InboxEntry = {
+  friend_id: string;
+  /** Their newest message either way, still sealed: the preview is decrypted in the browser. */
+  last: SealedMessage | null;
+  unread: number;
+  /** When they last read something I sent them: what "Seen" is based on. */
+  seen_at: string | null;
+  /** Walking around the village right now (migration 026). */
+  in_village: boolean;
+};
+
+/**
+ * One row per companion for the conversation list. The server can't read
+ * the previews any more than the messages, so it hands them over sealed.
+ */
+export async function inbox(): Promise<InboxEntry[]> {
+  const me = await requireUserId();
+  const iso = (v: unknown) => (v == null ? null : v instanceof Date ? v.toISOString() : String(v));
+  const rows = (await sql`
+    with friends as (
+      select case when requester_id = ${me}::uuid then addressee_id else requester_id end as id
+        from friendships
+       where status = 'accepted'
+         and (requester_id = ${me}::uuid or addressee_id = ${me}::uuid)
+    )
+    select f.id as friend_id,
+           l.id, l.sender_id, l.iv, l.body, l.created_at,
+           (select count(*)::int from messages u
+             where u.sender_id = f.id and u.recipient_id = ${me}::uuid and u.read_at is null) as unread,
+           (select max(r.read_at) from messages r
+             where r.sender_id = ${me}::uuid and r.recipient_id = f.id) as seen_at
+      from friends f
+      left join lateral (
+        select m.id, m.sender_id, m.iv, m.body, m.created_at from messages m
+         where (m.sender_id = ${me}::uuid and m.recipient_id = f.id)
+            or (m.sender_id = f.id and m.recipient_id = ${me}::uuid)
+         order by m.created_at desc, m.id desc
+         limit 1
+      ) l on true
+  `) as Record<string, unknown>[];
+
+  // Who's in the village. Its own query, so messaging works before 026 is run.
+  let here = new Set<string>();
+  try {
+    const p = (await sql`
+      select user_id from village_presence
+       where user_id = any(${rows.map((r) => r.friend_id as string)}::uuid[])
+         and seen_at > now() - interval '45 seconds'
+    `) as { user_id: string }[];
+    here = new Set(p.map((x) => x.user_id));
+  } catch {
+    /* no village yet */
+  }
+
+  return rows.map((r) => ({
+    friend_id: r.friend_id as string,
+    in_village: here.has(r.friend_id as string),
+    last: r.id
+      ? { id: r.id as string, sender_id: r.sender_id as string, iv: r.iv as string, body: r.body as string, created_at: iso(r.created_at)! }
+      : null,
+    unread: r.unread as number,
+    seen_at: iso(r.seen_at),
+  }));
+}
+
 /** Total unread across every companion — drives the badge in the header. */
 export async function unreadTotal(): Promise<number> {
   const me = await requireUserId();

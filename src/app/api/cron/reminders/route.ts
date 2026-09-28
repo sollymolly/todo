@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { PUSH_CONFIGURED } from "@/lib/push";
 import { runReminders } from "@/lib/reminders";
 import { sweepSessions } from "@/lib/village-server";
+import { sql } from "@/lib/db";
 
 /* --------------------------------------------------------------------------
    Called every five minutes by an outside scheduler (cron-job.org), with
@@ -30,6 +31,15 @@ async function handle(request: Request) {
   await sweepSessions().catch(() => {
     /* migration 026 not run yet */
   });
+  // Talk is only kept for an hour; challenges nobody answered expire; a duel
+  // both fighters walked away from is closed with no winner.
+  await sql`delete from space_chat where created_at < now() - interval '1 hour'`.catch(() => {});
+  await sql`
+    update duels set status = case when status = 'pending' then 'expired' else 'done' end,
+                     round_ends = null, updated_at = now()
+     where (status = 'pending' and created_at < now() - interval '60 seconds')
+        or (status = 'active' and updated_at < now() - interval '10 minutes')
+  `.catch(() => {});
   if (!PUSH_CONFIGURED) return Response.json({ skipped: "push keys not set" });
   try {
     return Response.json(await runReminders());

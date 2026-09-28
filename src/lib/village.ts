@@ -16,7 +16,35 @@ export type Place =
   | { kind: "home" }
   | { kind: "square" }
   | { kind: "hall" }
-  | { kind: "house"; hostId: string };
+  | { kind: "house"; hostId: string }
+  /* Migration 027: inside someone's house, or in the arena. These two are
+     real shared rooms — the same layout for everyone — so they carry a
+     position too. */
+  | { kind: "inside"; hostId: string }
+  | { kind: "arena" };
+
+/** Where someone stands in a shared room, in tiles. */
+export type Pos = { x: number; y: number; facing: 0 | 1 | 2 | 3 };
+
+/** How often to check in while in a shared room: people are moving about. */
+export const ROOM_PULSE_MS = 1_500;
+
+/**
+ * The space a place is, for talking: people in the same one can hear each
+ * other. The square and house fronts aren't spaces — everyone's village is
+ * laid out differently, so "near you" out there means nothing to anyone else.
+ */
+export function spaceOf(p: Place | null): string | null {
+  if (!p) return null;
+  if (p.kind === "inside") return `inside:${p.hostId}`;
+  if (p.kind === "arena") return "arena";
+  if (p.kind === "hall") return "hall";
+  return null;
+}
+
+export const SAY_MAX = 140;
+/** How long a line hangs over someone's head. */
+export const BUBBLE_MS = 7_000;
 
 /** Seen this recently counts as in the village right now. */
 export const ONLINE_MS = 45_000;
@@ -126,6 +154,8 @@ export type Neighbour = Villager & {
   doneToday: number;
   house: HouseLook;
   categories: { name: string; color: string; open: number }[];
+  /** Duels won and lost (migration 027). */
+  duels?: { wins: number; losses: number };
 };
 
 /** A session as the village sees it. */
@@ -146,6 +176,28 @@ export type SessionView = {
   }[];
 };
 
+export type RoomPerson = { villager: Villager; known: boolean; x: number; y: number; facing: 0 | 1 | 2 | 3 };
+
+export type ChatLine = { id: string; authorId: string; name: string; body: string; at: number };
+
+/** A duel as either fighter or a spectator sees it. Moves not yet revealed stay hidden. */
+export type DuelView = {
+  id: string;
+  a: { id: string; name: string };
+  b: { id: string; name: string };
+  status: "pending" | "active" | "done" | "declined" | "expired" | "cancelled";
+  round: number;
+  roundEndsAt: number | null;
+  createdAt: number;
+  hp: { a: number; b: number; aMax: number; bMax: number } | null;
+  /** Whether each side has chosen this round — never what. */
+  picked: { a: boolean; b: boolean };
+  /** The viewer's own pick this round, if they're fighting and have picked. */
+  myMove: "strike" | "guard" | "feint" | null;
+  last: { r: number; a: "strike" | "guard" | "feint" | null; b: "strike" | "guard" | "feint" | null; ad: number; bd: number } | null;
+  winner: string | null;
+};
+
 /** Everything a check-in returns. */
 export type Pulse = {
   now: number;
@@ -158,6 +210,10 @@ export type Pulse = {
   /** XP just paid for focus time on this check-in. */
   focusXp: number;
   nudges: NudgeView[];
+  /** The shared space I'm in — who's there, and what's been said. */
+  room: { space: string; people: RoomPerson[]; chat: ChatLine[] } | null;
+  /** Duels I'm in, or can watch from where I am. */
+  duels: DuelView[];
 };
 
 export type NudgeView = {
