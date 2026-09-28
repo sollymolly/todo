@@ -133,8 +133,9 @@ export default function Habits({
                     if (p.days) {
                       setCustom(false);
                       setDays(p.days);
-                    } else {
+                    } else if (!custom) {
                       setCustom(true);
+                      setDays([]);
                     }
                   }}
                   className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${
@@ -174,8 +175,8 @@ export default function Habits({
                 ))}
               </div>
               {days.length === 0 && (
-                <p className="mt-1 text-[11px] font-semibold text-red-700">
-                  Pick at least one day.
+                <p className="mt-1 text-[11px] font-semibold text-mud-500">
+                  Pick the days it runs on.
                 </p>
               )}
             </div>

@@ -69,11 +69,11 @@ export default function HabitGrid({
     setHabits(initial);
   }
 
-  const [end, setEnd] = useState(today); // last column shown
+  const [start, setStart] = useState(today); // first column shown
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const days = Array.from({ length: span }, (_, i) => shiftDay(end, i - span + 1));
+  const days = Array.from({ length: span }, (_, i) => shiftDay(start, i));
   const earliest = shiftDay(today, -179);
 
   async function tick(h: Habit, e: React.MouseEvent) {
@@ -111,8 +111,10 @@ export default function HabitGrid({
     <div className="panel overflow-hidden rounded-2xl">
       <div className="flex items-center justify-between gap-2 border-b border-mud-200 px-3 py-2">
         <button
-          onClick={() => setEnd((d) => shiftDay(d, -7))}
-          disabled={shiftDay(end, -span + 1) <= earliest}
+          onClick={() =>
+            setStart((d) => (shiftDay(d, -7) < earliest ? earliest : shiftDay(d, -7)))
+          }
+          disabled={start <= earliest}
           className="rounded-lg px-2 py-1 text-[11px] font-semibold text-mud-600 transition hover:bg-mud-100 disabled:opacity-30"
         >
           ← Earlier
@@ -121,8 +123,8 @@ export default function HabitGrid({
           {fmtRange(days[0], days[days.length - 1])}
         </span>
         <button
-          onClick={() => setEnd((d) => (shiftDay(d, 7) > today ? today : shiftDay(d, 7)))}
-          disabled={end >= today}
+          onClick={() => setStart((d) => (shiftDay(d, 7) > today ? today : shiftDay(d, 7)))}
+          disabled={start >= today}
           className="rounded-lg px-2 py-1 text-[11px] font-semibold text-mud-600 transition hover:bg-mud-100 disabled:opacity-30"
         >
           Later →
@@ -271,15 +273,29 @@ function Cell({
       </span>
     );
 
+  // Coming up: an empty box on each day it is due, pressable once it is today.
+  if (day > today) {
+    const upcoming =
+      h.active &&
+      !h.finished &&
+      h.days.includes(isoWeekday(day)) &&
+      (!h.ends_on || day <= h.ends_on);
+    return upcoming ? (
+      <span className={`${box} border-2 border-mud-200 bg-white/60`} title="Coming up" />
+    ) : (
+      <span className={box} />
+    );
+  }
+
   // Not scheduled, not yet started, after it ended, or a day that was paused.
   const scheduled =
     h.days.includes(isoWeekday(day)) && day >= h.created_on && day < today;
   return (
     <span
       className={`${box} ${scheduled ? "text-mud-300" : "text-mud-200"}`}
-      title={day > today ? undefined : scheduled ? "Not tracked" : "Rest day"}
+      title={scheduled ? "Not tracked" : "Rest day"}
     >
-      {day > today ? "" : "·"}
+      ·
     </span>
   );
 }
