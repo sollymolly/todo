@@ -157,7 +157,7 @@ export async function toggleHabit(id: string): Promise<HabitTick> {
   }
 }
 
-export async function addHabit(input: {
+export type HabitInput = {
   title: string;
   /** ISO weekdays it runs on, Monday = 1. */
   days: number[];
@@ -165,10 +165,15 @@ export async function addHabit(input: {
   endsOn?: string | null;
   /** Total number of occurrences before it stops. */
   occurrencesLimit?: number | null;
-}): Promise<HabitResult> {
-  const userId = await requireUserId();
+};
 
-  const title = input.title.trim();
+/** The checked, normalised form of a HabitInput, or what's wrong with it. */
+function cleanInput(
+  input: HabitInput
+):
+  | { ok: true; title: string; days: number[]; endsOn: string | null; limit: number | null }
+  | { ok: false; error: string } {
+  const title = input.title.trim().slice(0, 200);
   if (!title) return { ok: false, error: "Give the habit a name." };
 
   const days = cleanDays(input.days ?? []);
@@ -184,6 +189,16 @@ export async function addHabit(input: {
       ? Math.min(3650, Math.trunc(input.occurrencesLimit))
       : null;
 
+  return { ok: true, title, days, endsOn, limit };
+}
+
+export async function addHabit(input: HabitInput): Promise<HabitResult> {
+  const userId = await requireUserId();
+
+  const clean = cleanInput(input);
+  if (!clean.ok) return clean;
+  const { title, days, endsOn, limit } = clean;
+
   try {
     const count = (await sql`
       select count(*)::int as n from habits where user_id = ${userId}::uuid
@@ -198,7 +213,7 @@ export async function addHabit(input: {
         (user_id, title, days, ends_on, occurrences_limit, settled_through)
       values (
         ${userId}::uuid,
-        ${title.slice(0, 200)},
+        ${title},
         ${days}::integer[],
         ${endsOn}::date,
         ${limit},
@@ -213,6 +228,37 @@ export async function addHabit(input: {
   } catch (e) {
     console.error("[habits] add", e);
     return { ok: false, error: "Could not add that habit." };
+  }
+}
+
+/**
+ * Changes a habit's name, schedule or ending. Days already over are settled
+ * first, under the schedule they had, so an edit only shapes what's to come:
+ * the history, the streak and the XP already moved stay as they are.
+ */
+export async function updateHabit(id: string, input: HabitInput): Promise<HabitResult> {
+  const userId = await requireUserId();
+
+  const clean = cleanInput(input);
+  if (!clean.ok) return clean;
+  const { title, days, endsOn, limit } = clean;
+
+  try {
+    await syncHabits();
+    await sql`
+      update habits set
+        title             = ${title},
+        days              = ${days}::integer[],
+        ends_on           = ${endsOn}::date,
+        occurrences_limit = ${limit}
+       where id = ${id}::uuid and user_id = ${userId}::uuid
+    `;
+    revalidatePath("/habits");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (e) {
+    console.error("[habits] update", e);
+    return { ok: false, error: "Could not save that habit." };
   }
 }
 

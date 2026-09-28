@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import HabitGrid from "@/components/HabitGrid";
 import { useFx } from "@/components/Fx";
-import { addHabit } from "@/lib/habit-actions";
+import { addHabit, updateHabit } from "@/lib/habit-actions";
 import {
   EVERY_DAY,
-  HABIT_MAX_XP,
   WEEKDAYS_ONLY,
   WEEKEND_ONLY,
   type Habit,
@@ -40,6 +39,15 @@ const DAYS = [
   { n: 7, label: "Sun" },
 ];
 
+/** A selectable pill: solid green when chosen, a clear outline when not. */
+function chip(on: boolean): string {
+  return `rounded-xl border-2 px-3.5 py-2 text-xs font-bold shadow-sm transition ${
+    on
+      ? "border-grass-700 bg-grass-600 text-white"
+      : "border-mud-300 bg-white text-mud-700 hover:border-grass-500 hover:text-grass-700"
+  }`;
+}
+
 function sameDays(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((n, i) => n === b[i]);
 }
@@ -47,11 +55,9 @@ function sameDays(a: number[], b: number[]): boolean {
 export default function Habits({
   habits,
   today,
-  timezone,
 }: {
   habits: Habit[];
   today: string;
-  timezone: string | null;
 }) {
   const router = useRouter();
   const { celebrate } = useFx();
@@ -63,30 +69,61 @@ export default function Habits({
   const [times, setTimes] = useState("10");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The habit the form is editing; null when it's adding a new one. */
+  const [editing, setEditing] = useState<Habit | null>(null);
+  const formRef = useRef<HTMLElement>(null);
 
   const refresh = () => router.refresh();
 
-  async function create(e: React.FormEvent) {
+  // The habit being edited was deleted: the form goes back to adding.
+  if (editing && !habits.some((h) => h.id === editing.id)) reset();
+
+  function reset() {
+    setEditing(null);
+    setTitle("");
+    setDays(EVERY_DAY);
+    setCustom(false);
+    setStop("never");
+    setEndsOn("");
+    setTimes("10");
+    setError(null);
+  }
+
+  function edit(h: Habit) {
+    setEditing(h);
+    setTitle(h.title);
+    setDays(h.days);
+    setCustom(!PRESETS.some((p) => p.days && sameDays(h.days, p.days)));
+    setStop(h.occurrences_limit ? "after" : h.ends_on ? "on" : "never");
+    setEndsOn(h.ends_on ?? "");
+    setTimes(String(h.occurrences_limit ?? 10));
+    setError(null);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || busy) return;
     setBusy(true);
     setError(null);
-    const res = await addHabit({
+    const input = {
       title,
       days,
       endsOn: stop === "on" ? endsOn || null : null,
       occurrencesLimit: stop === "after" ? Number(times) || null : null,
-    });
+    };
+    const res = editing ? await updateHabit(editing.id, input) : await addHabit(input);
     setBusy(false);
     if (!res.ok) return setError(res.error);
-    setTitle("");
+    if (editing) reset();
+    else setTitle("");
     refresh();
   }
 
   const active = habits.filter((h) => h.active);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
+    <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-wide text-mud-900 drop-shadow-sm sm:text-3xl">
@@ -107,11 +144,11 @@ export default function Habits({
       </header>
 
       {/* ------------------------------------------------------------- new */}
-      <section className="panel rounded-2xl p-5">
+      <section ref={formRef} className="panel scroll-mt-4 rounded-2xl p-5">
         <h2 className="font-display text-sm font-bold tracking-wide text-mud-800">
-          New habit
+          {editing ? "Edit habit" : "New habit"}
         </h2>
-        <form onSubmit={create} className="mt-3">
+        <form onSubmit={save} className="mt-3">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -120,7 +157,10 @@ export default function Habits({
             className="field w-full rounded-xl px-3.5 py-2.5 text-sm"
           />
 
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-mud-500">
+            Repeats
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
             {PRESETS.map((p) => {
               const on = p.days
                 ? !custom && sameDays(days, p.days)
@@ -138,11 +178,7 @@ export default function Habits({
                       setDays([]);
                     }
                   }}
-                  className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${
-                    on
-                      ? "border-grass-600 bg-grass-600 text-white"
-                      : "border-mud-200 bg-white/70 text-mud-600 hover:border-mud-400"
-                  }`}
+                  className={chip(on)}
                 >
                   {p.label}
                 </button>
@@ -151,8 +187,8 @@ export default function Habits({
           </div>
 
           {custom && (
-            <div className="mt-2">
-              <div className="flex flex-wrap gap-1">
+            <div className="mt-2.5">
+              <div className="flex flex-wrap gap-1.5">
                 {DAYS.map((d) => (
                   <button
                     key={d.n}
@@ -164,11 +200,7 @@ export default function Habits({
                           : [...cur, d.n].sort((a, b) => a - b)
                       )
                     }
-                    className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
-                      days.includes(d.n)
-                        ? "bg-mud-800 text-mud-50"
-                        : "bg-white/70 text-mud-500 hover:bg-white"
-                    }`}
+                    className={`${chip(days.includes(d.n))} w-14 text-center`}
                   >
                     {d.label}
                   </button>
@@ -183,10 +215,10 @@ export default function Habits({
           )}
 
           {/* ------------------------------------------------------- ending */}
-          <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-mud-500">
+          <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-mud-500">
             Ends
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
             {([
               ["never", "Never"],
               ["on", "On a date"],
@@ -196,11 +228,7 @@ export default function Habits({
                 key={id}
                 type="button"
                 onClick={() => setStop(id)}
-                className={`rounded-lg border-2 px-3 py-1.5 text-xs font-semibold transition ${
-                  stop === id
-                    ? "border-grass-600 bg-grass-600 text-white"
-                    : "border-mud-200 bg-white/70 text-mud-600 hover:border-mud-400"
-                }`}
+                className={chip(stop === id)}
               >
                 {label}
               </button>
@@ -237,21 +265,33 @@ export default function Habits({
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={busy || !title.trim() || days.length === 0}
-            className="mt-3 w-full rounded-xl bg-grass-600 px-4 py-2.5 font-display text-sm font-bold tracking-wide text-white transition hover:bg-grass-500 disabled:bg-mud-300"
-          >
-            {busy ? "Adding…" : "Add habit"}
-          </button>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="submit"
+              disabled={busy || !title.trim() || days.length === 0}
+              className="w-full rounded-xl bg-grass-600 px-4 py-2.5 font-display text-sm font-bold tracking-wide text-white transition hover:bg-grass-500 disabled:bg-mud-300"
+            >
+              {editing
+                ? busy ? "Saving…" : "Save changes"
+                : busy ? "Adding…" : "Add habit"}
+            </button>
+            {editing && (
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-xl border border-mud-300 bg-white/80 px-4 py-2.5 text-sm font-semibold text-mud-700 transition hover:border-mud-400"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+          {editing && (
+            <p className="mt-2 text-[10px] leading-relaxed text-mud-400">
+              Changes apply from today on. Days already over keep what they were.
+            </p>
+          )}
         </form>
 
-        <p className="mt-3 text-[10px] leading-relaxed text-mud-400">
-          A tick is worth +1 XP, growing 1% for every day of the streak (up to
-          +{HABIT_MAX_XP}). A due day that ends without a tick is a miss: −1 XP,
-          the streak resets, and the day can&apos;t be ticked later. Days end at
-          midnight{timezone ? ` in ${timezone.replace(/_/g, " ")}` : " (UTC)"}.
-        </p>
       </section>
 
       {/* --------------------------------------------------------- running */}
@@ -261,6 +301,7 @@ export default function Habits({
             habits={habits}
             today={today}
             manage
+            onEdit={edit}
             onChanged={refresh}
             onTicked={({ delta, origin }) =>
               delta !== 0 && celebrate({ ...origin, xp: delta, label: delta > 0 ? "habit kept" : undefined })

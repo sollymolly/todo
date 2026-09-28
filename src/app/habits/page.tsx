@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Habits from "@/components/Habits";
 import Backdrop from "@/components/Backdrop";
 import { FxProvider } from "@/components/Fx";
-import { sql } from "@/lib/db";
 import { getUserId } from "@/lib/session";
 import { listHabits, syncHabits, type HabitBoard } from "@/lib/habit-actions";
 
@@ -13,7 +12,6 @@ export default async function HabitsPage() {
   if (!userId) redirect("/login");
 
   let board: HabitBoard = { today: new Date().toISOString().slice(0, 10), habits: [] };
-  let timezone: string | null = null;
   let failed = false;
 
   try {
@@ -21,10 +19,6 @@ export default async function HabitsPage() {
     // as misses however you arrive.
     await syncHabits();
     board = await listHabits();
-    const tz = (await sql`
-      select timezone from profiles where id = ${userId}::uuid
-    `) as { timezone: string | null }[];
-    timezone = tz[0]?.timezone ?? null;
   } catch {
     failed = true;
   }
@@ -52,7 +46,7 @@ export default async function HabitsPage() {
     <>
       <Backdrop />
       <FxProvider>
-        <Habits habits={board.habits} today={board.today} timezone={timezone} />
+        <Habits habits={board.habits} today={board.today} />
       </FxProvider>
     </>
   );
