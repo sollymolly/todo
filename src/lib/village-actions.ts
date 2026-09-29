@@ -8,10 +8,9 @@ import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { sendToUser } from "@/lib/push";
 import { friendIdsOf, leaveTable } from "@/lib/village-server";
-import { advanceDuel, duelById, inSpace, isMove } from "@/lib/village-rooms";
+import { duelById, inSpace } from "@/lib/village-rooms";
 import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
-import { INVITE_MS, statsFor } from "@/lib/duel";
-import type { Equipped } from "@/lib/types";
+import { COUNTDOWN_MS, DUEL_HP, DUEL_MS, INVITE_MS } from "@/lib/duel";
 import {
   cleanHouse,
   cleanLine,
@@ -296,13 +295,23 @@ export async function say(space: string, text: string): Promise<Result> {
 
 /* ----------------------------------------------------------------- duels */
 
-async function openDuelOf(userId: string): Promise<string | null> {
-  const rows = (await sql`
-    select id from duels where status in ('pending', 'active') and (a_id = ${userId}::uuid or b_id = ${userId}::uuid)
-      and not (status = 'pending' and created_at < now() - interval '60 seconds')
-     limit 1
-  `) as { id: string }[];
-  return rows[0]?.id ?? null;
+const ARENA_BUSY = "The arena's taken — one duel at a time. Wait for this one to finish.";
+
+/**
+ * Settles what time has already decided — an unanswered challenge, a fight
+ * whose clock ran out — so a stale row can't keep the arena closed.
+ */
+async function clearArena() {
+  await sql`
+    update duels set status = 'expired', updated_at = now()
+     where status = 'pending' and created_at < now() - interval '60 seconds'
+  `;
+  await sql`
+    update duels set
+      status = 'done', round_ends = null, updated_at = now(),
+      winner = case when a_hp > b_hp then a_id when b_hp > a_hp then b_id end
+     where status = 'active' and (round_ends is null or round_ends <= now())
+  `;
 }
 
 export async function challenge(opponentId: string): Promise<Result> {
@@ -310,10 +319,17 @@ export async function challenge(opponentId: string): Promise<Result> {
   if (!(await areFriends(me, opponentId))) return { ok: false, error: "You can only duel companions." };
   if (!(await inSpace(me, "arena")) || !(await inSpace(opponentId, "arena")))
     return { ok: false, error: "You both need to be in the arena." };
-  if (await openDuelOf(me)) return { ok: false, error: "Finish the duel you're in first." };
-  if (await openDuelOf(opponentId)) return { ok: false, error: "They're already in a duel." };
   if (await rateLimited("duel", me)) return { ok: false, error: TOO_MANY };
-  await sql`insert into duels (a_id, b_id) values (${me}::uuid, ${opponentId}::uuid)`;
+  await clearArena();
+  const open = (await sql`select 1 from duels where status in ('pending', 'active') limit 1`) as unknown[];
+  if (open.length) return { ok: false, error: ARENA_BUSY };
+  try {
+    await sql`insert into duels (a_id, b_id) values (${me}::uuid, ${opponentId}::uuid)`;
+  } catch (e) {
+    // Two challenges at the same moment: the one-duel index lets one in.
+    if (/duels_one_at_a_time/.test(String(e))) return { ok: false, error: ARENA_BUSY };
+    throw e;
+  }
   after(() => poke("arena"));
   return { ok: true };
 }
@@ -330,40 +346,18 @@ export async function answerDuel(duelId: string, accept: boolean): Promise<Resul
     await sql`update duels set status = 'declined', updated_at = now() where id = ${duelId}::uuid and status = 'pending'`;
     return { ok: true };
   }
-  const gear = (await sql`
-    select id, equipped from profiles where id = any(${[d.a_id, d.b_id]}::uuid[])
-  `) as { id: string; equipped: Equipped }[];
-  const a = statsFor(gear.find((g) => g.id === d.a_id)?.equipped ?? ({} as Equipped));
-  const b = statsFor(gear.find((g) => g.id === d.b_id)?.equipped ?? ({} as Equipped));
+  // Everyone starts level: 5 health each. The clock covers the countdown to
+  // "Fight!" and then the fight itself (src/lib/duel.ts).
+  const seconds = (COUNTDOWN_MS + DUEL_MS) / 1000;
   const rows = (await sql`
-    update duels set status = 'active', round = 1, round_ends = now() + interval '15 seconds',
-           a_hp = ${a.hp}, a_max = ${a.max}, a_atk = ${a.atk}, a_def = ${a.def},
-           b_hp = ${b.hp}, b_max = ${b.max}, b_atk = ${b.atk}, b_def = ${b.def}, updated_at = now()
+    update duels set status = 'active', round = 1,
+           round_ends = now() + make_interval(secs => ${seconds}),
+           a_hp = ${DUEL_HP}, a_max = ${DUEL_HP}, b_hp = ${DUEL_HP}, b_max = ${DUEL_HP},
+           updated_at = now()
      where id = ${duelId}::uuid and status = 'pending'
     returning id
   `) as unknown[];
   return rows.length ? { ok: true } : { ok: false, error: "That challenge has expired." };
-}
-
-export async function duelMove(duelId: string, move: string): Promise<Result> {
-  const me = await requireUserId();
-  if (!UUID.test(duelId) || !isMove(move)) return { ok: false, error: "That's not a move." };
-  const rows = (await sql`
-    update duels set
-      a_move = case when a_id = ${me}::uuid and a_move is null then ${move} else a_move end,
-      b_move = case when b_id = ${me}::uuid and b_move is null then ${move} else b_move end,
-      updated_at = now()
-     where id = ${duelId}::uuid and status = 'active' and (a_id = ${me}::uuid or b_id = ${me}::uuid)
-       and round_ends > now()
-    returning id
-  `) as unknown[];
-  if (!rows.length) return { ok: false, error: "Too late for that round." };
-  // Both in? Settle it now rather than at the next check-in. Either way the
-  // other side sees it at once: "they've picked", or the round's result.
-  const d = await duelById(duelId);
-  if (d?.a_move && d.b_move) await advanceDuel(d);
-  after(() => poke("arena"));
-  return { ok: true };
 }
 
 export async function yieldDuel(duelId: string): Promise<void> {

@@ -11,10 +11,11 @@ import { DuelUI, HeadBar } from "@/components/village/DuelUI";
 import { ArenaGate, ArenaView, RoomView } from "@/components/village/scenes";
 import { buildArena, buildRoom, type ArenaScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
-import { makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, walkTo, type Agent } from "@/components/village/engine";
+import { follow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, walkTo, type Agent } from "@/components/village/engine";
 import { ATLAS, buildWorld, inRect, PROPS, T, type Grid, type World } from "@/components/village/world";
 import { composeSheet } from "@/lib/sprite";
-import { checkIn, publishPulse, serverNow, useSessionStore } from "@/lib/session-store";
+import { checkIn, patchDuelHp, publishPulse, serverNow, useSessionStore } from "@/lib/session-store";
+import { HIT_COOLDOWN_MS } from "@/lib/duel";
 import { useVillageLive } from "@/lib/live-client";
 import { challenge, loadInterior, markNudgesSeen, saveInterior } from "@/lib/village-actions";
 import { cleanInterior, FURNITURE, type FurnitureKind, type Interior } from "@/lib/furniture";
@@ -113,7 +114,16 @@ export default function Village({ data }: { data: VillageData }) {
   const [place, setPlace] = useState<Place>({ kind: "home" });
   const [said, setSaid] = useState<ChatLine[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [hits, setHits] = useState<Record<string, { dmg: number; key: number }>>({});
+  const [hits, setHits] = useState<Record<string, { dmg: number; blocked?: boolean; key: number }>>({});
+  const [swings, setSwings] = useState<Record<string, number>>({});
+  /** Movement keys held, and "guard" while G is. */
+  const keys = useRef(new Set<string>());
+
+  const toast = useCallback((text: string) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t, { id, text }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+  }, []);
 
   useEffect(() => {
     publishPulse(data.pulse);
@@ -272,24 +282,23 @@ export default function Village({ data }: { data: VillageData }) {
       map.clear();
       return;
     }
-    const g = scene.kind === "room" ? scene.room : scene.arena;
     const entry = scene.kind === "room" ? scene.room.door : scene.arena.gate;
     const seen = new Set<string>();
     for (const p of roomPeople) {
       seen.add(p.villager.id);
+      // 0,0 is what the check-in says for "no position yet": a wall corner.
+      const known = p.x !== 0 || p.y !== 0;
       let a = map.get(p.villager.id);
       if (!a) {
         a = makeAgent(p.villager.id, entry.x, entry.y - 1, PLAYER_SPEED);
         map.set(p.villager.id, a);
+        if (known) follow(a, p.x, p.y, p.facing, true);
+        continue;
       }
       // Someone whose position is arriving live is already where they
       // should be; the check-in's copy is older and would pull them back.
       if (Date.now() - (liveSeen.current.get(p.villager.id) ?? 0) < LIVE_FRESH_MS) continue;
-      const tx = Math.round(p.x);
-      const ty = Math.round(p.y);
-      const cur = { x: Math.floor(a.x / T), y: Math.floor((a.y - 8) / T) };
-      if (cur.x !== tx || cur.y !== ty) walkTo(g, a, tx, ty);
-      else if (!a.path.length) a.dir = p.facing;
+      if (known) follow(a, p.x, p.y, p.facing);
     }
     for (const id of [...map.keys()]) if (!seen.has(id)) map.delete(id);
   }, [roomPeople, scene]);
@@ -317,24 +326,36 @@ export default function Village({ data }: { data: VillageData }) {
     });
   }, [scene, fighting, myDuel, me.id]);
 
-  // A round landing: numbers over heads, and a flash.
-  const lastRound = useRef<Record<string, number>>({});
-  useEffect(() => {
-    for (const d of livePulse.duels) {
-      if (!d.last || lastRound.current[d.id] === d.last.r) continue;
-      const first = lastRound.current[d.id] === undefined;
-      lastRound.current[d.id] = d.last.r;
-      if (first && d.status !== "active") continue;
-      const key = Date.now();
-      setHits((h) => ({ ...h, [d.a.id]: { dmg: d.last!.ad, key }, [d.b.id]: { dmg: d.last!.bd, key } }));
-      setTimeout(() => setHits((h) => {
-        const next = { ...h };
-        if (next[d.a.id]?.key === key) delete next[d.a.id];
-        if (next[d.b.id]?.key === key) delete next[d.b.id];
-        return next;
-      }), 1100);
-    }
-  }, [livePulse.duels]);
+  /** Numbers over heads for a moment: a hit (−1), or a hit caught on a guard. */
+  const flashHit = useCallback((id: string, blocked: boolean) => {
+    const key = Date.now() + Math.random();
+    setHits((h) => ({ ...h, [id]: { dmg: blocked ? 0 : 1, blocked, key } }));
+    setTimeout(
+      () =>
+        setHits((h) => {
+          if (h[id]?.key !== key) return h;
+          const next = { ...h };
+          delete next[id];
+          return next;
+        }),
+      900
+    );
+  }, []);
+  /** A swing, over the swinger's head. */
+  const flashSwing = useCallback((id: string) => {
+    const key = Date.now() + Math.random();
+    setSwings((s) => ({ ...s, [id]: key }));
+    setTimeout(
+      () =>
+        setSwings((s) => {
+          if (s[id] !== key) return s;
+          const next = { ...s };
+          delete next[id];
+          return next;
+        }),
+      350
+    );
+  }, []);
 
   /** Health over heads in the arena, for fighters and everyone watching. */
   const bars = useMemo(() => {
@@ -360,21 +381,28 @@ export default function Village({ data }: { data: VillageData }) {
     pokeTimer.current = setTimeout(() => beatNow.current(), 120);
   }, []);
 
+  /** Set on every (re)connect: send where I am even if I haven't moved. */
+  const resendPos = useRef(false);
+
   const live = useVillageLive(space, {
     poke: pokeBeat,
-    pos: ({ id, x, y, f }) => {
+    open: () => {
+      resendPos.current = true;
+    },
+    pos: ({ id, x, y, f, g }) => {
       const sc = sceneRef.current;
       if (sc.kind === "out") return;
       const a = roomAgents.current.get(id);
       // Someone new: the check-in brings what they look like.
       if (!a) return pokeBeat();
       liveSeen.current.set(id, Date.now());
-      const g = sc.kind === "room" ? sc.room : sc.arena;
-      const tx = Math.round(x);
-      const ty = Math.round(y);
-      const cur = { x: Math.floor(a.x / T), y: Math.floor((a.y - 8) / T) };
-      if (cur.x !== tx || cur.y !== ty) walkTo(g, a, tx, ty);
-      else if (!a.path.length) a.dir = (f % 4) as Agent["dir"];
+      follow(a, x, y, (f % 4) as Agent["dir"]);
+      a.guard = g;
+    },
+    blow: (b) => {
+      flashSwing(b.by);
+      flashHit(b.target, b.t === "block");
+      if (b.t === "hit") patchDuelHp(b.duel, b.a, b.b);
     },
   });
   const liveRef = useRef(false);
@@ -384,15 +412,44 @@ export default function Village({ data }: { data: VillageData }) {
     sendPosRef.current = live.sendPos;
   }, [live.connected, live.sendPos]);
 
-  // A round that runs out of time: check in the moment it does, rather than
-  // waiting to be told.
+  // The fight's clock, for the loop: when it starts (after the countdown)
+  // and ends. Null when I'm not fighting.
   const duelId = myDuel?.id;
-  const roundEndsAt = myDuel?.status === "active" ? myDuel.roundEndsAt : null;
+  const startsAt = fighting ? myDuel!.startsAt : null;
+  const endsAt = fighting ? myDuel!.endsAt : null;
+  const fightRef = useRef<{ startsAt: number; endsAt: number } | null>(null);
+  const skewRef = useRef(skew);
   useEffect(() => {
-    if (!duelId || !roundEndsAt) return;
-    const id = setTimeout(() => beatNow.current(), Math.max(0, roundEndsAt - serverNow(skew) + 250));
-    return () => clearTimeout(id);
-  }, [duelId, roundEndsAt, skew]);
+    fightRef.current = startsAt && endsAt ? { startsAt, endsAt } : null;
+    skewRef.current = skew;
+  }, [startsAt, endsAt, skew]);
+
+  // Check in the moment the fight starts and the moment time runs out,
+  // rather than waiting to be told.
+  useEffect(() => {
+    if (!duelId || !startsAt || !endsAt) return;
+    const at = [startsAt, endsAt].map((t) =>
+      setTimeout(() => beatNow.current(), Math.max(0, t - serverNow(skew) + 250))
+    );
+    return () => at.forEach(clearTimeout);
+  }, [duelId, startsAt, endsAt, skew]);
+
+  /** H, or the Hit button: a swing, judged by the server. */
+  const lastSwing = useRef(0);
+  const swing = useCallback(() => {
+    const f = fightRef.current;
+    const now = serverNow(skewRef.current);
+    if (!f || now < f.startsAt || now > f.endsAt || keys.current.has("guard")) return;
+    if (performance.now() - lastSwing.current < HIT_COOLDOWN_MS) return;
+    lastSwing.current = performance.now();
+    flashSwing(me.id);
+    if (!liveRef.current) return toast("Reconnecting to the arena — hold on a second.");
+    live.sendHit();
+  }, [flashSwing, me.id, live, toast]);
+  const swingRef = useRef(swing);
+  useEffect(() => {
+    swingRef.current = swing;
+  }, [swing]);
 
   /* ------------------------------------------------------------ talk */
 
@@ -424,7 +481,6 @@ export default function Village({ data }: { data: VillageData }) {
 
   const viewport = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
-  const keys = useRef(new Set<string>());
   const placeRef = useRef<Place>({ kind: "home" });
   const promptRef = useRef<Prompt>(null);
   const enteredAt = useRef(0);
@@ -448,23 +504,30 @@ export default function Village({ data }: { data: VillageData }) {
       const sc = sceneRef.current;
       const p = player.current!;
 
+      // A duel: the countdown walks me to my mark; then I'm free to move,
+      // at half pace while guarding, but only inside the ring.
+      const fight = fightRef.current;
+      const countdown = !!fight && serverNow(skewRef.current) < fight.startsAt;
       const k = keys.current;
+      p.guard = !!fight && !countdown && k.has("guard");
       const vx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0);
       const vy = (k.has("down") ? 1 : 0) - (k.has("up") ? 1 : 0);
-      if ((vx || vy) && !lockedRef.current) nudgePlayer(g, p, vx, vy, dt);
+      if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, p.guard ? dt / 2 : dt);
       else step(g, p, dt, t);
+      if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
       paint(p, S);
 
-      // In a shared room, tell the others each time I reach a new tile or
-      // turn — the same numbers the check-in sends, just sooner.
-      if (sc.kind !== "out" && liveRef.current && t - sentAt > 160) {
-        const x = (p.x - T / 2) / T;
-        const y = (p.y - T / 2 - 8) / T;
-        const key = `${Math.round(x)},${Math.round(y)},${p.dir}`;
-        if (key !== sentKey) {
+      // In a shared room, tell the others exactly where I am whenever I've
+      // moved a pixel, turned or guarded — the same numbers the check-in
+      // sends, just sooner. At most ~7 a second; the last one, where I
+      // stopped, always goes, because the key stays changed until it's sent.
+      if (sc.kind !== "out" && liveRef.current && t - sentAt > 140) {
+        const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.guard}`;
+        if (key !== sentKey || resendPos.current) {
+          resendPos.current = false;
           sentKey = key;
           sentAt = t;
-          sendPosRef.current(x, y, p.dir);
+          sendPosRef.current((p.x - T / 2) / T, (p.y - T / 2 - 8) / T, p.dir, p.guard);
         }
       }
       const others = sc.kind === "out" ? agents.current : roomAgents.current;
@@ -537,11 +600,6 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ---------------------------------------------------------- check-ins */
 
-  const toast = useCallback((text: string) => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((t) => [...t, { id, text }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
-  }, []);
 
   const shownNudges = useRef(new Set<string>());
   useEffect(() => {
@@ -680,6 +738,12 @@ export default function Village({ data }: { data: VillageData }) {
       if (dir) {
         e.preventDefault();
         keys.current.add(dir);
+      } else if (e.code === "KeyG") {
+        // Guard while held (duels).
+        keys.current.add("guard");
+      } else if (e.code === "KeyH") {
+        // A swing (duels). Holding the key doesn't repeat it.
+        if (!e.repeat) swingRef.current();
       } else if (e.code === "KeyE" || e.code === "Enter") {
         if (promptRef.current) {
           e.preventDefault();
@@ -690,6 +754,7 @@ export default function Village({ data }: { data: VillageData }) {
     const up = (e: KeyboardEvent) => {
       const dir = map[e.code];
       if (dir) keys.current.delete(dir);
+      else if (e.code === "KeyG") keys.current.delete("guard");
     };
     const blur = () => keys.current.clear();
     window.addEventListener("keydown", down);
@@ -723,7 +788,10 @@ export default function Village({ data }: { data: VillageData }) {
       else setDeco({ ...deco, selected: null });
       return;
     }
-    if (lockedRef.current) return;
+    // In a duel: still during the countdown; after that, taps walk you about
+    // the ring like the keys do (the loop keeps you inside it).
+    const fight = fightRef.current;
+    if (fight && serverNow(skewRef.current) < fight.startsAt) return;
     walkTo(gridRef.current, player.current!, tile.x, tile.y);
   }
 
@@ -881,6 +949,7 @@ export default function Village({ data }: { data: VillageData }) {
                   bubble={bubbles[p.villager.id]}
                   bar={bars[p.villager.id]}
                   hit={hits[p.villager.id]}
+                  swing={swings[p.villager.id]}
                   bind={bindAgent("room", p.villager.id)}
                   onTap={
                     p.known
@@ -896,6 +965,7 @@ export default function Village({ data }: { data: VillageData }) {
             bubble={space ? bubbles[me.id] : undefined}
             bar={bars[me.id]}
             hit={hits[me.id]}
+            swing={swings[me.id]}
             bind={bindAgent("me", me.id)}
           />
         </div>
@@ -970,6 +1040,9 @@ export default function Village({ data }: { data: VillageData }) {
             duel={myDuel}
             meId={me.id}
             skew={skew}
+            live={live.connected}
+            onHit={swing}
+            onGuard={(on) => (on ? keys.current.add("guard") : keys.current.delete("guard"))}
             onDismiss={() => setDismissed((s) => new Set(s).add(myDuel.id))}
           />
         )}
@@ -1088,7 +1161,9 @@ export default function Village({ data }: { data: VillageData }) {
       {!deco && open?.kind === "duelist" && byId.get(open.id) && (
         <DuelistCard
           n={byId.get(open.id)!}
-          busy={!!myDuel && (myDuel.status === "pending" || myDuel.status === "active")}
+          // One duel at a time in the arena: a fight going on, or my own
+          // challenge waiting, closes it.
+          busy={livePulse.duels.some((d) => d.status === "active") || myDuel?.status === "pending"}
           onChallenge={async () => {
             const r = await challenge(open.id).catch(() => ({ ok: false as const, error: "Couldn't send the challenge." }));
             if (!r.ok) toast(r.error);
@@ -1300,7 +1375,7 @@ function DuelistCard({ n, busy, onChallenge, onClose }: { n: Stats; busy: boolea
         }}
         className="mt-3 w-full rounded-lg bg-mud-800 px-3 py-2 text-sm font-bold text-white hover:bg-mud-700 disabled:opacity-50"
       >
-        {busy ? "You're already in a duel" : sending ? "Challenging…" : `⚔ Challenge ${n.name}`}
+        {busy ? "The arena's in use — one duel at a time" : sending ? "Challenging…" : `⚔ Challenge ${n.name}`}
       </button>
     </Panel>
   );
@@ -1314,6 +1389,7 @@ function Walker({
   bubble,
   bar,
   hit,
+  swing,
   bind,
   onTap,
 }: {
@@ -1323,14 +1399,18 @@ function Walker({
   stranger?: boolean;
   bubble?: string;
   bar?: { hp: number; max: number };
-  hit?: { dmg: number; key: number };
+  hit?: { dmg: number; blocked?: boolean; key: number };
+  /** A duel swing just now: its key, so each one flashes afresh. */
+  swing?: number;
   bind: (el: HTMLDivElement | null) => void;
   onTap?: () => void;
 }) {
   return (
     <div
       ref={bind}
-      className="absolute left-0 top-0"
+      // The loop sets data-guard straight on this element (engine.ts paint),
+      // so guarding shows without a re-render.
+      className="group absolute left-0 top-0"
       style={{ width: 64 * scale, height: 64 * scale, willChange: "transform" }}
       onPointerDown={
         onTap
@@ -1366,8 +1446,24 @@ function Walker({
             −{hit.dmg}
           </span>
         )}
+        {hit?.blocked && (
+          <span key={hit.key} className="damage-pop text-xs font-black text-sky-700 drop-shadow-[0_1px_0_white]">
+            Blocked!
+          </span>
+        )}
         {bar && <HeadBar hp={bar.hp} max={bar.max} />}
       </div>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute right-0 top-1/3 hidden text-lg drop-shadow group-data-[guard=1]:block"
+      >
+        🛡
+      </span>
+      {swing && (
+        <span key={swing} aria-hidden className="damage-pop pointer-events-none absolute left-0 top-1/3 text-lg drop-shadow">
+          ⚔
+        </span>
+      )}
       {label && (
         <span
           className={`pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 whitespace-nowrap rounded px-1 text-[10px] font-semibold shadow-sm ${

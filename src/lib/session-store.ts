@@ -30,6 +30,17 @@ export function publishPulse(p: Pulse) {
   listeners.forEach((l) => l());
 }
 
+/**
+ * A duel hit, as the live connection reported it: the fighters' health now,
+ * before the next check-in brings the rest. The clock offset stays as it is.
+ */
+export function patchDuelHp(duelId: string, a: number, b: number) {
+  if (!state.pulse) return;
+  const duels = state.pulse.duels.map((d) => (d.id === duelId && d.hp ? { ...d, hp: { ...d.hp, a, b } } : d));
+  state = { ...state, pulse: { ...state.pulse, duels } };
+  listeners.forEach((l) => l());
+}
+
 /** Forget the table straight away (left it), before the next check-in confirms. */
 export function clearMySession() {
   if (!state.pulse) return;

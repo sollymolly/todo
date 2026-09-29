@@ -228,7 +228,7 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
         people: place.kind === "hall" ? [] : await roomPeople(me, place, known),
         chat: await spaceChat(space, known),
       };
-    duels = await duelsFor(me, place?.kind === "arena" && shared, known);
+    duels = await duelsFor(me, place?.kind === "arena" && shared);
   } catch {
     /* db/schema.sql not run yet */
   }

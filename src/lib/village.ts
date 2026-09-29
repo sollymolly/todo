@@ -185,21 +185,17 @@ export type RoomPerson = { villager: Villager; known: boolean; x: number; y: num
 
 export type ChatLine = { id: string; authorId: string; name: string; body: string; at: number };
 
-/** A duel as either fighter or a spectator sees it. Moves not yet revealed stay hidden. */
+/** A duel as either fighter or a spectator sees it. See src/lib/duel.ts. */
 export type DuelView = {
   id: string;
   a: { id: string; name: string };
   b: { id: string; name: string };
   status: "pending" | "active" | "done" | "declined" | "expired" | "cancelled";
-  round: number;
-  roundEndsAt: number | null;
+  /** While active: when the fighting starts (after the countdown) and ends. */
+  startsAt: number | null;
+  endsAt: number | null;
   createdAt: number;
   hp: { a: number; b: number; aMax: number; bMax: number } | null;
-  /** Whether each side has chosen this round — never what. */
-  picked: { a: boolean; b: boolean };
-  /** The viewer's own pick this round, if they're fighting and have picked. */
-  myMove: "strike" | "guard" | "feint" | null;
-  last: { r: number; a: "strike" | "guard" | "feint" | null; b: "strike" | "guard" | "feint" | null; ad: number; bd: number } | null;
   winner: string | null;
 };
 

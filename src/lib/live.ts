@@ -7,7 +7,9 @@ import { Redis } from "@upstash/redis";
 
      pos   where someone is standing, straight from their screen
      poke  "something changed here — check in now" (a line said, a duel
-           move, someone arriving). Carries nothing, so it can't leak.
+           starting, someone arriving). Carries nothing, so it can't leak.
+     hit / block   a duel blow the server judged (live-hub.ts), so
+           everyone watching sees it the moment it lands
 
    Messages go through Redis pub/sub so every server instance hears them —
    a WebSocket is pinned to one instance, and the people in a room may be
@@ -19,8 +21,13 @@ import { Redis } from "@upstash/redis";
    -------------------------------------------------------------------------- */
 
 export type LiveMessage =
-  | { t: "pos"; id: string; x: number; y: number; f: number }
-  | { t: "poke" };
+  /* g: guarding (duels) */
+  | { t: "pos"; id: string; x: number; y: number; f: number; g: 0 | 1 }
+  | { t: "poke" }
+  /* A duel hit that landed: the fighters' health after it. */
+  | { t: "hit"; duel: string; by: string; target: string; a: number; b: number }
+  /* A hit caught on a guard. */
+  | { t: "block"; by: string; target: string };
 
 export const CHANNEL = "ql:space:";
 

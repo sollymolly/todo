@@ -556,6 +556,16 @@ create table if not exists duels (
   check (a_id <> b_id)
 );
 create index if not exists duels_open_idx on duels(status) where status in ('pending', 'active');
+-- Duels are fought live in the one arena (src/lib/duel.ts): only one may be
+-- open at a time. Anything time has already settled is closed first, so a
+-- stale row can't block the index being built.
+update duels set status = 'expired', updated_at = now()
+ where status = 'pending' and created_at < now() - interval '60 seconds';
+update duels set status = 'done', round_ends = null, updated_at = now(),
+       winner = case when a_hp > b_hp then a_id when b_hp > a_hp then b_id end
+ where status = 'active' and (round_ends is null or round_ends <= now());
+create unique index if not exists duels_one_at_a_time on duels ((true))
+ where status in ('pending', 'active');
 create index if not exists duels_a_idx on duels(a_id, created_at desc);
 create index if not exists duels_b_idx on duels(b_id, created_at desc);
 

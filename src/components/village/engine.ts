@@ -33,6 +33,14 @@ export type Agent = {
   nextStroll: number;
   /** Called once when the current path is finished. */
   onArrive?: () => void;
+  /**
+   * Someone in a shared room: exactly where their own screen has them, in
+   * world px, and which way they face. Followed in a straight line — they
+   * already walked the route themselves — so every screen ends up agreeing.
+   */
+  goal: { x: number; y: number; dir: Facing } | null;
+  /** Guarding, in a duel: shown as a shield over their head. */
+  guard: boolean;
 };
 
 export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED): Agent {
@@ -49,10 +57,49 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     seat: null,
     home: null,
     nextStroll: 0,
+    goal: null,
+    guard: false,
   };
 }
 
+/**
+ * Keeps a fighter's feet inside the arena ring — the same ellipse the ring
+ * is drawn as (scenes.tsx), less a little so they stay on the dirt side of
+ * the line. The ring is in tiles.
+ */
+export function keepInRing(a: Agent, ring: { cx: number; cy: number; r: number }) {
+  const ex = (ring.cx + 0.5) * T;
+  const ey = (ring.cy + 0.5) * T;
+  const rx = ring.r * T - 10;
+  const ry = ring.r * T * 0.7 - 10;
+  const fx = a.x - ex;
+  const fy = a.y - 8 - ey;
+  const k = Math.hypot(fx / rx, fy / ry);
+  if (k <= 1) return;
+  a.x = ex + fx / k;
+  a.y = ey + fy / k + 8;
+  a.path = [];
+}
+
 export const PLAYER_SPEED = RUN_SPEED;
+
+/** Further behind than this and they're simply put there. */
+const SNAP_PX = T * 4;
+
+/**
+ * Follow someone to where they reported being, in tiles — the same numbers
+ * the check-in and the live connection carry. `snap` places them at once.
+ */
+export function follow(a: Agent, x: number, y: number, dir: Facing, snap = false) {
+  a.goal = { x: x * T + T / 2, y: y * T + T / 2 + 8, dir };
+  a.path = [];
+  a.onArrive = undefined;
+  if (snap) {
+    a.x = a.goal.x;
+    a.y = a.goal.y;
+    a.dir = dir;
+  }
+}
 
 /** Walk to a tile along the streets; true if there's a way there. */
 export function walkTo(world: Grid, a: Agent, tx: number, ty: number, onArrive?: () => void): boolean {
@@ -72,6 +119,32 @@ function faceToward(dx: number, dy: number): Facing {
 
 /** Moves one walker along its path by dt seconds. */
 export function step(world: Grid, a: Agent, dt: number, now: number) {
+  if (a.goal) {
+    const g = a.goal;
+    const dx = g.x - a.x;
+    const dy = g.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > SNAP_PX) {
+      a.x = g.x;
+      a.y = g.y;
+      a.moving = false;
+    } else {
+      // Walking pace, or quicker when behind, so the lag never builds up.
+      const move = Math.max(a.speed, dist * 8) * dt;
+      a.moving = dist > 0.5;
+      if (dist <= move) {
+        a.x = g.x;
+        a.y = g.y;
+        a.stride += dist;
+      } else {
+        a.x += (dx / dist) * move;
+        a.y += (dy / dist) * move;
+        a.stride += move;
+      }
+    }
+    a.dir = g.dir;
+    return;
+  }
   if (a.seat) {
     // Walk to the seat first, then stay put, facing the table.
     const sx = a.seat.x * T + T / 2;
@@ -161,6 +234,8 @@ export function paint(a: Agent, scale: number) {
   const frame = a.moving ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
   el.style.transform = `translate3d(${Math.round((a.x - FRAME / 2) * scale)}px, ${Math.round((a.y - FEET) * scale)}px, 0)`;
   el.style.zIndex = String(Math.round(a.y));
+  const guard = a.guard ? "1" : "0";
+  if (el.dataset.guard !== guard) el.dataset.guard = guard;
   const sprite = el.firstElementChild as HTMLElement | null;
   if (sprite) sprite.style.backgroundPosition = `${-frame * FRAME * scale}px ${-a.dir * FRAME * scale}px`;
 }
