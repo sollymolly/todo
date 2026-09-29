@@ -11,7 +11,12 @@ export default async function HabitsPage() {
   const userId = await getUserId();
   if (!userId) redirect("/login");
 
-  let board: HabitBoard = { today: new Date().toISOString().slice(0, 10), habits: [] };
+  let board: HabitBoard = {
+    today: new Date().toISOString().slice(0, 10),
+    zone: null,
+    freezes: 2,
+    habits: [],
+  };
   let failed = false;
 
   try {
@@ -46,7 +51,9 @@ export default async function HabitsPage() {
     <>
       <Backdrop />
       <FxProvider>
-        <Habits habits={board.habits} today={board.today} />
+        <Habits habits={board.habits} today={board.today} zone={board.zone}
+          freezes={board.freezes}
+        />
       </FxProvider>
     </>
   );

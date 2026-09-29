@@ -14,6 +14,8 @@ export type NotificationPrefs = {
   messages: boolean;
   /** Companions may nudge you at all — in the app and as a notification. */
   nudges: boolean;
+  /** At 6pm and 9pm local, while a habit due today is still unticked. */
+  habits: boolean;
 };
 
 export const DEFAULT_PREFS: NotificationPrefs = {
@@ -23,6 +25,7 @@ export const DEFAULT_PREFS: NotificationPrefs = {
   morningMinutes: 8 * 60,
   messages: true,
   nudges: true,
+  habits: true,
 };
 
 export const LEAD_CHOICES: { minutes: number; label: string }[] = [
@@ -47,6 +50,7 @@ export function cleanPrefs(raw: Partial<NotificationPrefs> | null | undefined): 
       Number.isFinite(morning) && morning >= 0 && morning < 1440 ? morning : DEFAULT_PREFS.morningMinutes,
     messages: typeof r.messages === "boolean" ? r.messages : DEFAULT_PREFS.messages,
     nudges: typeof r.nudges === "boolean" ? r.nudges : DEFAULT_PREFS.nudges,
+    habits: typeof r.habits === "boolean" ? r.habits : DEFAULT_PREFS.habits,
   };
 }
 

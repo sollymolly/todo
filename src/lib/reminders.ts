@@ -24,7 +24,7 @@ let retrying = 0;
  * time, or it's still the morning window). Without this, one failed request
  * to a push service was a reminder lost for good.
  */
-async function release(userId: string, kind: "due" | "morning", refs: string[]) {
+async function release(userId: string, kind: "due" | "morning" | "habit", refs: string[]) {
   if (!refs.length) return;
   await sql`
     delete from notification_log
@@ -35,7 +35,13 @@ async function release(userId: string, kind: "due" | "morning", refs: string[]) 
 
 type DueRow = { user_id: string; todo_id: string; title: string; due_ms: string; ref: string };
 
-export async function runReminders(): Promise<{ due: number; morning: number; pruned: number; retrying: number }> {
+export async function runReminders(): Promise<{
+  due: number;
+  morning: number;
+  habits: number;
+  pruned: number;
+  retrying: number;
+}> {
   const pruned = (await sql`
     delete from notification_log where sent_at < now() - interval '3 days' returning 1
   `).length;
@@ -43,7 +49,8 @@ export async function runReminders(): Promise<{ due: number; morning: number; pr
   retrying = 0;
   const due = await dueSoon();
   const morning = await morningSummaries();
-  return { due, morning, pruned, retrying };
+  const habits = await habitReminders().catch(() => 0);
+  return { due, morning, habits, pruned, retrying };
 }
 
 /* ------------------------------------------------------------ deadlines */
@@ -207,6 +214,84 @@ async function morningSummaries(): Promise<number> {
     }).catch(() => 0);
     if (reached) sent++;
     else await release(p.user_id, "morning", [p.today]);
+  }
+  return sent;
+}
+
+/* --------------------------------------------------------------- habits */
+
+type HabitRow = { user_id: string; today: string; slot: number; titles: string[]; streak: number };
+
+/**
+ * At 6pm and 9pm local: anyone with a habit due today that isn't ticked yet.
+ * Each slot is a one-hour window, so a run that's late or retrying still
+ * lands close to the hour, and nobody gets a "6pm" reminder at 8:40.
+ * Ticking closes at 23:59:59 local; a day left unticked is then settled.
+ */
+async function habitReminders(): Promise<number> {
+  const found = (await sql`
+    with people as (
+      select s.user_id,
+             coalesce((select name from pg_timezone_names where name = pr.timezone), 'UTC') as tz
+        from (select distinct user_id from push_subscriptions) s
+        join profiles pr on pr.id = s.user_id
+        left join notification_prefs np on np.user_id = s.user_id
+       where coalesce(np.habits, true)
+    ),
+    now_local as (
+      select user_id,
+             (now() at time zone tz)::date as today,
+             extract(hour from now() at time zone tz)::int as hour
+        from people
+    )
+    select n.user_id, n.today::text as today, n.hour as slot,
+           array_agg(h.title order by h.streak desc, h.created_at) as titles,
+           max(h.streak)::int as streak
+      from now_local n
+      join habits h on h.user_id = n.user_id
+     where n.hour in (18, 21)
+       and h.active
+       and is_habit_due(h.days, n.today)
+       and not habit_over(
+             h.ends_on, h.occurrences_limit,
+             (select count(*)::int from habit_log l
+               where l.habit_id = h.id and l.day < n.today),
+             n.today)
+       and not exists (select 1 from habit_log l
+                        where l.habit_id = h.id and l.day = n.today and l.done)
+     group by n.user_id, n.today, n.hour
+  `) as HabitRow[];
+  if (!found.length) return 0;
+
+  const refs = found.map((f) => `${f.today}@${f.slot}`);
+  const claimed = new Set(
+    (
+      (await sql`
+        insert into notification_log (user_id, kind, ref)
+        select u, 'habit', r from unnest(${found.map((f) => f.user_id)}::uuid[], ${refs}::text[]) as x(u, r)
+        on conflict do nothing
+        returning user_id || ' ' || ref as key
+      `) as { key: string }[]
+    ).map((r) => r.key)
+  );
+
+  let sent = 0;
+  for (const f of found) {
+    const ref = `${f.today}@${f.slot}`;
+    if (!claimed.has(`${f.user_id} ${ref}`)) continue;
+
+    const n = f.titles.length;
+    const left = f.slot === 21 ? "Three hours left" : "Still time today";
+    const streak = f.streak > 0 ? ` Keep your ${f.streak}-day streak going.` : "";
+    const reached = await sendToUser(f.user_id, {
+      title: n === 1 ? `Don't forget: ${f.titles[0]}` : `${n} habits still to tick`,
+      body: `${n === 1 ? left : `${listTitles(f.titles)}. ${left}`} — open until 11:59 pm.${streak}`,
+      url: "/habits",
+      tag: "habits",
+      badge: n,
+    }).catch(() => 0);
+    if (reached) sent++;
+    else await release(f.user_id, "habit", [ref]);
   }
   return sent;
 }

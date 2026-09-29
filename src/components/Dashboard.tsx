@@ -54,6 +54,8 @@ export default function Dashboard(props: {
   habits: Habit[];
   /** The user's local date, YYYY-MM-DD, which is the only tickable column. */
   habitToday: string;
+  /** Streak freezes left this month, shared by every habit. */
+  habitFreezes?: number;
   tableColumns: TableColumn[];
   tableValues: ColumnValues;
   sweptCount: number;
@@ -78,6 +80,7 @@ function Inner({
   steps,
   habits,
   habitToday,
+  habitFreezes,
   tableColumns,
   tableValues,
   sweptCount,
@@ -92,6 +95,8 @@ function Inner({
   steps: Record<string, Subtask[]>;
   habits: Habit[];
   habitToday: string;
+  /** Streak freezes left this month, shared by every habit. */
+  habitFreezes?: number;
   tableColumns: TableColumn[];
   tableValues: ColumnValues;
   sweptCount: number;
@@ -742,6 +747,7 @@ function Inner({
                   <HabitGrid
                     habits={habits}
                     today={habitToday}
+                    freezes={habitFreezes}
                     span={7}
                     onChanged={() => startTransition(() => router.refresh())}
                     onTicked={({ delta, xp, origin }) => {

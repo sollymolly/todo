@@ -21,12 +21,13 @@ type PrefsRow = {
   morning_minutes: number;
   messages: boolean;
   nudges: boolean;
+  habits: boolean;
 };
 
 export async function loadNotificationPrefs(): Promise<NotificationPrefs> {
   const userId = await requireUserId();
   const rows = (await sql`
-    select due_soon, lead_minutes, morning, morning_minutes, messages, nudges
+    select due_soon, lead_minutes, morning, morning_minutes, messages, nudges, habits
       from notification_prefs where user_id = ${userId}::uuid
   `) as PrefsRow[];
   const r = rows[0];
@@ -38,6 +39,7 @@ export async function loadNotificationPrefs(): Promise<NotificationPrefs> {
     morningMinutes: r.morning_minutes,
     messages: r.messages,
     nudges: r.nudges,
+    habits: r.habits,
   });
 }
 
@@ -46,9 +48,9 @@ export async function saveNotificationPrefs(input: NotificationPrefs): Promise<v
   const p = cleanPrefs(input);
   await sql`
     insert into notification_prefs
-      (user_id, due_soon, lead_minutes, morning, morning_minutes, messages, nudges, updated_at)
+      (user_id, due_soon, lead_minutes, morning, morning_minutes, messages, nudges, habits, updated_at)
     values (${userId}::uuid, ${p.dueSoon}, ${p.leadMinutes}, ${p.morning},
-            ${p.morningMinutes}, ${p.messages}, ${p.nudges}, now())
+            ${p.morningMinutes}, ${p.messages}, ${p.nudges}, ${p.habits}, now())
     on conflict (user_id) do update set
       due_soon = excluded.due_soon,
       lead_minutes = excluded.lead_minutes,
@@ -56,6 +58,7 @@ export async function saveNotificationPrefs(input: NotificationPrefs): Promise<v
       morning_minutes = excluded.morning_minutes,
       messages = excluded.messages,
       nudges = excluded.nudges,
+      habits = excluded.habits,
       updated_at = now()
   `;
 }

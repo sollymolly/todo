@@ -222,6 +222,14 @@ export default function NotificationSettings({
 
           <li className="flex items-center gap-3 py-3">
             <div className="mr-auto min-w-0">
+              <p className="text-sm font-semibold text-mud-900">Habit reminders</p>
+              <p className="text-xs text-mud-500">At 6pm and 9pm if a habit due today isn&apos;t ticked yet.</p>
+            </div>
+            <Toggle on={prefs.habits} label="Habit reminders" onChange={(v) => update({ habits: v })} />
+          </li>
+
+          <li className="flex items-center gap-3 py-3">
+            <div className="mr-auto min-w-0">
               <p className="text-sm font-semibold text-mud-900">Messages</p>
               <p className="text-xs text-mud-500">When a companion writes to you.</p>
             </div>

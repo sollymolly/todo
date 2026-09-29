@@ -14,8 +14,9 @@ import {
    The habit grid, shared by the Habits page and the dashboard.
 
    One row per habit, one column per day: a green check for a day kept, a red
-   x for a day missed. Only today's cell can be pressed — once a day is over it
-   is settled one way or the other and stays that way.
+   x for a day missed, a snowflake for a day a streak freeze covered. Only
+   today's cell can be pressed, until 23:59:59 in the user's timezone — once a
+   day is over it is settled one way or the other and stays that way.
    -------------------------------------------------------------------------- */
 
 export type HabitTicked = {
@@ -49,6 +50,7 @@ function describe(h: Habit): string {
 export default function HabitGrid({
   habits: initial,
   today,
+  freezes,
   span = 7,
   manage = false,
   onEdit,
@@ -57,6 +59,8 @@ export default function HabitGrid({
 }: {
   habits: Habit[];
   today: string;
+  /** Streak freezes left this month, shown in the header. */
+  freezes?: number;
   /** How many days the grid shows at once. */
   span?: number;
   /** Show pause and delete on each row. */
@@ -84,12 +88,15 @@ export default function HabitGrid({
   const earliest = shiftDay(today, -179);
 
   async function tick(h: Habit, day: string, e: React.MouseEvent) {
-    if (busy || day > today) return;
+    if (busy || day !== today) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const origin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     setBusy(h.id);
     setError(null);
-    const res = await toggleHabit(h.id, day);
+    // The device's own zone rides along, so "today" on the server is the
+    // user's today even if the stored zone is stale.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const res = await toggleHabit(h.id, day, zone);
     setBusy(null);
     if (!res.ok) {
       setError(res.error);
@@ -100,13 +107,12 @@ export default function HabitGrid({
       prev.map((x) => {
         if (x.id !== h.id) return x;
         const log = { ...x.log };
-        // Un-ticking today clears the day; a past day stays settled, as a miss.
-        if (res.done || day !== today) log[day] = { done: res.done, xp: res.dayXp };
+        if (res.done) log[day] = { done: true, frozen: false, xp: res.delta };
         else delete log[day];
         return {
           ...x,
           log,
-          done_today: day === today ? res.done : x.done_today,
+          done_today: res.done,
           streak: res.streak,
           best_streak: Math.max(x.best_streak, res.streak),
         };
@@ -127,8 +133,18 @@ export default function HabitGrid({
         >
           ← Earlier
         </button>
-        <span className="font-display text-sm font-bold text-mud-800">
-          {fmtRange(days[0], days[days.length - 1])}
+        <span className="flex flex-col items-center leading-tight">
+          <span className="font-display text-sm font-bold text-mud-800">
+            {fmtRange(days[0], days[days.length - 1])}
+          </span>
+          {freezes !== undefined && (
+            <span
+              className="text-[11px] font-semibold text-sky-700"
+              title="A missed day spends one instead of breaking the streak. Two each month, shared by every habit."
+            >
+              ❄ {freezes} streak freeze{freezes === 1 ? "" : "s"} left this month
+            </span>
+          )}
         </span>
         <button
           onClick={() => setStart((d) => (shiftDay(d, 7) > today ? today : shiftDay(d, 7)))}
@@ -276,6 +292,7 @@ function Cell({
   const box =
     "mx-auto flex size-10 items-center justify-center rounded-xl border-2 text-lg font-bold";
 
+  // Today is the only day that can be pressed.
   if (day === today && (h.due_today || entry)) {
     const done = !!entry?.done;
     return (
@@ -284,7 +301,11 @@ function Cell({
         disabled={busy}
         aria-pressed={done}
         aria-label={done ? `Un-tick ${h.title} for today` : `Tick ${h.title} for today`}
-        title={done ? `Done today (+${entry.xp} XP) — press to undo` : "Tick off today"}
+        title={
+          done
+            ? `Done today (+${entry.xp} XP) — press to undo`
+            : "Tick off today — open until 11:59:59 pm"
+        }
         className={`${box} transition ${
           done
             ? "border-grass-700 bg-grass-600 text-white shadow-sm hover:bg-grass-500"
@@ -296,34 +317,27 @@ function Cell({
     );
   }
 
-  // A past day that was settled either way can still be changed: a miss
-  // ticked late, or a tick taken back. Days to come never get here.
-  if (entry && day < today) {
-    const label = new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      timeZone: "UTC",
-    });
+  // A settled day: kept, frozen or missed. Read-only.
+  if (entry) {
+    if (entry.done)
+      return (
+        <span className={`${box} border-grass-700 bg-grass-600 text-white`} title={`Kept (+${entry.xp} XP)`}>
+          ✓
+        </span>
+      );
+    if (entry.frozen)
+      return (
+        <span
+          className={`${box} border-sky-400 bg-sky-100 text-sky-600`}
+          title="Missed, but a streak freeze held the streak"
+        >
+          ❄
+        </span>
+      );
     return (
-      <button
-        onClick={onTick}
-        disabled={busy}
-        aria-pressed={entry.done}
-        aria-label={`${entry.done ? "Un-tick" : "Tick"} ${h.title} for ${label}`}
-        title={
-          entry.done
-            ? `Kept (+${entry.xp} XP) — press to undo`
-            : `Missed (${entry.xp} XP) — press if you did it after all`
-        }
-        className={`${box} transition ${
-          entry.done
-            ? "border-grass-700 bg-grass-600 text-white hover:bg-grass-500"
-            : "border-red-600 bg-red-500 text-white hover:border-grass-500 hover:bg-red-400"
-        } ${busy ? "animate-pulse" : ""}`}
-      >
-        {entry.done ? "✓" : "✕"}
-      </button>
+      <span className={`${box} border-red-600 bg-red-500 text-white`} title={`Missed (${entry.xp} XP)`}>
+        ✕
+      </span>
     );
   }
 
@@ -342,10 +356,7 @@ function Cell({
   // Coming up: an empty box on each day it is due, pressable once it is today.
   if (day > today) {
     const upcoming =
-      h.active &&
-      !h.finished &&
-      h.days.includes(isoWeekday(day)) &&
-      (!h.ends_on || day <= h.ends_on);
+      h.active && !h.finished && (!h.ends_on || day <= h.ends_on);
     return upcoming ? (
       <span className={`${box} border-mud-300 bg-white`} title="Coming up" />
     ) : (

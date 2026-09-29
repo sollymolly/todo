@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import HabitGrid from "@/components/HabitGrid";
+import TimezoneSync from "@/components/TimezoneSync";
 import { useFx } from "@/components/Fx";
 import { addHabit, updateHabit } from "@/lib/habit-actions";
 import {
@@ -55,9 +56,15 @@ function sameDays(a: number[], b: number[]): boolean {
 export default function Habits({
   habits,
   today,
+  zone,
+  freezes,
 }: {
   habits: Habit[];
   today: string;
+  /** Streak freezes left this month. */
+  freezes: number;
+  /** The timezone the server measured `today` in. */
+  zone: string | null;
 }) {
   const router = useRouter();
   const { celebrate } = useFx();
@@ -124,6 +131,7 @@ export default function Habits({
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
+      <TimezoneSync stored={zone} />
       <header className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-wide text-mud-900 drop-shadow-sm sm:text-3xl">
@@ -300,6 +308,7 @@ export default function Habits({
           <HabitGrid
             habits={habits}
             today={today}
+            freezes={freezes}
             manage
             onEdit={edit}
             onChanged={refresh}

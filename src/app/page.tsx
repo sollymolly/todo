@@ -127,8 +127,9 @@ export default async function Home({
   // Habits and their log, a section of their own.
   let habits: Habit[] = [];
   let habitToday = new Date().toISOString().slice(0, 10);
+  let habitFreezes: number | undefined;
   try {
-    ({ habits, today: habitToday } = await listHabits());
+    ({ habits, today: habitToday, freezes: habitFreezes } = await listHabits());
   } catch {
     /* habits aren't set up yet */
   }
@@ -145,6 +146,7 @@ export default async function Home({
       steps={steps}
       habits={habits}
       habitToday={habitToday}
+      habitFreezes={habitFreezes}
       tableColumns={tableColumns}
       tableValues={tableValues}
       sweptCount={sweptCount}

@@ -20,6 +20,10 @@ export type HabitResult = { ok: true } | { ok: false; error: string };
 export type HabitBoard = {
   /** The caller's local date, YYYY-MM-DD. */
   today: string;
+  /** The timezone stored on the profile, which "today" was measured in. */
+  zone: string | null;
+  /** Streak freezes left this month, shared by every habit. */
+  freezes: number;
   habits: Habit[];
 };
 
@@ -27,10 +31,8 @@ export type HabitTick =
   | {
       ok: true;
       done: boolean;
-      /** Everything that moved on the profile. */
+      /** Everything that moved on the profile — also today's reward. */
       delta: number;
-      /** What the day's log row now holds: its reward, or the miss. */
-      dayXp: number;
       streak: number;
       xp: number;
     }
@@ -50,8 +52,8 @@ function cleanDays(days: number[]): number[] | null {
 }
 
 /**
- * Settles every due day that has ended without a tick: -1 XP each, and the
- * streak resets. Idempotent, so it runs on every load next to sweepOverdue.
+ * Settles every due day that has ended without a tick: a streak freeze if one
+ * is left (streak held, no XP), otherwise -1 XP and the streak resets. Idempotent, so it runs on every load next to sweepOverdue.
  * Returns the XP it moved (zero or negative).
  */
 export async function syncHabits(): Promise<number> {
@@ -78,7 +80,10 @@ export async function listHabits(): Promise<HabitBoard> {
 
   const [meRows, rows, logs] = await Promise.all([
     sql`
-      select (now() at time zone coalesce(timezone, 'UTC'))::date::text as today
+      select (now() at time zone coalesce(timezone, 'UTC'))::date::text as today,
+             timezone as zone,
+             streak_freezes_left(id, (now() at time zone coalesce(timezone, 'UTC'))::date)
+               as freezes
         from profiles where id = ${userId}::uuid
     `,
     sql`
@@ -106,7 +111,7 @@ export async function listHabits(): Promise<HabitBoard> {
        order by h.active desc, h.created_at
     `,
     sql`
-      select habit_id, day::text as day, done, xp
+      select habit_id, day::text as day, done, frozen, xp
         from habit_log
        where user_id = ${userId}::uuid
          and day > current_date - ${HISTORY_DAYS}::int
@@ -114,14 +119,16 @@ export async function listHabits(): Promise<HabitBoard> {
   ]);
 
   const byHabit: Record<string, Record<string, HabitDay>> = {};
-  for (const l of logs as { habit_id: string; day: string; done: boolean; xp: number }[])
-    (byHabit[l.habit_id] ??= {})[l.day] = { done: l.done, xp: l.xp };
+  for (const l of logs as (HabitDay & { habit_id: string; day: string })[])
+    (byHabit[l.habit_id] ??= {})[l.day] = { done: l.done, frozen: l.frozen, xp: l.xp };
 
-  const today =
-    (meRows as { today: string }[])[0]?.today ?? new Date().toISOString().slice(0, 10);
+  const me = (meRows as { today: string; zone: string | null; freezes: number }[])[0];
+  const today = me?.today ?? new Date().toISOString().slice(0, 10);
 
   return {
     today,
+    zone: me?.zone ?? null,
+    freezes: me?.freezes ?? 2,
     habits: (rows as Record<string, unknown>[]).map((r) => {
       const finished = r.finished as boolean;
       return {
@@ -146,30 +153,34 @@ export async function listHabits(): Promise<HabitBoard> {
 }
 
 /**
- * Ticks a day, or un-ticks it. Today works as it always has; a past day that
- * was settled as a miss can be ticked late (the miss is refunded), and a past
- * tick can be taken back (it becomes a miss). Days to come are refused.
+ * Ticks today, or un-ticks it. `day` is the day the grid thinks is today; the
+ * server refuses it once that day has ended in the user's timezone (the box
+ * closes at 23:59:59 local) or if it hasn't begun. `zone` is the device's
+ * timezone, stored before the toggle so "today" is always the user's own.
  */
-export async function toggleHabit(id: string, day: string): Promise<HabitTick> {
+export async function toggleHabit(
+  id: string,
+  day: string,
+  zone?: string
+): Promise<HabitTick> {
   const userId = await requireUserId();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: "Could not update that habit." };
+  const tz = zone && /^[A-Za-z0-9+_\-/]{1,64}$/.test(zone) ? zone : null;
   try {
     const rows = (await sql`
-      select toggle_habit_day(${userId}::uuid, ${id}::uuid, ${day}::date) as result
+      select toggle_habit_day(${userId}::uuid, ${id}::uuid, ${day}::date, ${tz}::text) as result
     `) as {
-      result: { done: boolean; delta: number; day_xp?: number; streak: number; xp: number };
+      result: { done: boolean; delta: number; streak: number; xp: number };
     }[];
     revalidatePath("/habits");
     revalidatePath("/");
-    const r = rows[0].result;
-    // Today's toggle reports only what moved, which is also the row's XP.
-    return { ok: true, ...r, dayXp: r.day_xp ?? r.delta };
+    return { ok: true, ...rows[0].result };
   } catch (e) {
     // The function's own exceptions are written for people; anything else
     // isn't worth showing.
     const msg = e instanceof Error ? e.message : "";
     if (/toggle_habit_day.* does not exist/i.test(msg))
-      return { ok: false, error: "Run db/schema.sql to tick past days." };
+      return { ok: false, error: "Run db/schema.sql to tick habits." };
     return {
       ok: false,
       error: /^That (habit|day)/.test(msg) ? msg : "Could not update that habit.",
