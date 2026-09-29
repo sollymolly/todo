@@ -28,6 +28,11 @@ export type Pos = { x: number; y: number; facing: 0 | 1 | 2 | 3 };
 
 /** How often to check in while in a shared room: people are moving about. */
 export const ROOM_PULSE_MS = 1_500;
+/**
+ * The same, while the live connection is up: positions and changes arrive
+ * over it as they happen, so the check-in is only the backstop.
+ */
+export const LIVE_ROOM_PULSE_MS = 5_000;
 
 /**
  * The space a place is, for talking: people in the same one can hear each

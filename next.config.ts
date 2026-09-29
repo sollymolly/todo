@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The village's live connection (src/app/api/village/live): the WebSocket
+  // server and the Redis subscriber are plain Node packages, loaded as-is
+  // rather than bundled.
+  serverExternalPackages: ["ws", "ioredis", "@vercel/functions"],
   experimental: {
     serverActions: {
       // Screenshot import posts the image to a server action. The browser

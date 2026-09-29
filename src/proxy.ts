@@ -18,7 +18,7 @@ import { PRIVACY_VERSION } from "@/lib/policy";
    own secret (src/app/api/cron/reminders/route.ts). */
 const PUBLIC_PATHS = ["/login", "/privacy", "/forgot-password", "/reset-password", "/api/cron"];
 
-function policy(nonce: string, dev: boolean): string {
+function policy(nonce: string, dev: boolean, host: string): string {
   return [
     "default-src 'self'",
     // 'strict-dynamic' lets the nonced bootstrap load the chunks it needs
@@ -32,7 +32,9 @@ function policy(nonce: string, dev: boolean): string {
     "font-src 'self' data:",
     // Server actions post back to this origin; nothing should reach anywhere
     // else. This is also what stops an injected script exfiltrating messages.
-    `connect-src 'self'${dev ? " ws: wss:" : ""}`,
+    // This origin's own wss: is spelled out for the village's live socket:
+    // older Safari doesn't count it as 'self'.
+    `connect-src 'self' wss://${host}${dev ? " ws: wss:" : ""}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -46,7 +48,10 @@ function policy(nonce: string, dev: boolean): string {
 export async function proxy(request: NextRequest) {
   const dev = process.env.NODE_ENV !== "production";
   const nonce = crypto.randomUUID().replace(/-/g, "");
-  const csp = policy(nonce, dev);
+  // Only a plain host:port goes into the policy, never anything that could
+  // close the directive early.
+  const host = /^[a-z0-9.-]+(:\d+)?$/i.test(request.nextUrl.host) ? request.nextUrl.host : "localhost";
+  const csp = policy(nonce, dev, host);
 
   // Next reads the nonce back out of this request header to stamp its own
   // inline scripts, so the two can never drift apart.

@@ -15,11 +15,13 @@ import { makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, walkTo, type Agent }
 import { ATLAS, buildWorld, inRect, PROPS, T, type Grid, type World } from "@/components/village/world";
 import { composeSheet } from "@/lib/sprite";
 import { checkIn, publishPulse, serverNow, useSessionStore } from "@/lib/session-store";
+import { useVillageLive } from "@/lib/live-client";
 import { challenge, loadInterior, markNudgesSeen, saveInterior } from "@/lib/village-actions";
 import { cleanInterior, FURNITURE, type FurnitureKind, type Interior } from "@/lib/furniture";
 import {
   bloomFor,
   BUBBLE_MS,
+  LIVE_ROOM_PULSE_MS,
   ONLINE_MS,
   PULSE_MS,
   ROOM_PULSE_MS,
@@ -76,6 +78,9 @@ function useScale() {
   }, []);
   return scale;
 }
+
+/** A live position this recent outranks the check-in's. */
+const LIVE_FRESH_MS = 8_000;
 
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
 const promptKey = (p: Prompt) => (!p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind);
@@ -196,6 +201,10 @@ export default function Village({ data }: { data: VillageData }) {
 
   const agents = useRef(new Map<string, Agent>()); // outside
   const roomAgents = useRef(new Map<string, Agent>()); // in a room or the arena
+  /** When each person's position last arrived over the live connection. */
+  const liveSeen = useRef(new Map<string, number>());
+  /** Check in right now; set up by the check-in loop further down. */
+  const beatNow = useRef<() => void>(() => {});
   const player = useRef<Agent | null>(null);
   /** Hands a walker's element to its agent, so the loop can move it. */
   const bindAgent = useCallback(
@@ -273,6 +282,9 @@ export default function Village({ data }: { data: VillageData }) {
         a = makeAgent(p.villager.id, entry.x, entry.y - 1, PLAYER_SPEED);
         map.set(p.villager.id, a);
       }
+      // Someone whose position is arriving live is already where they
+      // should be; the check-in's copy is older and would pull them back.
+      if (Date.now() - (liveSeen.current.get(p.villager.id) ?? 0) < LIVE_FRESH_MS) continue;
       const tx = Math.round(p.x);
       const ty = Math.round(p.y);
       const cur = { x: Math.floor(a.x / T), y: Math.floor((a.y - 8) / T) };
@@ -336,9 +348,54 @@ export default function Village({ data }: { data: VillageData }) {
     return out;
   }, [scene.kind, livePulse.duels]);
 
-  /* ------------------------------------------------------------ talk */
+  /* ------------------------------------------------------------ live */
 
   const space = spaceOf(place);
+
+  // Pokes come in bursts — a move, then the round it settles — and one
+  // check-in covers the lot.
+  const pokeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pokeBeat = useCallback(() => {
+    clearTimeout(pokeTimer.current);
+    pokeTimer.current = setTimeout(() => beatNow.current(), 120);
+  }, []);
+
+  const live = useVillageLive(space, {
+    poke: pokeBeat,
+    pos: ({ id, x, y, f }) => {
+      const sc = sceneRef.current;
+      if (sc.kind === "out") return;
+      const a = roomAgents.current.get(id);
+      // Someone new: the check-in brings what they look like.
+      if (!a) return pokeBeat();
+      liveSeen.current.set(id, Date.now());
+      const g = sc.kind === "room" ? sc.room : sc.arena;
+      const tx = Math.round(x);
+      const ty = Math.round(y);
+      const cur = { x: Math.floor(a.x / T), y: Math.floor((a.y - 8) / T) };
+      if (cur.x !== tx || cur.y !== ty) walkTo(g, a, tx, ty);
+      else if (!a.path.length) a.dir = (f % 4) as Agent["dir"];
+    },
+  });
+  const liveRef = useRef(false);
+  const sendPosRef = useRef(live.sendPos);
+  useEffect(() => {
+    liveRef.current = live.connected;
+    sendPosRef.current = live.sendPos;
+  }, [live.connected, live.sendPos]);
+
+  // A round that runs out of time: check in the moment it does, rather than
+  // waiting to be told.
+  const duelId = myDuel?.id;
+  const roundEndsAt = myDuel?.status === "active" ? myDuel.roundEndsAt : null;
+  useEffect(() => {
+    if (!duelId || !roundEndsAt) return;
+    const id = setTimeout(() => beatNow.current(), Math.max(0, roundEndsAt - serverNow(skew) + 250));
+    return () => clearTimeout(id);
+  }, [duelId, roundEndsAt, skew]);
+
+  /* ------------------------------------------------------------ talk */
+
   const chatLines = useMemo(() => {
     const server = livePulse.room && livePulse.room.space === space ? livePulse.room.chat : [];
     const ids = new Set(server.map((l) => `${l.authorId}|${l.body}`));
@@ -381,6 +438,8 @@ export default function Village({ data }: { data: VillageData }) {
     let raf = 0;
     let last = performance.now();
     let lastCheck = 0;
+    let sentKey = "";
+    let sentAt = 0;
     const tick = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
@@ -395,6 +454,19 @@ export default function Village({ data }: { data: VillageData }) {
       if ((vx || vy) && !lockedRef.current) nudgePlayer(g, p, vx, vy, dt);
       else step(g, p, dt, t);
       paint(p, S);
+
+      // In a shared room, tell the others each time I reach a new tile or
+      // turn — the same numbers the check-in sends, just sooner.
+      if (sc.kind !== "out" && liveRef.current && t - sentAt > 160) {
+        const x = (p.x - T / 2) / T;
+        const y = (p.y - T / 2 - 8) / T;
+        const key = `${Math.round(x)},${Math.round(y)},${p.dir}`;
+        if (key !== sentKey) {
+          sentKey = key;
+          sentAt = t;
+          sendPosRef.current(x, y, p.dir);
+        }
+      }
       const others = sc.kind === "out" ? agents.current : roomAgents.current;
       for (const a of others.values()) {
         step(g, a, dt, t);
@@ -472,7 +544,6 @@ export default function Village({ data }: { data: VillageData }) {
   }, []);
 
   const shownNudges = useRef(new Set<string>());
-  const beatNow = useRef<() => void>(() => {});
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastPlace = "";
@@ -491,7 +562,10 @@ export default function Village({ data }: { data: VillageData }) {
           setToasts((t) => [...t, { id: n.id, nudge: true, text: `${n.fromName} nudged you: “${n.body}”${n.about ? ` (${n.about})` : ""}` }]);
         }
       }
-      timer = setTimeout(beat, sceneRef.current.kind !== "out" ? ROOM_PULSE_MS : PULSE_MS);
+      timer = setTimeout(
+        beat,
+        sceneRef.current.kind === "out" ? PULSE_MS : liveRef.current ? LIVE_ROOM_PULSE_MS : ROOM_PULSE_MS
+      );
     };
     beatNow.current = () => void beat();
     void beat();

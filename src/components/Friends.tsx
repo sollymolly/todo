@@ -41,6 +41,10 @@ import { escrowKey, getMessageKey } from "@/lib/message-key";
 type Shown = { id: string; mine: boolean; text: string; at: string };
 
 /** How often an open thread asks for anything new. */
+/** The "← Quests" header button, styled like the other pages' back buttons. */
+const HOME_BUTTON =
+  "shrink-0 rounded-lg border border-mud-300 bg-white/80 px-3 py-1.5 text-xs font-semibold text-mud-700 transition hover:border-grass-500 hover:bg-grass-50 hover:text-grass-700";
+
 const POLL_MS = 5000;
 /** And the conversation list, for previews and unread counts. */
 const INBOX_MS = 8000;
@@ -220,6 +224,11 @@ export default function Friends({
               ‹
             </Link>
             <h1 className="flex-1 font-display text-xl font-bold text-mud-900">Messages</h1>
+            {/* Phones have the tab bar; wider screens get the header button
+                every other page has. */}
+            <Link href="/" className={`${HOME_BUTTON} hidden sm:inline-block`}>
+              ← Quests
+            </Link>
             <button
               onClick={() => setAdding(true)}
               className="rounded-full bg-grass-600 px-3 py-1 text-xs font-semibold text-white hover:bg-grass-500"
@@ -698,6 +707,11 @@ function Thread({
             </span>
           </span>
         </button>
+        {/* Between sm and lg the list is hidden while a chat is open, and with
+            it the list's way home. */}
+        <Link href="/" className={`${HOME_BUTTON} hidden sm:inline-block lg:hidden`}>
+          ← Quests
+        </Link>
         <button
           onClick={() => setShowInfo((v) => !v)}
           aria-label="About this conversation"

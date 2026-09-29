@@ -1,7 +1,9 @@
 "use server";
 
+import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { levelFor } from "@/lib/game";
+import { poke } from "@/lib/live";
 import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { sendToUser } from "@/lib/push";
@@ -288,6 +290,7 @@ export async function say(space: string, text: string): Promise<Result> {
   if (!(await inSpace(me, space))) return { ok: false, error: "You've wandered off: nobody here to hear it." };
   if (await rateLimited("say", me)) return { ok: false, error: TOO_MANY };
   await sql`insert into space_chat (space, author_id, body) values (${space}, ${me}::uuid, ${body})`;
+  after(() => poke(space));
   return { ok: true };
 }
 
@@ -311,6 +314,7 @@ export async function challenge(opponentId: string): Promise<Result> {
   if (await openDuelOf(opponentId)) return { ok: false, error: "They're already in a duel." };
   if (await rateLimited("duel", me)) return { ok: false, error: TOO_MANY };
   await sql`insert into duels (a_id, b_id) values (${me}::uuid, ${opponentId}::uuid)`;
+  after(() => poke("arena"));
   return { ok: true };
 }
 
@@ -321,6 +325,7 @@ export async function answerDuel(duelId: string, accept: boolean): Promise<Resul
   const age = d ? Date.now() - new Date(d.created_at as string | Date).getTime() : Infinity;
   if (!d || d.b_id !== me || d.status !== "pending" || age > INVITE_MS)
     return { ok: false, error: "That challenge has expired." };
+  after(() => poke("arena"));
   if (!accept) {
     await sql`update duels set status = 'declined', updated_at = now() where id = ${duelId}::uuid and status = 'pending'`;
     return { ok: true };
@@ -353,9 +358,11 @@ export async function duelMove(duelId: string, move: string): Promise<Result> {
     returning id
   `) as unknown[];
   if (!rows.length) return { ok: false, error: "Too late for that round." };
-  // Both in? Settle it now rather than at the next check-in.
+  // Both in? Settle it now rather than at the next check-in. Either way the
+  // other side sees it at once: "they've picked", or the round's result.
   const d = await duelById(duelId);
   if (d?.a_move && d.b_move) await advanceDuel(d);
+  after(() => poke("arena"));
   return { ok: true };
 }
 
@@ -370,4 +377,5 @@ export async function yieldDuel(duelId: string): Promise<void> {
      where id = ${duelId}::uuid and status in ('pending', 'active')
        and (a_id = ${me}::uuid or b_id = ${me}::uuid)
   `;
+  after(() => poke("arena"));
 }

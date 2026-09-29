@@ -1,5 +1,7 @@
+import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { judge, MAX_ROUNDS, resolveRound, type Move } from "@/lib/duel";
+import { poke } from "@/lib/live";
 import type { Appearance, Equipped } from "@/lib/types";
 import type { ChatLine, DuelView, Place, Pos, RoomPerson } from "@/lib/village";
 
@@ -175,6 +177,9 @@ export async function advanceDuel(d: DuelRow): Promise<DuelRow> {
       updated_at = now()
      where id = ${d.id}::uuid and status = 'active' and round = ${d.round}
   `;
+  // A round that ran out of time is settled by whichever check-in noticed;
+  // everyone else watching should see it now too.
+  after(() => poke("arena"));
   return (await duelById(d.id)) ?? d;
 }
 
