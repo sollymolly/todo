@@ -95,7 +95,6 @@ export const GROUND = {
   grass: [1, 23] as const,
   dirt: [9, 21] as const,
   dirtPebbles: [10, 21] as const,
-  stone: [16, 27] as const,
 };
 
 /* ----------------------------------------------------------------- layout */

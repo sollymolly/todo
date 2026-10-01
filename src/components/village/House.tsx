@@ -230,10 +230,10 @@ export default function House({
 
   return (
     <svg viewBox="0 0 256 224" width={256} height={224} shapeRendering="crispEdges" aria-hidden>
-      {/* Shadow on the ground, then the building, then the garden in front. */}
+      {/* Shadow on the ground, then the building, then the garden in front.
+          The path to the door is the ground's own dirt, under tile 4. */}
       <rect x={36} y={186} width={184} height={10} fill="#000" opacity={0.12} />
       {building}
-      <rect x={96} y={192} width={64} height={32} fill="#c69a5d" opacity={0.55} />
       <Bed x={32} garden={look.garden} bloom={bloom} />
       <Bed x={160} garden={look.garden} bloom={bloom} />
     </svg>
