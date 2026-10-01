@@ -26,7 +26,7 @@ export const T = 32;
 
 const MARGIN = 4; // forest around the edge
 const PLOT_W = 8;
-const SIDE_PLOTS = 3; // plots each side of the centre column
+const SIDE_PLOTS = 5; // plots each side of the centre column
 const CENTRE_W = 14;
 const BAND_H = 9;
 
@@ -137,11 +137,12 @@ export function plotAt(n: number): { x: number; y: number } {
 
 /**
  * How many lots the village has, given its highest-numbered house: always
- * a band of empty ones past it to move into, and at least two bands, so a
- * small village still has a road south.
+ * two bands of empty ones past it, room for newcomers and anyone moving, and
+ * at least three bands to start with. It grows as people arrive; there's no
+ * limit.
  */
 export function lotsFor(highest: number): number {
-  return Math.max(2, Math.ceil((highest + 1) / PLOTS_PER_BAND) + 1) * PLOTS_PER_BAND;
+  return Math.max(3, Math.ceil((highest + 1) / PLOTS_PER_BAND) + 2) * PLOTS_PER_BAND;
 }
 
 /**
@@ -236,22 +237,15 @@ export function buildWorld(owners: (string | null)[]): World {
     place(rand() < 0.7 ? "pine" : "oak", 1 + Math.floor(rand() * 2), y);
     place(rand() < 0.7 ? "pine" : "oak", w - 2 - Math.floor(rand() * 2), y);
   }
+  // Empty lots: cleared grass, a bush or a sapling at the back, and the
+  // "Empty lot" sign where a house's name would be (Village.tsx).
   for (const p of plots) {
     if (p.owner) continue;
-    // Each lot's own seed, so its trees stay put as the village grows.
+    // Each lot's own seed, so it looks the same as the village grows.
     const r = seeded(hash(`lot:${p.n}`))();
-    if (r < 0.4) {
-      place("oak", p.x + 2, p.y + 3);
-      place("bush", p.x + 5, p.y + 5);
-    } else if (r < 0.7) {
-      place("pine", p.x + 2, p.y + 2);
-      place("pine", p.x + 5, p.y + 3);
-      place("stump", p.x + 3, p.y + 5);
-    } else {
-      place("bush", p.x + 3, p.y + 3);
-      place("sapling", p.x + 6, p.y + 2);
-      props.push({ kind: "mushroom", px: (p.x + 1) * T, py: (p.y + 6) * T });
-    }
+    if (r < 0.5) place("bush", p.x + 6, p.y + 1);
+    else place("sapling", p.x + 1, p.y + 1);
+    block({ x: p.x, y: p.y + 6, w: 1, h: 1 });
   }
   // A little green on the road's shoulders.
   for (let b = 1; b < bands; b++) {

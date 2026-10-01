@@ -1562,6 +1562,23 @@ function Outdoors({
           )
         )}
 
+      {/* Empty lots: a signpost where a house's name would be */}
+      {world.plots.map((p) =>
+        p.owner ? null : (
+          <div
+            key={`sign-${p.n}`}
+            aria-hidden
+            className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
+            style={{ left: (p.x + 0.5) * T * S, top: (p.y + 7) * T * S - 4 * S, zIndex: (p.y + 7) * T }}
+          >
+            <div className="rounded-[3px] border-2 border-[#5a3e28] bg-[#d8bb8a] px-1.5 py-0.5 text-center leading-tight shadow-[0_2px_0_#5a3e28]">
+              <p className="whitespace-nowrap font-display text-[10px] font-bold text-[#5a3e28]">Empty lot</p>
+            </div>
+            <div className="bg-[#6b4a2b]" style={{ width: 3 * S, height: 12 * S }} />
+          </div>
+        )
+      )}
+
       {/* Houses, each with a signpost: everyone's, friends or not */}
       {world.plots.map((p) => {
         if (!p.owner) return null;

@@ -71,9 +71,10 @@ async function plotsVersion(): Promise<string> {
 }
 
 /**
- * Gives me a plot on my first visit: the empty lot nearest my companions'
- * houses — or nearest the hall if none of them has one yet — so friends end
- * up neighbours. They can move later (village-actions.ts, moveHouse).
+ * Gives someone a plot if they haven't one: the empty lot nearest their
+ * companions' houses — or nearest the hall if none of them has one yet — so
+ * friends end up neighbours. They can move later (village-actions.ts,
+ * moveHouse).
  */
 export async function ensurePlot(me: string, friends: string[]): Promise<void> {
   const mine = (await sql`select plot from houses where user_id = ${me}::uuid`) as { plot: number | null }[];
@@ -434,7 +435,16 @@ export type VillageData = {
 export async function loadVillage(me: string): Promise<VillageData> {
   const friends = await listFriends();
   const ids = [me, ...friends.map((f) => f.user_id)];
+  // My house, and my companions': theirs are built the first time anyone
+  // who knows them comes by, so nobody's missing from a friend's village
+  // just because they haven't opened it themselves yet.
   await ensurePlot(me, ids.slice(1));
+  const unplaced = (await sql`
+    select f.id from unnest(${ids.slice(1)}::uuid[]) as f(id)
+      left join houses h on h.user_id = f.id
+     where h.plot is null
+  `) as { id: string }[];
+  for (const { id } of unplaced) await ensurePlot(id, await friendIdsOf(id));
 
   const [meRows, houses, totals] = await Promise.all([
     sql`
