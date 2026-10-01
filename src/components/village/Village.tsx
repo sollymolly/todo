@@ -9,10 +9,12 @@ import ChatBar from "@/components/village/ChatBar";
 import DecoratePanel from "@/components/village/DecoratePanel";
 import { DuelUI, HeadBar } from "@/components/village/DuelUI";
 import { ArenaGate, ArenaView, RoomView } from "@/components/village/scenes";
+import { Bakery, Fountain, GardenGround, Library, ParkGround, Station, Store, Well } from "@/components/village/Landmarks";
+import TrainRide from "@/components/village/TrainRide";
 import { buildArena, buildRoom, type ArenaScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
 import { follow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, walkTo, type Agent } from "@/components/village/engine";
-import { ATLAS, buildWorld, inRect, PROPS, T, type Grid, type World } from "@/components/village/world";
+import { ATLAS, buildWorld, inRect, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
 import { composeAttack, composeSheet, type AttackSheet } from "@/lib/sprite";
 import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
 import { facingToward, HIT_COOLDOWN_MS } from "@/lib/duel";
@@ -62,12 +64,15 @@ type Open =
   | { kind: "hall" }
   | { kind: "people" }
   | { kind: "duelist"; id: string }
+  | { kind: "store" }
+  | { kind: "train" }
   | null;
 
 type Prompt =
   | { kind: "house"; id: string }
   | { kind: "hall" }
   | { kind: "arena" }
+  | { kind: "station" }
   | { kind: "leave" }
   | null;
 
@@ -96,6 +101,15 @@ const LIVE_FRESH_MS = 8_000;
  */
 const POS_HEARTBEAT_MS = 2_500;
 
+/** Each village's trees, turned to its season (world.ts, Theme). */
+const TREE_TINT: Record<Theme, string | undefined> = {
+  meadow: undefined,
+  autumn: "hue-rotate(-55deg) saturate(1.4)",
+  forest: "brightness(0.85) saturate(1.1)",
+  spring: "hue-rotate(250deg) saturate(0.75) brightness(1.15)",
+  snowy: "saturate(0.35) brightness(1.3)",
+};
+
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
 const promptKey = (p: Prompt) => (!p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind);
 
@@ -109,15 +123,22 @@ export default function Village({ data }: { data: VillageData }) {
     scaleRef.current = scale;
   }, [scale]);
 
-  // One village for everyone: each house on its own plot, the same on
-  // every screen (world.ts). Redrawn when someone arrives or moves house.
+  // Villages of PLOTS_PER_VILLAGE houses each, every house on its own plot,
+  // the same on every screen (world.ts), joined by trains. I start in my
+  // own. Redrawn when someone arrives or moves house.
   const [residents, setResidents] = useState<Resident[]>(data.residents);
   const residentOf = useMemo(() => new Map(residents.map((r) => [r.id, r])), [residents]);
+  const [v, setV] = useState(() => villageOf(data.residents.find((r) => r.id === data.me.id)?.plot ?? 0));
+  const vRef = useRef(v);
+  useEffect(() => {
+    vRef.current = v;
+  }, [v]);
+  const villages = useMemo(() => Math.max(1, ...residents.map((r) => villageOf(r.plot) + 1)), [residents]);
   const world: World = useMemo(() => {
-    const owners: (string | null)[] = [];
-    for (const r of residents) owners[r.plot] = r.id;
-    return buildWorld(Array.from(owners, (o) => o ?? null));
-  }, [residents]);
+    const owners: (string | null)[] = Array(PLOTS_PER_VILLAGE).fill(null);
+    for (const r of residents) if (villageOf(r.plot) === v) owners[r.plot % PLOTS_PER_VILLAGE] = r.id;
+    return buildWorld(v, owners);
+  }, [residents, v]);
   const plotOf = useMemo(() => new Map(world.plots.filter((p) => p.owner).map((p) => [p.owner!, p])), [world]);
 
   /* ------------------------------------------------------------ state */
@@ -171,10 +192,10 @@ export default function Village({ data }: { data: VillageData }) {
       });
   }, [livePulse.plotsAt]);
 
-  /** Tables in the order they're drawn, and who sits where. */
+  /** This village's tables in the order they're drawn, and who sits where. */
   const seating = useMemo(() => {
     const seats = new Map<string, { x: number; y: number; face: 0 | 1 | 2 | 3 }>();
-    const sessions = [...livePulse.sessions].sort((a, b) => a.startedAt - b.startedAt);
+    const sessions = livePulse.sessions.filter((s) => (s.village ?? 0) === v).sort((a, b) => a.startedAt - b.startedAt);
     sessions.forEach((s, i) => {
       const table = world.tables[i % world.tables.length];
       s.members.forEach((m, j) => {
@@ -183,7 +204,7 @@ export default function Village({ data }: { data: VillageData }) {
       });
     });
     return seats;
-  }, [livePulse.sessions, world]);
+  }, [livePulse.sessions, world, v]);
 
   const sessionOf = useCallback(
     (id: string): SessionView | null => livePulse.sessions.find((s) => s.members.some((m) => m.villager.id === id)) ?? null,
@@ -196,15 +217,18 @@ export default function Village({ data }: { data: VillageData }) {
    */
   const outdoorPeople: OutdoorPerson[] = useMemo(() => {
     const out = new Map<string, OutdoorPerson>();
-    for (const o of livePulse.outdoors ?? []) out.set(o.villager.id, o);
+    // Only a check-in from this village: one from the last can still be
+    // on its way back after a train ride.
+    if ((livePulse.village ?? 0) === v) for (const o of livePulse.outdoors ?? []) out.set(o.villager.id, o);
     for (const s of livePulse.sessions)
-      for (const m of s.members)
-        if (m.villager.id !== me.id && !out.has(m.villager.id))
-          out.set(m.villager.id, { villager: m.villager, known: m.known, place: { kind: "home" }, pos: null });
+      if ((s.village ?? 0) === v)
+        for (const m of s.members)
+          if (m.villager.id !== me.id && !out.has(m.villager.id))
+            out.set(m.villager.id, { villager: m.villager, known: m.known, place: { kind: "home" }, pos: null });
     return [...out.values()];
-  }, [livePulse.outdoors, livePulse.sessions, me.id]);
+  }, [livePulse.village, livePulse.outdoors, livePulse.sessions, me.id, v]);
 
-  const space = spaceOf(place);
+  const space = spaceOf(place, v);
 
   /** In a room or the arena: whoever the check-in says is here with me. */
   const roomPeople = useMemo(
@@ -341,7 +365,7 @@ export default function Village({ data }: { data: VillageData }) {
   }, [outdoorPeople, seating, plotOf, world]);
 
   // Live positions are in the space they came from: a new scene starts afresh.
-  const sceneKey = scene.kind === "room" ? `room:${scene.hostId}` : scene.kind;
+  const sceneKey = `${v}:${scene.kind === "room" ? `room:${scene.hostId}` : scene.kind}`;
   useEffect(() => {
     lastLive.current.clear();
   }, [sceneKey]);
@@ -479,7 +503,7 @@ export default function Village({ data }: { data: VillageData }) {
     seatedRef.current = !!livePulse.mySessionId;
   }, [livePulse.mySessionId]);
 
-  const live = useVillageLive(liveSpaceOf(place), {
+  const live = useVillageLive(liveSpaceOf(place, v), {
     poke: pokeBeat,
     joined: () => {
       resendPos.current = true;
@@ -696,6 +720,8 @@ export default function Village({ data }: { data: VillageData }) {
           }
           const da = Math.hypot(tx - (world.arena.door.x + 0.5), ty - (world.arena.door.y + 0.5));
           if (!best && da < 1.7) best = { kind: "arena" };
+          const ds = Math.hypot(tx - (world.station.door.x + 0.5), ty - (world.station.door.y + 0.5));
+          if (!best && ds < 1.7) best = { kind: "station" };
           if (placeKey(where) !== placeKey(placeRef.current)) {
             placeRef.current = where;
             setPlace(where);
@@ -723,7 +749,7 @@ export default function Village({ data }: { data: VillageData }) {
   // Where I am, as every check-in says it — this loop's, and any other on
   // the page (session-store.ts).
   const here = useCallback(
-    () => ({ place: placeRef.current, pos: tilesOf(player.current!) }),
+    () => ({ place: placeRef.current, pos: tilesOf(player.current!), village: vRef.current }),
     []
   );
   useEffect(() => {
@@ -751,7 +777,7 @@ export default function Village({ data }: { data: VillageData }) {
       try {
         if (document.visibilityState === "visible") {
           const at = here();
-          const r = await checkIn(at.place, at.pos);
+          const r = await checkIn(at.place, at.pos, at.village);
           lastPlace = placeKey(at.place);
           if (r?.focusXp) toast(`+${r.focusXp} XP for focus time`);
           for (const n of r?.nudges ?? []) {
@@ -791,7 +817,7 @@ export default function Village({ data }: { data: VillageData }) {
       // on my last check-in — so make that where I actually stopped.
       if (sceneRef.current.kind !== "out") {
         const at = here();
-        void checkIn(at.place, at.pos);
+        void checkIn(at.place, at.pos, at.village);
       }
     };
     document.addEventListener("visibilitychange", onVis);
@@ -880,6 +906,7 @@ export default function Village({ data }: { data: VillageData }) {
       if (!p) return;
       if (p.kind === "hall") setOpen({ kind: "hall" });
       else if (p.kind === "arena") enterArena();
+      else if (p.kind === "station") setOpen({ kind: "train" });
       else if (p.kind === "leave") leave();
       else void enterHouse(p.id);
     },
@@ -978,10 +1005,18 @@ export default function Village({ data }: { data: VillageData }) {
     setDeco({ ...deco, draft: clean });
   }
 
+  /** Someone's village, if it isn't this one: their house is a train ride away. */
+  function awayIn(id: string): string | null {
+    const r = residentOf.get(id);
+    return r && villageOf(r.plot) !== v ? villageInfo(villageOf(r.plot)).name : null;
+  }
+
   function visitHouse(id: string) {
+    const away = awayIn(id);
+    const r = residentOf.get(id);
+    if (away) return toast(`${r ? `${r.name}'s` : "Their"} house is in ${away}. Take the train from the station.`);
     const plot = plotOf.get(id);
     if (!plot) return;
-    const r = residentOf.get(id);
     // Anyone's house can be seen; only companions go in (village-actions, loadInterior).
     if (r && !r.known) return toast(`That's ${r.name}'s house. Only their companions go in.`);
     walkTo(world, player.current!, plot.door.x, plot.door.y, () => void enterHouse(id));
@@ -1008,6 +1043,36 @@ export default function Village({ data }: { data: VillageData }) {
     walkTo(world, player.current!, world.arena.door.x, world.arena.door.y, () => enterArena());
   }
 
+  function goToStation() {
+    walkTo(world, player.current!, world.station.door.x, world.station.door.y, () => setOpen({ kind: "train" }));
+  }
+
+  /* ---------------------------------------------------------- trains */
+
+  // Aboard, on the way to village `ride`; arriving puts me on its platform.
+  const [ride, setRide] = useState<number | null>(null);
+  function board(to: number) {
+    setOpen(null);
+    if (to !== v) setRide(to);
+  }
+  const arrive = useCallback(() => {
+    if (ride == null) return;
+    // Every village's station is in the same place (world.ts).
+    const door = world.station.door;
+    const p = player.current!;
+    p.path = [];
+    p.goal = null;
+    p.x = door.x * T + T / 2;
+    p.y = door.y * T + T / 2 + 8;
+    p.dir = 0;
+    vRef.current = ride;
+    setV(ride);
+    setRide(null);
+    placeRef.current = { kind: "square" };
+    setPlace(placeRef.current);
+    beatNow.current();
+  }, [ride, world]);
+
   /* ------------------------------------------------------------- words */
 
   const statusOfId = (id: string) => statusOf(livePulse.presence[id], now);
@@ -1026,14 +1091,16 @@ export default function Village({ data }: { data: VillageData }) {
       return mins < 60 ? `${label} · here ${mins} min ago` : mins < 1440 ? `${label} · here ${Math.round(mins / 60)} h ago` : label;
     }
     if (status === "home") return label + seat;
-    if (seating.has(id)) return `${label} · working at the town hall`;
-    const p = livePulse.presence[id]!.place;
+    const { place: p, village } = livePulse.presence[id]!;
+    // In a village: which one, by name.
+    const named = `In ${villageInfo(village ?? 0).name}`;
+    if (seating.has(id)) return `${named} · working at the town hall`;
     const whose = (host: string) => (host === me.id ? "your" : host === id ? "their" : `${byId.get(host)?.name ?? "someone"}'s`);
-    if (p.kind === "hall") return `${label} · at the town hall`;
-    if (p.kind === "arena") return `${label} · in the arena`;
-    if (p.kind === "inside") return `${label} · inside ${whose(p.hostId)} house`;
-    if (p.kind === "house") return `${label} · ${p.hostId === id ? "outside their house" : `at ${whose(p.hostId)} house`}`;
-    return `${label} · out on the square`;
+    if (p.kind === "hall") return `${named} · at the town hall`;
+    if (p.kind === "arena") return `${named} · in the arena`;
+    if (p.kind === "inside") return `${named} · inside ${whose(p.hostId)} house`;
+    if (p.kind === "house") return `${named} · ${p.hostId === id ? "outside their house" : `at ${whose(p.hostId)} house`}`;
+    return `${named} · out on the square`;
   }
 
   const S = scale;
@@ -1041,6 +1108,8 @@ export default function Village({ data }: { data: VillageData }) {
     ? null
     : prompt.kind === "hall"
       ? "Enter the town hall"
+      : prompt.kind === "station"
+        ? "Take the train"
       : prompt.kind === "arena"
         ? "Enter the arena"
         : prompt.kind === "leave"
@@ -1100,6 +1169,8 @@ export default function Village({ data }: { data: VillageData }) {
               onHall={goToHall}
               onArena={goToArena}
               onLot={(n) => void moveTo(n)}
+              onStore={() => setOpen({ kind: "store" })}
+              onStation={goToStation}
             />
           )}
           {scene.kind === "room" && shownRoom && (
@@ -1192,7 +1263,7 @@ export default function Village({ data }: { data: VillageData }) {
             </button>
           )}
           <h1 className="panel rounded-lg px-3 py-1.5 font-display text-sm font-bold text-mud-900">
-            {scene.kind === "out" ? "Village" : scene.kind === "arena" ? "Arena" : `${hostName} ${roomTier}`}
+            {scene.kind === "out" ? world.name : scene.kind === "arena" ? `${world.name} arena` : `${hostName} ${roomTier}`}
           </h1>
         </div>
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
@@ -1211,6 +1282,9 @@ export default function Village({ data }: { data: VillageData }) {
               </button>
               <button onClick={goToArena} className="panel rounded-lg px-3 py-1.5 text-xs font-semibold text-mud-700 hover:text-grass-700">
                 Arena
+              </button>
+              <button onClick={goToStation} className="panel rounded-lg px-3 py-1.5 text-xs font-semibold text-mud-700 hover:text-grass-700">
+                Station
               </button>
             </>
           )}
@@ -1280,6 +1354,8 @@ export default function Village({ data }: { data: VillageData }) {
           Arrow keys or WASD to walk · click to go somewhere · E to go in
         </p>
       )}
+
+      {ride != null && <TrainRide to={villageInfo(ride).name} onDone={arrive} />}
 
       {(toasts.length > 0 || elsewhere || moving) && (
         <div className="absolute inset-x-0 top-14 z-[70000] flex flex-col items-center gap-2 px-3">
@@ -1386,7 +1462,13 @@ export default function Village({ data }: { data: VillageData }) {
           onGo={(id) => {
             setOpen(null);
             const p = livePulse.presence[id]?.place;
-            // Out in the village: walk to where they're standing.
+            // About in another village: that's a train ride.
+            const theirs = livePulse.presence[id]?.village ?? 0;
+            if (statusOfId(id) === "village" && theirs !== v) {
+              toast(`${byId.get(id)?.name ?? "They"} ${byId.get(id) ? "is" : "are"} in ${villageInfo(theirs).name}. Take the train from the station.`);
+              return goToStation();
+            }
+            // Out in this village: walk to where they're standing.
             const there = agents.current.get(id);
             if (scene.kind === "out" && there && statusOfId(id) === "village" && p && p.kind !== "inside" && p.kind !== "arena")
               walkTo(world, player.current!, Math.floor(there.x / T), Math.floor((there.y - 8) / T));
@@ -1397,6 +1479,53 @@ export default function Village({ data }: { data: VillageData }) {
           }}
           onClose={() => setOpen(null)}
         />
+      )}
+      {!deco && open?.kind === "train" && (
+        <Panel title={`${world.name} station`} sub="Trains to every village, whenever you like" onClose={() => setOpen(null)}>
+          <ul className="space-y-1.5">
+            {Array.from({ length: villages }, (_, n) => {
+              const info = villageInfo(n);
+              const houses = residents.filter((r) => villageOf(r.plot) === n);
+              const friends = houses.filter((r) => r.known && r.id !== me.id).length;
+              const mine = houses.some((r) => r.id === me.id);
+              return (
+                <li key={n}>
+                  <button
+                    disabled={n === v}
+                    onClick={() => board(n)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ring-1 ring-mud-200 hover:bg-mud-100 disabled:bg-grass-100/60 disabled:ring-grass-300"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-mud-900">
+                        {info.name}
+                        {mine && <span className="ml-1.5 text-xs font-normal text-mud-500">· your house</span>}
+                      </span>
+                      <span className="block text-xs text-mud-500">
+                        {info.theme[0].toUpperCase() + info.theme.slice(1)} · {houses.length} of {PLOTS_PER_VILLAGE} houses
+                        {friends ? ` · ${friends} companion${friends === 1 ? "" : "s"}` : ""}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-grass-700">{n === v ? "You're here" : "Board ›"}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-xs text-mud-500">A new village opens when the last one fills up.</p>
+        </Panel>
+      )}
+      {!deco && open?.kind === "store" && (
+        <Panel title="General store" sub="Gear, dyes and the rest of what a knight wears" onClose={() => setOpen(null)}>
+          <p className="text-sm text-mud-600">
+            Everything you can wear is kept at the Armoury, unlocking as you level up. Come back and show the village.
+          </p>
+          <Link
+            href="/character"
+            className="mt-3 block w-full rounded-lg bg-grass-600 px-3 py-2 text-center text-sm font-bold text-white hover:bg-grass-500"
+          >
+            Go to the Armoury
+          </Link>
+        </Panel>
       )}
       {!deco && open?.kind === "duelist" && byId.get(open.id) && (
         <DuelistCard
@@ -1437,6 +1566,8 @@ function Outdoors({
   onHall,
   onArena,
   onLot,
+  onStore,
+  onStation,
 }: {
   world: World;
   S: number;
@@ -1455,6 +1586,8 @@ function Outdoors({
   onHall: () => void;
   onArena: () => void;
   onLot: (plot: number) => void;
+  onStore: () => void;
+  onStation: () => void;
 }) {
   return (
     <>
@@ -1477,6 +1610,7 @@ function Outdoors({
               backgroundPosition: `${-spec.sx * S}px ${-spec.sy * S}px`,
               backgroundSize: `${1024 * S}px ${1024 * S}px`,
               imageRendering: "pixelated",
+              filter: TREE_TINT[world.theme],
             }}
           />
         );
@@ -1523,6 +1657,77 @@ function Outdoors({
           </svg>
         </div>
       ))}
+
+      {/* Landmarks: the store, the library, the bakery, parks and gardens */}
+      {world.landmarks.map((l, i) => {
+        const at = (r: { x: number; y: number; w: number; h: number }, z: number) => ({
+          left: r.x * T * S,
+          top: r.y * T * S,
+          width: r.w * T * S,
+          height: r.h * T * S,
+          zIndex: z,
+        });
+        if (l.kind === "park" || l.kind === "garden")
+          return (
+            <div key={i}>
+              <div aria-hidden className="pointer-events-none absolute" style={at(l.area, 1)}>
+                {l.kind === "park" ? <ParkGround /> : <GardenGround />}
+              </div>
+              {/* The fountain or well stands up off the ground, sorted with the walkers. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute"
+                style={{
+                  left: l.body.x * T * S,
+                  top: (l.body.y * T - 24) * S,
+                  width: l.body.w * T * S,
+                  height: 56 * S,
+                  zIndex: (l.body.y + 1) * T,
+                }}
+              >
+                {l.kind === "park" ? <Fountain /> : <Well />}
+              </div>
+            </div>
+          );
+        const Building = l.kind === "store" ? Store : l.kind === "library" ? Library : Bakery;
+        return l.kind === "store" ? (
+          <button
+            key={i}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onStore();
+            }}
+            aria-label="The general store"
+            className="absolute"
+            style={at(l.body, (l.body.y + l.body.h) * T)}
+          >
+            <Building />
+          </button>
+        ) : (
+          <div key={i} aria-hidden className="pointer-events-none absolute" style={at(l.body, (l.body.y + l.body.h) * T)}>
+            <Building />
+          </div>
+        );
+      })}
+
+      {/* The station, at the foot of the road */}
+      <button
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onStation();
+        }}
+        aria-label={`${world.name} station`}
+        className="absolute"
+        style={{
+          left: world.station.body.x * T * S,
+          top: world.station.body.y * T * S,
+          width: world.station.body.w * T * S,
+          height: world.station.body.h * T * S,
+          zIndex: (world.station.body.y + world.station.body.h) * T,
+        }}
+      >
+        <Station name={world.name} />
+      </button>
 
       {/* The arena's gatehouse */}
       <button

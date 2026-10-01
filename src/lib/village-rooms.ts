@@ -3,7 +3,7 @@ import { sql } from "@/lib/db";
 import { fightStartsAt, INVITE_MS, judge, strike, type Facing, type Stance } from "@/lib/duel";
 import { poke } from "@/lib/live";
 import type { Appearance, Equipped } from "@/lib/types";
-import type { ChatLine, DuelView, Place, RoomPerson } from "@/lib/village";
+import { arenaSpace, readSpace, type ChatLine, type DuelView, type Place, type RoomPerson } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    Shared rooms, talk and duels — the server side. Used by
@@ -26,7 +26,7 @@ export const ONLINE = "45 seconds";
 /* --------------------------------------------------------------- rooms */
 
 /** Everyone in my shared room but me, with where they stand. */
-export async function roomPeople(me: string, place: Place, known: Set<string>): Promise<RoomPerson[]> {
+export async function roomPeople(me: string, place: Place, known: Set<string>, village: number): Promise<RoomPerson[]> {
   type Row = { user_id: string; x: number | null; y: number | null; facing: number | null; display_name: string; appearance: Appearance; equipped: Equipped };
   let rows: Row[] = [];
   if (place.kind === "inside") {
@@ -37,12 +37,13 @@ export async function roomPeople(me: string, place: Place, known: Set<string>): 
          and v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
     `) as Row[];
   } else if (place.kind === "arena") {
-    // Everyone: it's one arena for the whole village. Strangers come back
-    // marked as such (known = false) and show as a knight and a name.
+    // Everyone in this village's arena. Strangers come back marked as such
+    // (known = false) and show as a knight and a name.
     rows = (await sql`
       select v.user_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
         from village_presence v join profiles p on p.id = v.user_id
-       where v.place = 'arena' and v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
+       where v.place = 'arena' and v.village = ${village}
+         and v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
     `) as Row[];
   }
   return rows.map((r) => ({
@@ -75,13 +76,14 @@ export async function spaceChat(space: string, known: Set<string>): Promise<Chat
 /** Am I in this space right now? Talking there takes being there. */
 export async function inSpace(me: string, space: string): Promise<boolean> {
   const rows = (await sql`
-    select place, host_id from village_presence
+    select place, host_id, village from village_presence
      where user_id = ${me}::uuid and seen_at > now() - ${ONLINE}::interval
-  `) as { place: string; host_id: string | null }[];
+  `) as { place: string; host_id: string | null; village: number }[];
   const r = rows[0];
-  if (!r) return false;
-  if (space === "arena" || space === "hall") return r.place === space;
-  return r.place === "inside" && `inside:${r.host_id}` === space;
+  const s = readSpace(space);
+  if (!r || !s) return false;
+  if (s.kind === "inside") return r.place === "inside" && `inside:${r.host_id}` === space;
+  return r.place === s.kind && r.village === s.village;
 }
 
 /* --------------------------------------------------------------- duels */
@@ -99,6 +101,8 @@ type DuelRow = {
   b_max: number | null;
   /* When the fight ends; it starts DUEL_MS before. */
   round_ends: unknown;
+  /* Whose arena it's in. */
+  village: number;
   winner: string | null;
   created_at: unknown;
   updated_at: unknown;
@@ -107,7 +111,7 @@ type DuelRow = {
 export async function duelById(id: string): Promise<DuelRow | null> {
   const rows = (await sql`
     select d.id, d.a_id, d.b_id, pa.display_name as a_name, pb.display_name as b_name, d.status,
-           d.a_hp, d.b_hp, d.a_max, d.b_max, d.round_ends, d.winner, d.created_at, d.updated_at
+           d.a_hp, d.b_hp, d.a_max, d.b_max, d.round_ends, d.village, d.winner, d.created_at, d.updated_at
       from duels d join profiles pa on pa.id = d.a_id join profiles pb on pb.id = d.b_id
      where d.id = ${id}::uuid
   `) as DuelRow[];
@@ -123,7 +127,7 @@ export async function advanceDuel(d: DuelRow): Promise<DuelRow> {
   const now = Date.now();
   if (d.status === "pending" && now - ms(d.created_at) > INVITE_MS) {
     await sql`update duels set status = 'expired', updated_at = now() where id = ${d.id}::uuid and status = 'pending'`;
-    after(() => poke("arena"));
+    after(() => poke(arenaSpace(d.village)));
     return (await duelById(d.id)) ?? d;
   }
   if (d.status !== "active" || !d.round_ends || ms(d.round_ends) > now) return d;
@@ -136,7 +140,7 @@ export async function advanceDuel(d: DuelRow): Promise<DuelRow> {
   `;
   // Settled by whichever check-in noticed the clock; everyone watching
   // should see it now too.
-  after(() => poke("arena"));
+  after(() => poke(arenaSpace(d.village)));
   return (await duelById(d.id)) ?? d;
 }
 
@@ -156,17 +160,18 @@ export function viewDuel(d: DuelRow): DuelView {
 }
 
 /**
- * Duels to show: mine that are open or just finished, and — in the arena —
- * the fight going on there, whoever's in it. Each is moved on first if due.
+ * Duels to show: mine that are open or just finished, and — in an arena
+ * (`arena`: which village's) — the fight going on there, whoever's in it.
+ * Each is moved on first if due.
  */
-export async function duelsFor(me: string, inArena: boolean): Promise<DuelView[]> {
+export async function duelsFor(me: string, arena: number | null): Promise<DuelView[]> {
   const rows = (await sql`
     select d.id, d.a_id, d.b_id, pa.display_name as a_name, pb.display_name as b_name, d.status,
-           d.a_hp, d.b_hp, d.a_max, d.b_max, d.round_ends, d.winner, d.created_at, d.updated_at
+           d.a_hp, d.b_hp, d.a_max, d.b_max, d.round_ends, d.village, d.winner, d.created_at, d.updated_at
       from duels d join profiles pa on pa.id = d.a_id join profiles pb on pb.id = d.b_id
      where (d.status in ('pending', 'active') or d.updated_at > now() - interval '20 seconds')
        and (d.a_id = ${me}::uuid or d.b_id = ${me}::uuid
-            or (${inArena} and d.status <> 'pending'))
+            or (d.village = ${arena ?? -1} and d.status <> 'pending'))
      order by d.created_at desc
      limit 10
   `) as DuelRow[];

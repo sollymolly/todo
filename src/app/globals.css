@@ -231,6 +231,27 @@ body {
 }
 .damage-pop { animation: damage-pop 1s ease-out forwards; }
 
+/* The park fountain: ripples spreading, the spray bobbing. */
+@keyframes fountain-ripple {
+  0% { transform: scale(0.4); opacity: 0.9 }
+  100% { transform: scale(1.5); opacity: 0 }
+}
+.fountain-ripple { animation: fountain-ripple 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes fountain-spray {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-2px) }
+}
+.fountain-spray { animation: fountain-spray 0.8s ease-in-out infinite; }
+
+/* The train ride between villages: hills and sleepers slide by, the train rocks. */
+@keyframes ride-scroll { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+.ride-far svg { animation: ride-scroll 9s linear infinite; }
+.ride-near svg { animation: ride-scroll 3.5s linear infinite; }
+.ride-sleepers { animation: ride-scroll 0.6s linear infinite; }
+@keyframes ride-rock { 0%, 100% { transform: translate(-50%, 0) } 50% { transform: translate(-50%, -2px) } }
+.ride-train { animation: ride-rock 0.35s ease-in-out infinite; }
+.ride-smoke rect { animation: smoke-rise 1.2s ease-out infinite; transform-box: fill-box; }
+
 /* A fire in the hearth. */
 @keyframes fire-flicker {
   0%, 100% { transform: scaleY(1); opacity: 1 }
@@ -239,6 +260,7 @@ body {
 .fire-flicker { animation: fire-flicker 0.6s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
 
 @media (prefers-reduced-motion: reduce) {
-  .char-idle, .char-cape, .house-smoke rect, .walker-hit, .fire-flicker { animation: none !important; }
+  .char-idle, .char-cape, .house-smoke rect, .walker-hit, .fire-flicker, .fountain-ripple, .fountain-spray,
+  .ride-far svg, .ride-near svg, .ride-sleepers, .ride-train, .ride-smoke rect { animation: none !important; }
   .mote { display: none; }
 }

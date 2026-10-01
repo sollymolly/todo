@@ -41,6 +41,12 @@ function readPos(raw: unknown): Pos | null {
   return { x, y, facing: (Number.isInteger(f) && f >= 0 && f <= 3 ? f : 2) as Pos["facing"] };
 }
 
+/** Which village they're in: a small whole number, or none (wherever they last were). */
+function readVillage(raw: unknown): number | null {
+  const v = Number(raw);
+  return raw != null && Number.isInteger(v) && v >= 0 && v < 100_000 ? v : null;
+}
+
 /** Which of someone's open apps is asking: an id it made up for itself. */
 function readDevice(raw: unknown): string | null {
   return typeof raw === "string" && /^[\w-]{8,64}$/.test(raw) ? raw : null;
@@ -52,7 +58,7 @@ export async function POST(request: Request) {
 
   // The body can arrive as text/plain: the app sends its goodbye with
   // navigator.sendBeacon as it closes.
-  let body: { place?: unknown; pos?: unknown; device?: unknown; release?: unknown } = {};
+  let body: { place?: unknown; pos?: unknown; device?: unknown; release?: unknown; village?: unknown } = {};
   try {
     body = await request.json();
   } catch {
@@ -67,7 +73,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    return Response.json(await pulse(me, readPlace(body.place), readPos(body.pos), readDevice(body.device)), {
+    return Response.json(await pulse(me, readPlace(body.place), readPos(body.pos), readDevice(body.device), readVillage(body.village)), {
       headers: { "cache-control": "no-store" },
     });
   } catch (e) {

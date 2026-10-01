@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ATLAS, GROUND, T, inRect, type Rect, type World } from "@/components/village/world";
+import { ATLAS, GROUND, T, inRect, type Rect, type Theme, type World } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The ground, painted once onto one canvas at 1× and scaled up with crisp
-   pixels: grass everywhere, dirt streets and door paths, a stone plaza.
+   pixels: grass everywhere, dirt streets, door paths and empty lots, a
+   stone plaza.
    -------------------------------------------------------------------------- */
 
 /** The plaza's stones: the town hall's grey, a shade darker underfoot. */
@@ -44,6 +45,27 @@ function stonePaving(r: Rect): { x: number; y: number; w: number; h: number; fil
   return out;
 }
 
+/** Each village's grass, washed over the meadow's (world.ts, Theme). */
+const GRASS_TINT: Record<Theme, string | null> = {
+  meadow: null,
+  autumn: "rgba(214,140,40,0.35)",
+  forest: "rgba(10,50,20,0.3)",
+  spring: "rgba(170,230,120,0.22)",
+  snowy: "rgba(240,246,255,0.82)",
+};
+
+/** The railway along the bottom: a gravel bed, sleepers, two rails. In px, at 1×. */
+function railway(r: Rect): { x: number; y: number; w: number; h: number; fill: string }[] {
+  const x0 = r.x * T;
+  const y0 = r.y * T;
+  const w = r.w * T;
+  const h = r.h * T;
+  const out = [{ x: x0, y: y0 + 6, w, h: h - 12, fill: "#8a7a66" }];
+  for (let x = x0; x < x0 + w; x += 16) out.push({ x, y: y0 + 12, w: 7, h: h - 24, fill: "#5a4632" });
+  out.push({ x: x0, y: y0 + 18, w, h: 3, fill: "#b8bcc0" }, { x: x0, y: y0 + h - 21, w, h: 3, fill: "#b8bcc0" });
+  return out;
+}
+
 /**
  * Rows of tiles per canvas. The village grows downward as people arrive,
  * and one canvas can only be so big (iOS draws nothing past ~16M pixels),
@@ -61,7 +83,10 @@ export default function Ground({ world, scale }: { world: World; scale: number }
     img.onload = () => {
       if (cancelled) return;
       const doors = new Set(world.plots.filter((p) => p.owner).map((p) => `${p.door.x},${p.door.y}`));
-      const paving = stonePaving(world.hall.plaza);
+      // An empty lot is a patch of bare dirt, where a house would stand.
+      const lots = world.plots.filter((p) => !p.owner).map((p) => ({ x: p.x + 1, y: p.y + 1, w: 6, h: 6 }));
+      const paving = [...stonePaving(world.hall.plaza), ...stonePaving(world.station.platform), ...railway(world.station.track)];
+      const tint = GRASS_TINT[world.theme];
       refs.current.slice(0, strips).forEach((canvas, i) => {
         const ctx = canvas?.getContext("2d");
         if (!ctx) return;
@@ -74,9 +99,15 @@ export default function Ground({ world, scale }: { world: World; scale: number }
         for (let y = top; y < Math.min(world.h, top + STRIP); y++)
           for (let x = 0; x < world.w; x++) {
             if (inRect(world.hall.plaza, x, y)) continue; // paved below
-            if (world.streets.some((s) => inRect(s, x, y)) || doors.has(`${x},${y}`))
+            if (world.streets.some((s) => inRect(s, x, y)) || doors.has(`${x},${y}`) || lots.some((l) => inRect(l, x, y)))
               tile((x * 7 + y * 13) % 5 === 0 ? GROUND.dirtPebbles : GROUND.dirt, x, y);
-            else tile(GROUND.grass, x, y);
+            else {
+              tile(GROUND.grass, x, y);
+              if (tint) {
+                ctx.fillStyle = tint;
+                ctx.fillRect(x * T, y * T, T, T);
+              }
+            }
           }
         for (const s of paving) {
           ctx.fillStyle = s.fill;

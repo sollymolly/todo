@@ -16,7 +16,7 @@ import {
   type Resident,
   type SessionView,
 } from "@/lib/village";
-import { lotsFor, plotAt } from "@/components/village/world";
+import { plotAt, PLOTS_PER_VILLAGE, villageOf } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The village's queries, shared by the page, its actions and
@@ -70,11 +70,17 @@ async function plotsVersion(): Promise<string> {
   return `${rows[0]?.n ?? 0}:${rows[0]?.at ? ms(rows[0].at) : 0}`;
 }
 
+/** How many villages there are: one for every PLOTS_PER_VILLAGE houses, and always at least one. */
+export async function villageCount(): Promise<number> {
+  const rows = (await sql`select coalesce(max(plot), -1)::int as highest from houses where plot is not null`) as { highest: number }[];
+  return villageOf(Math.max(0, rows[0]?.highest ?? 0)) + 1;
+}
+
 /**
- * Gives someone a plot if they haven't one: the empty lot nearest their
- * companions' houses — or nearest the hall if none of them has one yet — so
- * friends end up neighbours. They can move later (village-actions.ts,
- * moveHouse).
+ * Gives someone a plot if they haven't one: in the village most of their
+ * companions live in that still has room — otherwise the first with room,
+ * or a new one when they're all full — on the empty lot nearest those
+ * companions (or nearest the hall). They can move later (moveHouse).
  */
 export async function ensurePlot(me: string, friends: string[]): Promise<void> {
   const mine = (await sql`select plot from houses where user_id = ${me}::uuid`) as { plot: number | null }[];
@@ -83,16 +89,27 @@ export async function ensurePlot(me: string, friends: string[]): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const rows = (await sql`select user_id, plot from houses where plot is not null`) as { user_id: string; plot: number }[];
     const taken = new Set(rows.map((r) => r.plot));
-    const near = rows.filter((r) => companions.has(r.user_id)).map((r) => plotAt(r.plot));
-    const highest = rows.reduce((m, r) => Math.max(m, r.plot), -1);
+    const count = rows.length ? villageOf(Math.max(...rows.map((r) => r.plot))) + 1 : 1;
+    const free = (v: number) => {
+      const out: number[] = [];
+      for (let i = 0; i < PLOTS_PER_VILLAGE; i++) if (!taken.has(v * PLOTS_PER_VILLAGE + i)) out.push(v * PLOTS_PER_VILLAGE + i);
+      return out;
+    };
+    const friendsIn = (v: number) => rows.filter((r) => companions.has(r.user_id) && villageOf(r.plot) === v);
+    // Every village with room, the new one after them last.
+    let best = -1;
+    for (let v = 0; v <= count; v++) {
+      if (!free(v).length) continue;
+      if (best < 0 || friendsIn(v).length > friendsIn(best).length) best = v;
+    }
+    const near = friendsIn(best).map((r) => plotAt(r.plot));
     const score = (n: number) => {
       if (!near.length) return n;
       const p = plotAt(n);
       return Math.min(...near.map((q) => Math.hypot(p.x - q.x, p.y - q.y)));
     };
     let pick = -1;
-    for (let n = 0; n < lotsFor(highest); n++)
-      if (!taken.has(n) && (pick < 0 || score(n) < score(pick))) pick = n;
+    for (const n of free(best)) if (pick < 0 || score(n) < score(pick)) pick = n;
     try {
       await sql`
         insert into houses (user_id, plot, plot_at) values (${me}::uuid, ${pick}, now())
@@ -115,13 +132,19 @@ function placeOf(kind: string, host: string | null): Place {
   return { kind: "home" };
 }
 
-/** Everyone else outside in the village, or at home in the app — friends or not. */
-async function outdoorsOf(me: string, known: Set<string>): Promise<OutdoorPerson[]> {
+/**
+ * Everyone else outside in village `village`, friends or not — and anyone
+ * at home in the app whose house is there, who stands by their door.
+ */
+async function outdoorsOf(me: string, known: Set<string>, village: number): Promise<OutdoorPerson[]> {
   const rows = (await sql`
     select v.user_id, v.place, v.host_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
-      from village_presence v join profiles p on p.id = v.user_id
+      from village_presence v
+      join profiles p on p.id = v.user_id
+      left join houses h on h.user_id = v.user_id
      where v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
-       and v.place in ('home', 'square', 'hall', 'house')
+       and ((v.place in ('square', 'hall', 'house') and v.village = ${village})
+            or (v.place = 'home' and h.plot / ${PLOTS_PER_VILLAGE} = ${village}))
   `) as {
     user_id: string;
     place: string;
@@ -152,18 +175,18 @@ let haveDevice = true;
  * one keeps the row until it's closed, and this returns false. A position
  * goes with anywhere in the village; at home in the app there's none.
  */
-async function writePresence(me: string, place: Place, pos: Pos | null, device: string | null): Promise<boolean> {
+async function writePresence(me: string, place: Place, pos: Pos | null, device: string | null, village: number): Promise<boolean> {
   const host = place.kind === "house" || place.kind === "inside" ? place.hostId : null;
   const at = place.kind === "home" ? null : pos;
   if (haveDevice) {
     try {
       const rows = (await sql`
-        insert into village_presence as v (user_id, place, host_id, x, y, facing, device, seen_at)
-        values (${me}::uuid, ${place.kind}, ${host}::uuid, ${at?.x ?? null}, ${at?.y ?? null}, ${at?.facing ?? null}, ${device}, now())
+        insert into village_presence as v (user_id, place, host_id, x, y, facing, device, village, seen_at)
+        values (${me}::uuid, ${place.kind}, ${host}::uuid, ${at?.x ?? null}, ${at?.y ?? null}, ${at?.facing ?? null}, ${device}, ${village}, now())
         on conflict (user_id) do update set
           place = excluded.place, host_id = excluded.host_id,
           x = excluded.x, y = excluded.y, facing = excluded.facing,
-          device = excluded.device, seen_at = now()
+          device = excluded.device, village = excluded.village, seen_at = now()
          where v.device is null or excluded.device is null or v.device = excluded.device
             or v.seen_at < now() - ${ONLINE}::interval
         returning 1 as ok
@@ -175,11 +198,11 @@ async function writePresence(me: string, place: Place, pos: Pos | null, device: 
     }
   }
   await sql`
-    insert into village_presence (user_id, place, host_id, x, y, facing, seen_at)
-    values (${me}::uuid, ${place.kind}, ${host}::uuid, ${at?.x ?? null}, ${at?.y ?? null}, ${at?.facing ?? null}, now())
+    insert into village_presence (user_id, place, host_id, x, y, facing, village, seen_at)
+    values (${me}::uuid, ${place.kind}, ${host}::uuid, ${at?.x ?? null}, ${at?.y ?? null}, ${at?.facing ?? null}, ${village}, now())
     on conflict (user_id) do update set
       place = excluded.place, host_id = excluded.host_id,
-      x = excluded.x, y = excluded.y, facing = excluded.facing, seen_at = now()
+      x = excluded.x, y = excluded.y, facing = excluded.facing, village = excluded.village, seen_at = now()
   `;
   return true;
 }
@@ -254,7 +277,7 @@ export async function leaveTable(me: string): Promise<number> {
 async function visibleSessions(me: string, known: Set<string>): Promise<SessionView[]> {
   const ids = [...known];
   const sessions = (await sql`
-    select s.id, s.host_id, s.focus, s.focus_from, s.started_at
+    select s.id, s.host_id, s.village, s.focus, s.focus_from, s.started_at
       from work_sessions s
      where s.ended_at is null
        and exists (
@@ -263,7 +286,7 @@ async function visibleSessions(me: string, known: Set<string>): Promise<SessionV
        )
      order by s.started_at
      limit 20
-  `) as { id: string; host_id: string; focus: boolean; focus_from: unknown; started_at: unknown }[];
+  `) as { id: string; host_id: string; village: number; focus: boolean; focus_from: unknown; started_at: unknown }[];
   if (!sessions.length) return [];
 
   const members = (await sql`
@@ -289,6 +312,7 @@ async function visibleSessions(me: string, known: Set<string>): Promise<SessionV
   return sessions.map((s) => ({
     id: s.id,
     hostId: s.host_id,
+    village: s.village,
     focus: s.focus,
     focusFrom: s.focus_from ? ms(s.focus_from) : null,
     startedAt: ms(s.started_at),
@@ -326,31 +350,50 @@ export async function unseenNudges(me: string): Promise<NudgeView[]> {
 
 /* ------------------------------------------------------------------ pulse */
 
+/** Which village I was last in — or, never having been about, the one my house is in. */
+async function lastVillage(me: string): Promise<number> {
+  const rows = (await sql`
+    select coalesce(
+      (select village from village_presence where user_id = ${me}::uuid and place <> 'home'),
+      (select plot / ${PLOTS_PER_VILLAGE} from houses where user_id = ${me}::uuid),
+      0) as v
+  `) as { v: number }[];
+  return rows[0]?.v ?? 0;
+}
+
 /**
  * One check-in: where I am, and what the village looks like from here.
  * `place` null moves nobody: it only keeps my seat at a table. `device`
- * is which of my open apps is asking (see village_presence.device).
+ * is which of my open apps is asking (see village_presence.device);
+ * `village`, which village I'm in (none given: where I last was).
  */
-export async function pulse(me: string, place: Place | null, pos: Pos | null = null, device: string | null = null): Promise<Pulse> {
+export async function pulse(
+  me: string,
+  place: Place | null,
+  pos: Pos | null = null,
+  device: string | null = null,
+  village: number | null = null
+): Promise<Pulse> {
   await sweepSessions();
   const friends = await friendIdsOf(me);
   const known = new Set([me, ...friends]);
+  const here = village ?? (await lastVillage(me));
 
   // Inside a house only if it's mine or a companion's; otherwise I'm out on
   // the square. What this device sees is wherever it has me, even when
   // another of my devices is the one friends see.
   const at: Place | null = place?.kind === "inside" && !known.has(place.hostId) ? { kind: "square" } : place;
-  const elsewhere = at ? !(await writePresence(me, at, pos, device)) : false;
+  const elsewhere = at ? !(await writePresence(me, at, pos, device, here)) : false;
   const shared = at?.kind === "inside" || at?.kind === "arena";
   const focusXp = await sessionHeartbeat(me);
 
   const presenceRows = (await sql`
-    select user_id, place, host_id, seen_at from village_presence
+    select user_id, place, host_id, village, seen_at from village_presence
      where user_id = any(${friends}::uuid[])
-  `) as { user_id: string; place: string; host_id: string | null; seen_at: unknown }[];
+  `) as { user_id: string; place: string; host_id: string | null; village: number; seen_at: unknown }[];
 
   const presence: Pulse["presence"] = {};
-  for (const r of presenceRows) presence[r.user_id] = { place: placeOf(r.place, r.host_id), seenAt: ms(r.seen_at) };
+  for (const r of presenceRows) presence[r.user_id] = { place: placeOf(r.place, r.host_id), seenAt: ms(r.seen_at), village: r.village };
 
   const sessions = await visibleSessions(me, known);
   const mine = (await sql`
@@ -360,15 +403,15 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
   // The shared space I'm in: who's there, and what's been said.
   let room: Pulse["room"] = null;
   let duels: Pulse["duels"] = [];
-  const space = shared || at?.kind === "hall" ? spaceOf(at) : null;
+  const space = shared || at?.kind === "hall" ? spaceOf(at, here) : null;
   try {
     if (space && at)
       room = {
         space,
-        people: at.kind === "hall" ? [] : await roomPeople(me, at, known),
+        people: at.kind === "hall" ? [] : await roomPeople(me, at, known, here),
         chat: await spaceChat(space, known),
       };
-    duels = await duelsFor(me, at?.kind === "arena");
+    duels = await duelsFor(me, at?.kind === "arena" ? here : null);
   } catch {
     /* db/schema.sql not run yet */
   }
@@ -384,7 +427,8 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
     room,
     duels,
     elsewhere,
-    outdoors: await outdoorsOf(me, known),
+    outdoors: await outdoorsOf(me, known, here),
+    village: here,
     plotsAt: await plotsVersion(),
   };
 }

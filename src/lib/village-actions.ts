@@ -7,8 +7,8 @@ import { poke } from "@/lib/live";
 import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { sendToUser } from "@/lib/push";
-import { friendIdsOf, leaveTable, residents } from "@/lib/village-server";
-import { lotsFor } from "@/components/village/world";
+import { friendIdsOf, leaveTable, residents, villageCount } from "@/lib/village-server";
+import { villageOf } from "@/components/village/world";
 import { duelById, inSpace } from "@/lib/village-rooms";
 import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
 import { COUNTDOWN_MS, DUEL_HP, DUEL_MS, INVITE_MS } from "@/lib/duel";
@@ -17,8 +17,10 @@ import {
   cleanLine,
   NOTE_MAX,
   NUDGE_EVERY_MS,
+  arenaSpace,
   NUDGE_MAX,
-  OUTSIDE,
+  outsideSpace,
+  readSpace,
   SAY_MAX,
   tierFor,
   type HouseLook,
@@ -66,9 +68,9 @@ export async function loadResidents(): Promise<Resident[]> {
 /** Moves my house to an empty lot. My rooms come with me. */
 export async function moveHouse(plot: number): Promise<Result> {
   const me = await requireUserId();
-  if (!Number.isInteger(plot) || plot < 0) return { ok: false, error: "That's not a lot." };
-  const rows = (await sql`select coalesce(max(plot), -1)::int as highest from houses where plot is not null`) as { highest: number }[];
-  if (plot >= lotsFor(rows[0]?.highest ?? -1)) return { ok: false, error: "That's not a lot." };
+  // Any empty lot in any village there is; a new village opens by itself
+  // when the last one fills (village-server.ts, ensurePlot).
+  if (!Number.isInteger(plot) || plot < 0 || villageOf(plot) >= (await villageCount())) return { ok: false, error: "That's not a lot." };
   try {
     const moved = (await sql`
       update houses set plot = ${plot}, plot_at = now() where user_id = ${me}::uuid and plot is not null returning plot
@@ -78,8 +80,14 @@ export async function moveHouse(plot: number): Promise<Result> {
     if (/houses_plot_key|duplicate key/i.test(String(e))) return { ok: false, error: "Someone's just moved in there." };
     throw e;
   }
-  after(() => poke(OUTSIDE));
+  after(() => poke(outsideSpace(villageOf(plot))));
   return { ok: true };
+}
+
+/** Which village I'm in, as my last check-in had it. */
+async function myVillage(me: string): Promise<number> {
+  const rows = (await sql`select village from village_presence where user_id = ${me}::uuid`) as { village: number }[];
+  return rows[0]?.village ?? 0;
 }
 
 /* ------------------------------------------------------------------ notes */
@@ -215,8 +223,8 @@ export async function startSession(input: { focus: boolean; todoId: string | nul
   // One statement, so the table never exists without anyone at it.
   await sql`
     with s as (
-      insert into work_sessions (host_id, focus, focus_from)
-      values (${me}::uuid, ${!!input.focus}, case when ${!!input.focus} then now() end)
+      insert into work_sessions (host_id, focus, focus_from, village)
+      values (${me}::uuid, ${!!input.focus}, case when ${!!input.focus} then now() end, ${await myVillage(me)})
       returning id
     )
     insert into session_members (session_id, user_id, todo_id)
@@ -317,15 +325,16 @@ export async function say(space: string, text: string): Promise<Result> {
   if (!(await inSpace(me, space))) return { ok: false, error: "You've wandered off: nobody here to hear it." };
   if (await rateLimited("say", me)) return { ok: false, error: TOO_MANY };
   await sql`insert into space_chat (space, author_id, body) values (${space}, ${me}::uuid, ${body})`;
-  // The hall is out in the village, and its listeners on the live "village"
-  // space (village.ts, liveSpaceOf).
-  after(() => poke(space === "hall" ? OUTSIDE : space));
+  // A town hall is out in its village: its listeners are on that village's
+  // live space (village.ts, liveSpaceOf).
+  const at = readSpace(space);
+  after(() => poke(at?.kind === "hall" ? outsideSpace(at.village) : space));
   return { ok: true };
 }
 
 /* ----------------------------------------------------------------- duels */
 
-const ARENA_BUSY = "The arena's taken — one duel at a time. Wait for this one to finish.";
+const ARENA_BUSY = "This arena's taken — one duel at a time in each. Wait for this one to finish.";
 
 /**
  * Settles what time has already decided — an unanswered challenge, a fight
@@ -347,20 +356,21 @@ async function clearArena() {
 export async function challenge(opponentId: string): Promise<Result> {
   const me = await requireUserId();
   if (!(await areFriends(me, opponentId))) return { ok: false, error: "You can only duel companions." };
-  if (!(await inSpace(me, "arena")) || !(await inSpace(opponentId, "arena")))
-    return { ok: false, error: "You both need to be in the arena." };
+  const v = await myVillage(me);
+  if (!(await inSpace(me, arenaSpace(v))) || !(await inSpace(opponentId, arenaSpace(v))))
+    return { ok: false, error: "You both need to be in the same arena." };
   if (await rateLimited("duel", me)) return { ok: false, error: TOO_MANY };
   await clearArena();
-  const open = (await sql`select 1 from duels where status in ('pending', 'active') limit 1`) as unknown[];
+  const open = (await sql`select 1 from duels where status in ('pending', 'active') and village = ${v} limit 1`) as unknown[];
   if (open.length) return { ok: false, error: ARENA_BUSY };
   try {
-    await sql`insert into duels (a_id, b_id) values (${me}::uuid, ${opponentId}::uuid)`;
+    await sql`insert into duels (a_id, b_id, village) values (${me}::uuid, ${opponentId}::uuid, ${v})`;
   } catch (e) {
-    // Two challenges at the same moment: the one-duel index lets one in.
-    if (/duels_one_at_a_time/.test(String(e))) return { ok: false, error: ARENA_BUSY };
+    // Two challenges at the same moment: the one-duel-per-arena index lets one in.
+    if (/duels_one_per_arena/.test(String(e))) return { ok: false, error: ARENA_BUSY };
     throw e;
   }
-  after(() => poke("arena"));
+  after(() => poke(arenaSpace(v)));
   return { ok: true };
 }
 
@@ -371,7 +381,7 @@ export async function answerDuel(duelId: string, accept: boolean): Promise<Resul
   const age = d ? Date.now() - new Date(d.created_at as string | Date).getTime() : Infinity;
   if (!d || d.b_id !== me || d.status !== "pending" || age > INVITE_MS)
     return { ok: false, error: "That challenge has expired." };
-  after(() => poke("arena"));
+  after(() => poke(arenaSpace(d.village)));
   if (!accept) {
     await sql`update duels set status = 'declined', updated_at = now() where id = ${duelId}::uuid and status = 'pending'`;
     return { ok: true };
@@ -393,13 +403,14 @@ export async function answerDuel(duelId: string, accept: boolean): Promise<Resul
 export async function yieldDuel(duelId: string): Promise<void> {
   const me = await requireUserId();
   if (!UUID.test(duelId)) return;
-  await sql`
+  const rows = (await sql`
     update duels set
       winner = case when status = 'active' then (case when a_id = ${me}::uuid then b_id else a_id end) end,
       status = case when status = 'pending' then 'cancelled' else 'done' end,
       round_ends = null, updated_at = now()
      where id = ${duelId}::uuid and status in ('pending', 'active')
        and (a_id = ${me}::uuid or b_id = ${me}::uuid)
-  `;
-  after(() => poke("arena"));
+    returning village
+  `) as { village: number }[];
+  if (rows[0]) after(() => poke(arenaSpace(rows[0].village)));
 }

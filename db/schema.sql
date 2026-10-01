@@ -454,6 +454,9 @@ create table if not exists village_presence (
   seen_at  timestamptz not null default now()
 );
 alter table village_presence add column if not exists device text;
+-- Which village they're in: there's a new one for every 40 houses (plot / 40),
+-- each with its own town hall and arena, joined by trains.
+alter table village_presence add column if not exists village integer not null default 0;
 
 -- A house's size follows its owner's level and is never stored. `interior`
 -- holds wallpaper, floor and furniture; null is the default room.
@@ -514,6 +517,8 @@ create table if not exists work_sessions (
   ended_at    timestamptz
 );
 create index if not exists work_sessions_open_idx on work_sessions(ended_at) where ended_at is null;
+-- The village whose town hall the table is in.
+alter table work_sessions add column if not exists village integer not null default 0;
 
 create table if not exists session_members (
   id              uuid primary key default gen_random_uuid(),
@@ -569,6 +574,8 @@ create table if not exists duels (
   updated_at  timestamptz not null default now(),
   check (a_id <> b_id)
 );
+-- The village whose arena it's fought in: one duel at a time in each.
+alter table duels add column if not exists village integer not null default 0;
 create index if not exists duels_open_idx on duels(status) where status in ('pending', 'active');
 -- Duels are fought live in the one arena (src/lib/duel.ts): only one may be
 -- open at a time. Anything time has already settled is closed first, so a
@@ -578,7 +585,9 @@ update duels set status = 'expired', updated_at = now()
 update duels set status = 'done', round_ends = null, updated_at = now(),
        winner = case when a_hp > b_hp then a_id when b_hp > a_hp then b_id end
  where status = 'active' and (round_ends is null or round_ends <= now());
-create unique index if not exists duels_one_at_a_time on duels ((true))
+-- One duel at a time in each village's arena.
+drop index if exists duels_one_at_a_time;
+create unique index if not exists duels_one_per_arena on duels (village)
  where status in ('pending', 'active');
 create index if not exists duels_a_idx on duels(a_id, created_at desc);
 create index if not exists duels_b_idx on duels(b_id, created_at desc);

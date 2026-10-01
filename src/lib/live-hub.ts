@@ -3,7 +3,12 @@ import type { WebSocket } from "ws";
 import { CHANNEL, poke, publishLive, type LiveMessage } from "@/lib/live";
 import { HIT_COOLDOWN_MS, HIT_GRACE_MS, type Facing, type Stance } from "@/lib/duel";
 import { landHit } from "@/lib/village-rooms";
-import { OUTSIDE } from "@/lib/village";
+import { readSpace } from "@/lib/village";
+
+/** A village's arena: where stances are kept and swings judged. */
+const isArena = (space: string | null) => readSpace(space ?? "")?.kind === "arena";
+/** Outside in a village: everyone in it, so nobody is poked on the way in or out. */
+const isOutside = (space: string) => readSpace(space)?.kind === "village";
 
 /* --------------------------------------------------------------------------
    One server instance's share of the live village: the sockets it holds,
@@ -65,7 +70,7 @@ function subscriber(): Redis {
     } catch {
       return;
     }
-    if (msg.t === "pos" && space === "arena")
+    if (msg.t === "pos" && isArena(space))
       stances.set(msg.id, { x: msg.x, y: msg.y, f: (msg.f % 4) as Facing, g: msg.g === 1 });
     const conns = bySpace.get(space);
     if (!conns) return;
@@ -82,7 +87,8 @@ function subscriber(): Redis {
 
 /** May this person be in this space at all? The same rule the check-in uses. */
 function allowed(c: Conn, space: string): boolean {
-  if (space === "arena" || space === OUTSIDE) return true;
+  const s = readSpace(space);
+  if (s?.kind === "arena" || s?.kind === "village") return true;
   if (!space.startsWith("inside:")) return false;
   const host = space.slice("inside:".length);
   return UUID.test(host) && (host === c.me || c.known.has(host));
@@ -93,18 +99,17 @@ function leave(c: Conn) {
   if (!space) return;
   c.space = null;
   c.nextPos = null;
-  if (space === "arena") stances.delete(c.me);
+  if (isArena(space)) stances.delete(c.me);
   const conns = bySpace.get(space);
   conns?.delete(c);
   if (conns && conns.size === 0) {
     bySpace.delete(space);
-    if (space === "arena") stances.clear();
     void sub?.unsubscribe(CHANNEL + space).catch(() => {});
   }
   // Whoever's still there should see them go now, not at the next check-in.
   // Not outside: that's everyone in the village, and they'll notice soon
   // enough without all checking in at once.
-  if (space !== OUTSIDE) void poke(space);
+  if (!isOutside(space)) void poke(space);
   if (bySpace.size === 0 && sub) {
     sub.disconnect();
     sub = null;
@@ -124,7 +129,7 @@ function join(c: Conn, space: string) {
   }
   conns.add(c);
   // Outside, a newcomer's first footstep is what makes the others look.
-  if (space !== OUTSIDE) void poke(space);
+  if (!isOutside(space)) void poke(space);
 }
 
 function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown }) {
@@ -143,7 +148,7 @@ function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown 
   };
   // Straight into this instance's picture of the arena too: a swing right
   // after a step is judged from the step.
-  if (c.space === "arena") stances.set(c.me, { x: msg.x, y: msg.y, f: msg.f as Facing, g: msg.g === 1 });
+  if (isArena(c.space)) stances.set(c.me, { x: msg.x, y: msg.y, f: msg.f as Facing, g: msg.g === 1 });
   // Only the newest matters: it replaces any still waiting to go.
   c.nextPos = { space: c.space, msg };
   void pumpPos(c);
@@ -178,19 +183,20 @@ async function pumpPos(c: Conn) {
 }
 
 async function onHit(c: Conn) {
-  if (c.space !== "arena") return;
+  const arena = c.space;
+  if (!arena || !isArena(arena)) return;
   const now = Date.now();
   if (now - c.lastHit < HIT_COOLDOWN_MS) return;
   c.lastHit = now;
-  void publishLive("arena", { t: "swing", by: c.me });
+  void publishLive(arena, { t: "swing", by: c.me });
   try {
     await new Promise((r) => setTimeout(r, HIT_GRACE_MS));
     const r = await landHit(c.me, (id) => stances.get(id) ?? null);
     if (r.kind === "hit") {
-      await publishLive("arena", { t: "hit", duel: r.duelId, by: c.me, target: r.target, a: r.a, b: r.b });
-      if (r.over) await poke("arena");
+      await publishLive(arena, { t: "hit", duel: r.duelId, by: c.me, target: r.target, a: r.a, b: r.b });
+      if (r.over) await poke(arena);
     } else if (r.kind === "blocked") {
-      await publishLive("arena", { t: "block", by: c.me, target: r.target });
+      await publishLive(arena, { t: "block", by: c.me, target: r.target });
     }
   } catch {
     /* a swing that couldn't be judged simply doesn't land */

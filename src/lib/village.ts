@@ -43,24 +43,35 @@ export const LIVE_ROOM_PULSE_MS = 5_000;
  * other. The square and house fronts aren't spaces for talking — nobody's
  * near enough there to hear.
  */
-export function spaceOf(p: Place | null): string | null {
+export function spaceOf(p: Place | null, village: number): string | null {
   if (!p) return null;
   if (p.kind === "inside") return `inside:${p.hostId}`;
-  if (p.kind === "arena") return "arena";
-  if (p.kind === "hall") return "hall";
+  if (p.kind === "arena") return arenaSpace(village);
+  if (p.kind === "hall") return `hall:${village}`;
   return null;
+}
+
+/** Each village's own arena, and everywhere outside in it. */
+export const arenaSpace = (village: number) => `arena:${village}`;
+export const outsideSpace = (village: number) => `village:${village}`;
+
+/** A space's kind and village: "hall:2" → hall, 2. Rooms have no village. */
+export function readSpace(space: string): { kind: "hall" | "arena" | "village" | "inside"; village: number } | null {
+  const m = /^(hall|arena|village):(\d{1,6})$/.exec(space);
+  if (m) return { kind: m[1] as "hall" | "arena" | "village", village: Number(m[2]) };
+  return space.startsWith("inside:") ? { kind: "inside", village: -1 } : null;
 }
 
 /**
  * The live connection's space for a place (src/lib/live-hub.ts): who hears
- * whose footsteps. A room or the arena is its own; everywhere outside is
- * "village", the town hall included. Being home in the app isn't anywhere.
+ * whose footsteps. A room or an arena is its own; everywhere outside in a
+ * village is that village's, its town hall included. Being home in the app
+ * isn't anywhere.
  */
-export const OUTSIDE = "village";
-export function liveSpaceOf(p: Place | null): string | null {
+export function liveSpaceOf(p: Place | null, village: number): string | null {
   if (!p || p.kind === "home") return null;
-  if (p.kind === "inside" || p.kind === "arena") return spaceOf(p);
-  return OUTSIDE;
+  if (p.kind === "inside" || p.kind === "arena") return spaceOf(p, village);
+  return outsideSpace(village);
 }
 
 export const SAY_MAX = 140;
@@ -196,6 +207,8 @@ export type Neighbour = Villager & {
 export type SessionView = {
   id: string;
   hostId: string;
+  /** Whose town hall the table is in. */
+  village: number;
   focus: boolean;
   /** Epoch ms the shared focus clock counts from. */
   focusFrom: number | null;
@@ -258,7 +271,9 @@ export type Pulse = {
   now: number;
   /** Who's asking — the viewer's own id. */
   me: string;
-  presence: Record<string, { place: Place; seenAt: number }>;
+  presence: Record<string, { place: Place; seenAt: number; village: number }>;
+  /** The village this check-in was from: where `outdoors` and `room` are. */
+  village: number;
   sessions: SessionView[];
   /** The viewer's own open seat, if any. */
   mySessionId: string | null;

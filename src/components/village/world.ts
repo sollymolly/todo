@@ -63,6 +63,10 @@ export type Facing = 0 | 1 | 2 | 3; // LPC rows: up, left, down, right
 export type Grid = { w: number; h: number; blocked: boolean[][] };
 
 export type World = {
+  /** Which village (plot / PLOTS_PER_VILLAGE), its name and look. */
+  v: number;
+  name: string;
+  theme: Theme;
   w: number;
   h: number;
   plots: Plot[];
@@ -70,11 +74,52 @@ export type World = {
   /** The arena's gatehouse; its door leads in. */
   arena: { body: Rect; door: { x: number; y: number } };
   tables: Table[];
+  /** The rest of the village: a store, a library, parks… (Landmarks.tsx). */
+  landmarks: Landmark[];
+  /** Along the bottom: the station (its door opens onto the platform) and the line. */
+  station: { body: Rect; door: { x: number; y: number }; platform: Rect; track: Rect };
   streets: Rect[];
   props: Prop[];
   /** blocked[y][x] */
   blocked: boolean[][];
 };
+
+/* -------------------------------------------------------------- landmarks */
+
+export type LandmarkKind = "store" | "library" | "bakery" | "park" | "garden";
+
+/**
+ * Something that isn't anyone's house, beside the road down the middle.
+ * `area` is all of its ground (5×7 tiles); `body` the part that can't be
+ * walked through (a building, a fountain, a well); `door` where a
+ * building's way in is.
+ */
+export type Landmark = { kind: LandmarkKind; area: Rect; body: Rect; door: { x: number; y: number } | null };
+
+/** Every village has one of each, beside the road; each village in its own order. */
+const LANDMARKS: LandmarkKind[] = ["store", "park", "library", "bakery", "garden"];
+export const BUILDINGS: LandmarkKind[] = ["store", "library", "bakery"];
+
+/* ---------------------------------------------------------------- villages */
+
+/**
+ * The look of a village: how its grass and trees are tinted (Ground.tsx,
+ * Village.tsx) and how thick its woods are. The first is the meadow the
+ * village always was; the rest follow in turn.
+ */
+export type Theme = "meadow" | "forest" | "autumn" | "snowy" | "spring";
+const THEMES: Theme[] = ["meadow", "autumn", "forest", "spring", "snowy"];
+
+const NAMES = [
+  "Oakvale", "Riverford", "Ashby", "Thornfield", "Brightwater", "Elmstead", "Millbrook", "Wrenhollow",
+  "Stonebridge", "Fernley", "Hollowmere", "Kingsrest", "Larkspur", "Mossgate", "Fairhaven", "Briarwood",
+];
+
+/** A village's name and look, the same for everyone. */
+export function villageInfo(v: number): { name: string; theme: Theme } {
+  const round = Math.floor(v / NAMES.length);
+  return { name: NAMES[v % NAMES.length] + (round ? ` ${round + 1}` : ""), theme: THEMES[v % THEMES.length] };
+}
 
 /* ------------------------------------------------------------------ props */
 
@@ -121,43 +166,44 @@ function hash(str: string): number {
 
 const centreX = MARGIN + SIDE_PLOTS * PLOT_W;
 export const PLOTS_PER_BAND = SIDE_PLOTS * 2;
+/** Rows of houses in a village. */
+const BANDS = 4;
+/** How many houses a village holds; the next ones start a new village. */
+export const PLOTS_PER_VILLAGE = BANDS * PLOTS_PER_BAND;
 const bandTop = (b: number) => MARGIN + b * BAND_H;
+/** The railway, below the last row of houses. */
+const RAIL_TOP = bandTop(BANDS);
+
+/** Which village plot `plot` is in. */
+export const villageOf = (plot: number) => Math.floor(plot / PLOTS_PER_VILLAGE);
 
 /**
- * Where plot `n` is, its top-left tile. Numbered nearest the hall first —
- * band by band, alternating sides — and fixed for good: the village only
- * ever grows at the bottom, so nothing already there moves.
+ * Where plot `n` is in its village, its top-left tile. Numbered nearest the
+ * hall first — band by band, alternating sides — and fixed for good.
  */
 export function plotAt(n: number): { x: number; y: number } {
-  const k = n % PLOTS_PER_BAND;
+  const local = n % PLOTS_PER_VILLAGE;
+  const k = local % PLOTS_PER_BAND;
   const side = k % 2 ? -1 : 1;
   const i = Math.floor(k / 2);
-  return { x: side === 1 ? centreX + CENTRE_W + i * PLOT_W : centreX - (i + 1) * PLOT_W, y: bandTop(Math.floor(n / PLOTS_PER_BAND)) };
+  return { x: side === 1 ? centreX + CENTRE_W + i * PLOT_W : centreX - (i + 1) * PLOT_W, y: bandTop(Math.floor(local / PLOTS_PER_BAND)) };
 }
 
 /**
- * How many lots the village has, given its highest-numbered house: always
- * two bands of empty ones past it, room for newcomers and anyone moving, and
- * at least three bands to start with. It grows as people arrive; there's no
- * limit.
+ * Village `v`, the same on every screen. `owners[i]` is whose house is on
+ * its i-th plot — plot v × PLOTS_PER_VILLAGE + i (db: houses.plot) — or
+ * nothing for an empty lot.
  */
-export function lotsFor(highest: number): number {
-  return Math.max(3, Math.ceil((highest + 1) / PLOTS_PER_BAND) + 2) * PLOTS_PER_BAND;
-}
-
-/**
- * The village: one for everyone, the same on every screen. `owners[n]` is
- * whose house is on plot n (db: houses.plot), or nothing for an empty lot.
- */
-export function buildWorld(owners: (string | null)[]): World {
-  const bands = lotsFor(owners.length - 1) / PLOTS_PER_BAND;
-  const h = MARGIN * 2 + bands * BAND_H;
+export function buildWorld(v: number, owners: (string | null)[]): World {
+  const { name, theme } = villageInfo(v);
+  const bands = BANDS;
+  const h = RAIL_TOP + 7 + MARGIN;
   const w = WORLD_W;
   const blocked = Array.from({ length: h }, () => Array<boolean>(w).fill(false));
   const block = (r: Rect) => {
     for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (blocked[y]) blocked[y][x] = true;
   };
-  const rand = seeded(hash("village"));
+  const rand = seeded(hash(`village:${v}`));
 
   // Forest margin: solid, apart from the trees drawn on it.
   block({ x: 0, y: 0, w, h: MARGIN - 1 });
@@ -165,10 +211,12 @@ export function buildWorld(owners: (string | null)[]): World {
   block({ x: 0, y: 0, w: MARGIN - 1, h });
   block({ x: w - MARGIN + 1, y: 0, w: MARGIN - 1, h });
 
-  // Streets along the bottom of every band, and the road down the middle.
+  // Streets along the bottom of every band, the road down the middle, and
+  // paths either side of the station down to the platform.
   const streets: Rect[] = [];
   for (let b = 0; b < bands; b++) streets.push({ x: MARGIN - 1, y: bandTop(b) + 7, w: w - 2 * (MARGIN - 1), h: 2 });
   streets.push({ x: centreX + 5, y: bandTop(1), w: 4, h: (bands - 1) * BAND_H });
+  streets.push({ x: centreX + 3, y: RAIL_TOP, w: 1, h: 4 }, { x: centreX + 10, y: RAIL_TOP, w: 1, h: 4 });
 
   // The hall and its plaza, in the middle of band 0. The hall reaches up into
   // the forest margin: it's the biggest thing in the village.
@@ -180,7 +228,7 @@ export function buildWorld(owners: (string | null)[]): World {
     plaza: { x: centreX, y: bandTop(0) + 5, w: CENTRE_W, h: 4 },
   };
 
-  // Work tables either side of the hall door, then down the road.
+  // Work tables either side of the hall door.
   const tables: Table[] = [];
   const addTable = (x: number, y: number) => {
     const t: Table = {
@@ -204,11 +252,22 @@ export function buildWorld(owners: (string | null)[]): World {
   const arena = { body: { x: centreX, y: bandTop(1) + 1, w: 5, h: 4 }, door: { x: centreX + 2, y: bandTop(1) + 5 } };
   block(arena.body);
 
+  // The station, at the foot of the road, and the line along the bottom.
+  const station = {
+    body: { x: centreX + 4, y: RAIL_TOP, w: 6, h: 4 },
+    door: { x: centreX + 7, y: RAIL_TOP + 4 },
+    platform: { x: MARGIN - 1, y: RAIL_TOP + 4, w: w - 2 * (MARGIN - 1), h: 1 },
+    track: { x: 0, y: RAIL_TOP + 5, w, h: 2 },
+  };
+  block(station.body);
+  block(station.track);
+
   // Plots.
   const plots: Plot[] = [];
-  for (let n = 0; n < bands * PLOTS_PER_BAND; n++) {
+  for (let i = 0; i < PLOTS_PER_VILLAGE; i++) {
+    const n = v * PLOTS_PER_VILLAGE + i;
     const { x, y: top } = plotAt(n);
-    const owner = owners[n] ?? null;
+    const owner = owners[i] ?? null;
     const body = { x: x + 1, y: top + 1, w: 6, h: 5 };
     const plot: Plot = { n, owner, x, y: top, door: { x: x + 4, y: top + 6 }, body };
     if (owner) {
@@ -216,45 +275,61 @@ export function buildWorld(owners: (string | null)[]): World {
       // Garden beds either side of the path to the door.
       block({ x: x + 1, y: top + 6, w: 2, h: 1 });
       block({ x: x + 5, y: top + 6, w: 2, h: 1 });
-      // The signpost with the owner's name, on the grass to the left.
-      block({ x, y: top + 6, w: 1, h: 1 });
     }
+    // The signpost — the owner's name, or "Empty lot" — on the grass to the left.
+    block({ x, y: top + 6, w: 1, h: 1 });
     plots.push(plot);
   }
 
-  // Scenery. Trees on the forest margin, and something on every empty lot.
+  // Scenery: trees on the forest margin, thicker in a forest village.
   const props: Prop[] = [];
   const place = (kind: PropKind, tx: number, ty: number) => {
     const spec = PROPS[kind];
     props.push({ kind, px: tx * T + T / 2, py: (ty + 1) * T });
     if (spec.blocks) block({ x: tx - (spec.blocks > 1 ? 1 : 0), y: ty, w: spec.blocks === 2 ? 3 : 1, h: 1 });
   };
-  for (let x = 1; x < w - 1; x += 2 + Math.floor(rand() * 2)) {
+  const gap = () => (theme === "forest" ? 1 : 2) + Math.floor(rand() * 2);
+  for (let x = 1; x < w - 1; x += gap()) {
     place(rand() < 0.6 ? "pine" : "oak", x, 1 + Math.floor(rand() * 2));
     place(rand() < 0.7 ? "pine" : "bush", x, h - 2 - Math.floor(rand() * 2));
   }
-  for (let y = MARGIN; y < h - MARGIN; y += 2 + Math.floor(rand() * 2)) {
+  for (let y = MARGIN; y < h - MARGIN; y += gap()) {
     place(rand() < 0.7 ? "pine" : "oak", 1 + Math.floor(rand() * 2), y);
     place(rand() < 0.7 ? "pine" : "oak", w - 2 - Math.floor(rand() * 2), y);
   }
-  // Empty lots: cleared grass, a bush or a sapling at the back, and the
-  // "Empty lot" sign where a house's name would be (Village.tsx).
-  for (const p of plots) {
-    if (p.owner) continue;
-    // Each lot's own seed, so it looks the same as the village grows.
-    const r = seeded(hash(`lot:${p.n}`))();
-    if (r < 0.5) place("bush", p.x + 6, p.y + 1);
-    else place("sapling", p.x + 1, p.y + 1);
-    block({ x: p.x, y: p.y + 6, w: 1, h: 1 });
-  }
-  // A little green on the road's shoulders.
-  for (let b = 1; b < bands; b++) {
-    if (b > 1) place("sapling", centreX + 2, bandTop(b) + 5);
-    place("sapling", centreX + 11, bandTop(b) + 5);
-  }
 
-  // Keep the streets, the plaza and every door clear, whatever grew there.
-  for (const s of [...streets, hall.plaza]) {
+  // Either side of the road, below the hall: one of each landmark, in this
+  // village's own order (the first village keeps the order it always had).
+  const order = [...LANDMARKS];
+  if (v > 0)
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+  const landmarks: Landmark[] = [];
+  let k = 0;
+  for (let b = 1; b < bands; b++)
+    for (const side of b === 1 ? [1] : [-1, 1]) {
+      const kind = order[k++];
+      const x = side === 1 ? centreX + 9 : centreX;
+      const y = bandTop(b);
+      const area = { x, y, w: 5, h: 7 };
+      if (BUILDINGS.includes(kind)) {
+        const body = { x, y: y + 1, w: 5, h: 4 };
+        block(body);
+        landmarks.push({ kind, area, body, door: { x: x + 2, y: y + 5 } });
+      } else {
+        // A fountain or a well in the middle, trees at the back.
+        const body = kind === "park" ? { x: x + 1, y: y + 3, w: 3, h: 1 } : { x: x + 2, y: y + 3, w: 1, h: 1 };
+        block(body);
+        place(kind === "park" ? "oak" : "pine", x, y + 1);
+        place(kind === "park" ? "oak" : "sapling", x + 4, y + 1);
+        landmarks.push({ kind, area, body, door: null });
+      }
+    }
+
+  // Keep the streets, the plaza, the platform and every door clear, whatever grew there.
+  for (const s of [...streets, hall.plaza, station.platform]) {
     for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) if (blocked[y]) blocked[y][x] = false;
   }
   for (const t of tables) block({ x: t.x, y: t.y, w: t.w, h: 1 });
@@ -262,7 +337,7 @@ export function buildWorld(owners: (string | null)[]): World {
   blocked[hall.door.y][hall.door.x] = false;
   blocked[arena.door.y][arena.door.x] = false;
 
-  return { w, h, plots, hall, arena, tables, streets, props, blocked };
+  return { v, name, theme, w, h, plots, hall, arena, tables, landmarks, station, streets, props, blocked };
 }
 
 /* ------------------------------------------------------------ pathfinding */

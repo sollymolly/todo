@@ -68,7 +68,7 @@ export function serverNow(skew: number) {
  * than "nowhere in particular" — which answers with no room, and would empty
  * the room I'm standing in until the village's own next check-in.
  */
-let villageWhere: (() => { place: unknown; pos: unknown }) | null = null;
+let villageWhere: (() => { place: unknown; pos: unknown; village?: number }) | null = null;
 export function setVillageWhere(fn: typeof villageWhere) {
   villageWhere = fn;
 }
@@ -94,15 +94,18 @@ function deviceId(): string {
 let sent = 0;
 let shown = 0;
 
-/** One check-in. `place` null: don't move me, just keep my seat. */
-export async function checkIn(place: unknown, pos: unknown = null): Promise<Pulse | null> {
-  if (place == null && villageWhere) ({ place, pos } = villageWhere());
+/**
+ * One check-in. `place` null: don't move me, just keep my seat. `village`:
+ * which village I'm in (none: wherever I last was).
+ */
+export async function checkIn(place: unknown, pos: unknown = null, village?: number): Promise<Pulse | null> {
+  if (place == null && villageWhere) ({ place, pos, village } = villageWhere());
   const n = ++sent;
   try {
     const res = await fetch("/api/village/pulse", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ place, pos, device: deviceId() }),
+      body: JSON.stringify({ place, pos, village, device: deviceId() }),
       cache: "no-store",
     });
     if (!res.ok) return null;
