@@ -14,9 +14,10 @@ import {
    The habit grid, shared by the Habits page and the dashboard.
 
    One row per habit, one column per day: a green check for a day kept, a red
-   x for a day missed, a snowflake for a day a streak freeze covered. Only
-   today's cell can be pressed, until 23:59:59 in the user's timezone — once a
-   day is over it is settled one way or the other and stays that way.
+   x for a day missed, a snowflake for a day a streak freeze covered. Today's
+   cell can be pressed until 23:59:59 in the user's timezone; after that a day
+   is settled and stays that way — except a frozen day in the last week, which
+   can still be ticked late (it hands the freeze back).
    -------------------------------------------------------------------------- */
 
 export type HabitTicked = {
@@ -88,7 +89,8 @@ export default function HabitGrid({
   const earliest = shiftDay(today, -179);
 
   async function tick(h: Habit, day: string, e: React.MouseEvent) {
-    if (busy || day !== today) return;
+    const late = day !== today;
+    if (busy || (late && !redeemable(h, day, today))) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const origin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     setBusy(h.id);
@@ -112,13 +114,15 @@ export default function HabitGrid({
         return {
           ...x,
           log,
-          done_today: res.done,
+          done_today: late ? x.done_today : res.done,
           streak: res.streak,
           best_streak: Math.max(x.best_streak, res.streak),
         };
       })
     );
     onTicked?.({ delta: res.delta, xp: res.xp, origin });
+    // A late tick gives a freeze back and lengthens the days after it.
+    if (late) onChanged();
   }
 
   return (
@@ -325,6 +329,20 @@ function Cell({
           ✓
         </span>
       );
+    if (entry.frozen && redeemable(h, day, today))
+      return (
+        <button
+          onClick={onTick}
+          disabled={busy}
+          aria-label={`Tick ${h.title} late for ${day}`}
+          title="A streak freeze covered this day. Did it after all? Press to tick it late and get the freeze back."
+          className={`${box} border-sky-400 bg-sky-100 text-sky-600 shadow-sm transition hover:border-grass-500 hover:bg-white hover:text-grass-500 ${
+            busy ? "animate-pulse" : ""
+          }`}
+        >
+          ❄
+        </button>
+      );
     if (entry.frozen)
       return (
         <span
@@ -371,6 +389,11 @@ function Cell({
       ·
     </span>
   );
+}
+
+/** A frozen day from the last week, which can still be ticked late. */
+function redeemable(h: Habit, day: string, today: string): boolean {
+  return !!h.log[day]?.frozen && day < today && day >= shiftDay(today, -7);
 }
 
 function fmtRange(a: string, b: string): string {

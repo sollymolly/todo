@@ -93,8 +93,8 @@ create table if not exists profiles (
   -- Deadlines that were missed and then removed by abandoning the quest. The
   -- row is gone, so this counter is the whole record.
   archived_missed   integer not null default 0,
-  -- Streak freezes: two a month, shared by every habit. freezes_month is the
-  -- month the pool was last topped up; an older one means it's full again.
+  -- Unused: streak freezes are now counted from habit_log (see
+  -- streak_freezes_left). Kept so older rows still load.
   streak_freezes    integer not null default 2,
   freezes_month     date,
   created_at    timestamptz not null default now()
@@ -1192,42 +1192,33 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- use_streak_freeze — spend one of the account's streak freezes on p_day, if
--- there's one left. Everyone gets two a month: the first spend in a new month
--- tops the pool back up to two before taking one. Returns whether it spent.
+-- streak_freezes_left — two a month, shared by every habit, counted straight
+-- from the log: each frozen day is one spent. A freeze is spent the moment its
+-- day closes, so it comes out of the month of the day after (a freeze on the
+-- 30th of September is October's). Redeeming a frozen day hands it back.
+-- (profiles.streak_freezes / freezes_month are no longer read.)
 -- ---------------------------------------------------------------------------
+create or replace function streak_freezes_left(p_user uuid, p_today date)
+returns integer
+language sql stable as $$
+  select greatest(0, 2 - count(*)::integer)
+    from habit_log
+   where user_id = p_user
+     and frozen
+     and date_trunc('month', day + 1) = date_trunc('month', p_today);
+$$;
+
+-- use_streak_freeze — whether a freeze is left to spend on p_day. The caller
+-- spends it by logging the day as frozen. The profile row is locked so two
+-- settles can't both take the last one.
 create or replace function use_streak_freeze(p_user uuid, p_day date)
 returns boolean
 language plpgsql
 as $$
-declare
-  v_month date := date_trunc('month', p_day)::date;
 begin
-  update profiles set
-    streak_freezes = case
-      when freezes_month is null or freezes_month < v_month then 2
-      else streak_freezes
-    end - 1,
-    freezes_month = greatest(coalesce(freezes_month, v_month), v_month)
-   where id = p_user
-     and case
-           when freezes_month is null or freezes_month < v_month then 2
-           else streak_freezes
-         end > 0;
-  return found;
+  perform 1 from profiles where id = p_user for update;
+  return streak_freezes_left(p_user, p_day + 1) > 0;
 end;
-$$;
-
--- streak_freezes_left — what the pool holds for the month p_today is in.
-create or replace function streak_freezes_left(p_user uuid, p_today date)
-returns integer
-language sql stable as $$
-  select case
-           when freezes_month is null
-             or freezes_month < date_trunc('month', p_today)::date then 2
-           else streak_freezes
-         end
-    from profiles where id = p_user;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -1367,10 +1358,71 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- redeem_habit_day — tick a day a streak freeze covered, up to a week late,
+-- for when it was done but not ticked in time. It's paid as the tick it
+-- would have been, the freeze goes back in the pool, and every later day in
+-- the same unbroken run counts one more (rewards already paid stand).
+-- Any other closed day stays closed.
+-- ---------------------------------------------------------------------------
+create or replace function redeem_habit_day(p_user uuid, p_habit uuid, p_day date)
+returns json
+language plpgsql
+as $$
+declare
+  v_today  date;
+  v_streak integer;
+  v_moved  integer;
+  v_break  date;
+  v_log    habit_log%rowtype;
+  h        habits%rowtype;
+begin
+  perform settle_habits(p_user);
+
+  select (now() at time zone coalesce(timezone, 'UTC'))::date into v_today
+    from profiles where id = p_user;
+
+  select * into h from habits where id = p_habit and user_id = p_user for update;
+  if not found then raise exception 'Habit not found'; end if;
+
+  select * into v_log from habit_log where habit_id = h.id and day = p_day for update;
+  if not found or not v_log.frozen or p_day < v_today - 7 then
+    raise exception 'That day has closed — habits can only be ticked on the day.';
+  end if;
+
+  -- The frozen row holds the streak as it stood; this tick extends it.
+  v_streak := v_log.streak + 1;
+  v_moved  := habit_move_xp(p_user, habit_reward(v_streak), 'habit (late): ' || h.title);
+
+  update habit_log set done = true, frozen = false, xp = v_moved, streak = v_streak
+   where habit_id = h.id and day = p_day;
+
+  -- The run carries on until the first real miss after it.
+  select min(day) into v_break from habit_log
+   where habit_id = h.id and day > p_day and not done and not frozen;
+
+  update habit_log set streak = streak + 1
+   where habit_id = h.id and day > p_day and (v_break is null or day < v_break);
+
+  update habits set
+    streak      = case when v_break is null then streak + 1 else streak end,
+    best_streak = greatest(best_streak,
+                           (select max(streak) from habit_log where habit_id = h.id))
+   where id = h.id
+  returning streak into v_streak;
+
+  return json_build_object(
+    'done', true, 'delta', v_moved, 'streak', v_streak,
+    'xp', (select xp from profiles where id = p_user)
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- toggle_habit_day — tick or un-tick a day, which must be today in the
 -- user's own timezone: the box closes at 23:59:59 local, and days to come
 -- can't be ticked early. p_zone is the device's timezone, stored first so
--- "today" is always theirs. (Past-day editing and its restreak_habit are gone.)
+-- "today" is always theirs. A closed day can only be a frozen one, which goes
+-- to redeem_habit_day. (Past-day editing and its restreak_habit are gone.)
 -- ---------------------------------------------------------------------------
 drop function if exists toggle_habit_day(uuid, uuid, date);
 drop function if exists restreak_habit(uuid, date, integer);
@@ -1394,7 +1446,7 @@ begin
     from profiles where id = p_user;
 
   if p_day is not null and p_day < v_today then
-    raise exception 'That day has closed — habits can only be ticked on the day.';
+    return redeem_habit_day(p_user, p_habit, p_day);
   end if;
   if p_day is not null and p_day > v_today then
     raise exception 'That day hasn''t come yet — habits can only be ticked on the day.';
