@@ -446,8 +446,14 @@ create table if not exists village_presence (
   x        real,
   y        real,
   facing   smallint,
+  /* Which of their devices this is (an id each open app makes up). Signed
+     in on two, the first one here keeps the row until it's closed — stops
+     checking in, or says it's going — so the two never fight over it.
+     Null: no device's, or let go of. */
+  device   text,
   seen_at  timestamptz not null default now()
 );
+alter table village_presence add column if not exists device text;
 
 -- A house's size follows its owner's level and is never stored. `interior`
 -- holds wallpaper, floor and furniture; null is the default room.

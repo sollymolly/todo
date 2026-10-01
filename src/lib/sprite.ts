@@ -17,7 +17,7 @@ import type { Appearance, BodyType, DyeSlot, Equipped } from "@/lib/types";
    village's walkers, so the two can never disagree about what someone wears.
 
    Every sheet is a 9x4 grid of 64px frames: a walk cycle facing up, left,
-   down and right.
+   down and right. (A few weapons ship on 128px frames; load() trims them.)
    -------------------------------------------------------------------------- */
 
 export const FRAME = manifest.frame; // 64
@@ -124,14 +124,38 @@ export function ramp(kind: string, want: string, fallback: string): string[] {
   return table[want] ?? table[fallback] ?? [];
 }
 
-const imageCache = new Map<string, Promise<HTMLImageElement>>();
+const imageCache = new Map<string, Promise<CanvasImageSource>>();
 
-export function load(src: string): Promise<HTMLImageElement> {
+/**
+ * One layer's sheet, as the usual 9×4 grid of 64px frames. A few weapons
+ * (the katana and scimitar: runeblade, dragonfang) are drawn on 128px
+ * frames so their blades have room; the knight sits in the middle of each,
+ * so the middle 64px of each is the frame that lines up with everything
+ * else. A blade that reaches past it is trimmed at the frame's edge, as
+ * every other weapon's is.
+ */
+function asFrames(img: HTMLImageElement): CanvasImageSource {
+  const size = img.naturalHeight / 4;
+  if (size === FRAME) return img;
+  const pad = (size - FRAME) / 2;
+  const out = document.createElement("canvas");
+  out.width = FRAME * 9;
+  out.height = FRAME * 4;
+  const ctx = out.getContext("2d");
+  if (!ctx) return img;
+  ctx.imageSmoothingEnabled = false;
+  for (let row = 0; row < 4; row++)
+    for (let col = 0; col < 9; col++)
+      ctx.drawImage(img, col * size + pad, row * size + pad, FRAME, FRAME, col * FRAME, row * FRAME, FRAME, FRAME);
+  return out;
+}
+
+export function load(src: string): Promise<CanvasImageSource> {
   let p = imageCache.get(src);
   if (!p) {
     p = new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = () => resolve(img);
+      img.onload = () => resolve(asFrames(img));
       img.onerror = () => reject(new Error(`failed: ${src}`));
       img.src = src;
     });

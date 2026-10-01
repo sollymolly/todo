@@ -370,21 +370,21 @@
     "bodies": {
      "male": [
       {
-       "src": "/sprites/lpc/weapon/sword/katana/walk//katana.png",
-       "z": 140
+       "src": "/sprites/lpc/weapon/sword/katana/walk/behind/katana.png",
+       "z": 9
       },
       {
-       "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+       "src": "/sprites/lpc/weapon/sword/katana/walk/katana.png",
        "z": 140
       }
      ],
      "female": [
       {
-       "src": "/sprites/lpc/weapon/sword/katana/walk//katana.png",
-       "z": 140
+       "src": "/sprites/lpc/weapon/sword/katana/walk/behind/katana.png",
+       "z": 9
       },
       {
-       "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+       "src": "/sprites/lpc/weapon/sword/katana/walk/katana.png",
        "z": 140
       }
      ]
@@ -395,21 +395,21 @@
     "bodies": {
      "male": [
       {
-       "src": "/sprites/lpc/weapon/sword/scimitar/walk//scimitar.png",
-       "z": 140
+       "src": "/sprites/lpc/weapon/sword/scimitar/walk/behind/scimitar.png",
+       "z": 9
       },
       {
-       "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+       "src": "/sprites/lpc/weapon/sword/scimitar/walk/scimitar.png",
        "z": 140
       }
      ],
      "female": [
       {
-       "src": "/sprites/lpc/weapon/sword/scimitar/walk//scimitar.png",
-       "z": 140
+       "src": "/sprites/lpc/weapon/sword/scimitar/walk/behind/scimitar.png",
+       "z": 9
       },
       {
-       "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+       "src": "/sprites/lpc/weapon/sword/scimitar/walk/scimitar.png",
        "z": 140
       }
      ]

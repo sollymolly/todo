@@ -29,7 +29,7 @@ import {
 /** Draw one 64px frame, optionally remapping a colour ramp. */
 function drawLayer(
   ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
+  img: CanvasImageSource,
   col: number,
   recolor?: { from: string[]; to: string[] }
 ) {

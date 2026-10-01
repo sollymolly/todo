@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import TabBar, { TAB_PATHS } from "@/components/TabBar";
 import SessionPill from "@/components/SessionPill";
+import Presence from "@/components/Presence";
 import { forgetSavedPages, startPwa, useConnectivity } from "@/lib/pwa";
 import { forgetPush, resyncPush } from "@/lib/push-client";
 
@@ -47,6 +48,7 @@ export default function PwaShell({ children }: { children: React.ReactNode }) {
         {children}
         {tabs && <TabBar />}
         {tabs && <SessionPill />}
+        {tabs && <Presence />}
       </div>
       {offline && (
         <div

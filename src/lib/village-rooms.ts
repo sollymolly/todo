@@ -3,7 +3,7 @@ import { sql } from "@/lib/db";
 import { fightStartsAt, INVITE_MS, judge, strike, type Facing, type Stance } from "@/lib/duel";
 import { poke } from "@/lib/live";
 import type { Appearance, Equipped } from "@/lib/types";
-import type { ChatLine, DuelView, Place, Pos, RoomPerson } from "@/lib/village";
+import type { ChatLine, DuelView, Place, RoomPerson } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    Shared rooms, talk and duels — the server side. Used by
@@ -20,7 +20,8 @@ import type { ChatLine, DuelView, Place, Pos, RoomPerson } from "@/lib/village";
    -------------------------------------------------------------------------- */
 
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Number(v));
-const ONLINE = "45 seconds";
+/** ONLINE_MS (village.ts), for SQL. */
+export const ONLINE = "45 seconds";
 
 /* --------------------------------------------------------------- rooms */
 
@@ -51,20 +52,6 @@ export async function roomPeople(me: string, place: Place, known: Set<string>): 
     y: r.y ?? 0,
     facing: ((r.facing ?? 2) % 4) as 0 | 1 | 2 | 3,
   }));
-}
-
-/** Store where I am. Inside a house only if it's mine or a companion's. */
-export async function touchRoomPresence(me: string, place: Place, pos: Pos | null, known: Set<string>): Promise<boolean> {
-  if (place.kind === "inside" && !known.has(place.hostId)) return false;
-  await sql`
-    insert into village_presence (user_id, place, host_id, x, y, facing, seen_at)
-    values (${me}::uuid, ${place.kind}, ${place.kind === "inside" ? place.hostId : null}::uuid,
-            ${pos?.x ?? null}, ${pos?.y ?? null}, ${pos?.facing ?? null}, now())
-    on conflict (user_id) do update set
-      place = excluded.place, host_id = excluded.host_id,
-      x = excluded.x, y = excluded.y, facing = excluded.facing, seen_at = now()
-  `;
-  return true;
 }
 
 /* ---------------------------------------------------------------- talk */

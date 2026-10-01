@@ -1,11 +1,12 @@
 import { getUserId } from "@/lib/session";
-import { pulse } from "@/lib/village-server";
+import { pulse, releasePresence } from "@/lib/village-server";
 import type { Place, Pos } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    The village's check-in: "I'm here" in, "here's everyone" out. Polled every
-   few seconds while the village is open, and less often by the session timer
-   elsewhere in the app (which sends no place, so it doesn't move you).
+   few seconds while the village is open, and less often from anywhere else
+   in the app (Presence.tsx: "at home"). With no place, it moves nobody and
+   only keeps a seat at a table.
 
    A route rather than a server action on purpose: actions queue one at a
    time, and a check-in every five seconds would hold up the ones people
@@ -40,23 +41,37 @@ function readPos(raw: unknown): Pos | null {
   return { x, y, facing: (Number.isInteger(f) && f >= 0 && f <= 3 ? f : 2) as Pos["facing"] };
 }
 
+/** Which of someone's open apps is asking: an id it made up for itself. */
+function readDevice(raw: unknown): string | null {
+  return typeof raw === "string" && /^[\w-]{8,64}$/.test(raw) ? raw : null;
+}
+
 export async function POST(request: Request) {
   const me = await getUserId();
   if (!me) return Response.json({ error: "signed out" }, { status: 401 });
 
-  let body: { place?: unknown; pos?: unknown } = {};
+  // The body can arrive as text/plain: the app sends its goodbye with
+  // navigator.sendBeacon as it closes.
+  let body: { place?: unknown; pos?: unknown; device?: unknown; release?: unknown } = {};
   try {
     body = await request.json();
   } catch {
     /* no body: a check-in without a place */
   }
 
+  // { release: device }: that app is closing (session-store.ts).
+  const leaving = readDevice(body.release);
+  if (leaving) {
+    await releasePresence(me, leaving);
+    return new Response(null, { status: 204 });
+  }
+
   try {
-    return Response.json(await pulse(me, readPlace(body.place), readPos(body.pos)), {
+    return Response.json(await pulse(me, readPlace(body.place), readPos(body.pos), readDevice(body.device)), {
       headers: { "cache-control": "no-store" },
     });
   } catch (e) {
-    const missing = /relation .* does not exist|function .* does not exist/i.test(String(e));
+    const missing = /relation .* does not exist|function .* does not exist|column .* does not exist/i.test(String(e));
     return Response.json({ error: missing ? "village not set up" : "check-in failed" }, { status: missing ? 503 : 500 });
   }
 }

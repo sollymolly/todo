@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import { colorOf, progressFor } from "@/lib/game";
+import { STATUS_LABEL, type Status } from "@/lib/village";
 import {
   cancelRequest,
   findPerson,
@@ -310,7 +311,7 @@ export default function Friends({
                       f.user_id === openId ? "bg-grass-100/70" : "hover:bg-mud-100"
                     }`}
                   >
-                    <Avatar appearance={f.appearance} equipped={f.equipped} size={46} online={!!e?.in_village} />
+                    <Avatar appearance={f.appearance} equipped={f.equipped} size={46} status={e?.status} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">
                         <span className={`min-w-0 flex-1 truncate text-[15px] ${unread ? "font-bold" : "font-semibold"} text-mud-900`}>
@@ -350,7 +351,7 @@ export default function Friends({
               meId={meId}
               myPublicKey={myPublicKey}
               seenAt={entries.get(open.user_id)?.seen_at ?? null}
-              inVillage={!!entries.get(open.user_id)?.in_village}
+              status={entries.get(open.user_id)?.status ?? "offline"}
               onBack={closeChat}
               onSent={() => void refreshInbox()}
               onRemove={async () => {
@@ -498,7 +499,7 @@ function Thread({
   meId,
   myPublicKey,
   seenAt,
-  inVillage,
+  status,
   onBack,
   onSent,
   onRemove,
@@ -508,7 +509,8 @@ function Thread({
   myPublicKey: string | null;
   /** When they last read something I sent. */
   seenAt: string | null;
-  inVillage: boolean;
+  /** Offline, at home (in the app elsewhere), or in the village. */
+  status: Status;
   onBack: () => void;
   onSent: () => void;
   onRemove: () => void;
@@ -698,11 +700,11 @@ function Thread({
           ‹
         </button>
         <button onClick={() => setShowInfo((v) => !v)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          <Avatar appearance={friend.appearance} equipped={friend.equipped} size={38} online={inVillage} />
+          <Avatar appearance={friend.appearance} equipped={friend.equipped} size={38} status={status} />
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold text-mud-900">{friend.display_name}</span>
             <span className="block truncate text-[11px] text-mud-500">
-              {inVillage ? "In the village · " : ""}
+              {STATUS_LABEL[status]} ·{" "}
               {statusLine(friend)}
             </span>
           </span>

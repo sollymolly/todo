@@ -8,6 +8,7 @@ import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { ESCROW_CONFIGURED, openPrivateKey, publicKeyFor, sealPrivateKey } from "@/lib/escrow";
 import type { Appearance, Equipped } from "@/lib/types";
+import type { Status } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    Friends, and the relay for encrypted direct messages.
@@ -584,8 +585,8 @@ export type InboxEntry = {
   unread: number;
   /** When they last read something I sent them: what "Seen" is based on. */
   seen_at: string | null;
-  /** Walking around the village right now. */
-  in_village: boolean;
+  /** In the village, in the app elsewhere ("home"), or not around. */
+  status: Status;
 };
 
 /**
@@ -618,22 +619,22 @@ export async function inbox(): Promise<InboxEntry[]> {
       ) l on true
   `) as Record<string, unknown>[];
 
-  // Who's in the village. Its own query, so messaging works before 026 is run.
-  let here = new Set<string>();
+  // Who's around, and where. Its own query, so messaging works before 026 is run.
+  let here = new Map<string, Status>();
   try {
     const p = (await sql`
-      select user_id from village_presence
+      select user_id, place from village_presence
        where user_id = any(${rows.map((r) => r.friend_id as string)}::uuid[])
          and seen_at > now() - interval '45 seconds'
-    `) as { user_id: string }[];
-    here = new Set(p.map((x) => x.user_id));
+    `) as { user_id: string; place: string }[];
+    here = new Map(p.map((x) => [x.user_id, x.place === "home" ? "home" : "village"]));
   } catch {
     /* no village yet */
   }
 
   return rows.map((r) => ({
     friend_id: r.friend_id as string,
-    in_village: here.has(r.friend_id as string),
+    status: here.get(r.friend_id as string) ?? "offline",
     last: r.id
       ? { id: r.id as string, sender_id: r.sender_id as string, iv: r.iv as string, body: r.body as string, created_at: iso(r.created_at)! }
       : null,

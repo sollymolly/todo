@@ -13,7 +13,8 @@ Rather than hard-code paths — they are inconsistent across contributors — th
 resolves each one by reading the definition and probing both shapes.
 
 Output:
-    public/sprites/lpc/**.png     the sheets (576x256, 9x4 grid of 64px frames)
+    public/sprites/lpc/**.png     the sheets (576x256, 9x4 grid of 64px frames;
+                                  a few weapons' walk_128 sheets are 128px frames)
     public/sprites/lpc/manifest.json
     public/sprites/lpc/CREDITS.md attribution required by CC-BY-SA / GPL
 
@@ -223,16 +224,24 @@ def resolve(defn, slot, body):
     for key in sorted(k for k in defn if k.startswith("layer_")):
         layer = defn[key]
         # Skip the attack-only layers; we only ever draw a standing frame.
-        if any(x in str(layer) for x in ("attack_", "/behind/")):
+        # A layer for another animation (the katana's slash_128) isn't a
+        # walk either — but a walk's own behind layer (walk_128) is: it
+        # holds the blade facing up, left and right. Those 128px sheets
+        # are trimmed to 64px frames as they load (src/lib/sprite.ts).
+        anim = layer.get("custom_animation")
+        if anim and not anim.startswith("walk"):
+            continue
+        if "attack_" in str(layer) or ("/behind/" in str(layer) and not anim):
             continue
 
         d = next((layer[k] for k in BODY_KEYS[body] if layer.get(k)), None)
         if not d:
             continue
+        d = d if d.endswith("/") else f"{d}/"
 
         # Some definitions already point at the animation folder, others stop
         # at the item folder. Probe both shapes.
-        stem = d if d.rstrip("/").endswith("walk") else f"{d}walk"
+        stem = d.rstrip("/") if d.rstrip("/").endswith("walk") else f"{d}walk"
         candidates = []
         if variant:
             candidates += [f"{stem}/{variant}.png", f"{d}{variant}.png"]

@@ -2,7 +2,7 @@ import { sql } from "@/lib/db";
 import { levelFor } from "@/lib/game";
 import { listFriends } from "@/lib/social-actions";
 import type { Appearance, Equipped } from "@/lib/types";
-import { duelRecords, duelsFor, roomPeople, spaceChat, touchRoomPresence } from "@/lib/village-rooms";
+import { duelRecords, duelsFor, ONLINE, roomPeople, spaceChat } from "@/lib/village-rooms";
 import {
   cleanHouse,
   spaceOf,
@@ -36,15 +36,59 @@ export async function friendIdsOf(me: string): Promise<string[]> {
 
 /* --------------------------------------------------------------- presence */
 
-export async function touchPresence(me: string, place: Place | null) {
-  if (!place) return;
+/** Until db/schema.sql's `device` column is added, every device writes, as before. */
+let haveDevice = true;
+
+/**
+ * Stores where I am, from this device (`device`, made up by each open app)
+ * — unless another of my devices got here first and is still about: that
+ * one keeps the row until it's closed, and this returns false. A position
+ * goes with a shared room only.
+ */
+async function writePresence(me: string, place: Place, pos: Pos | null, device: string | null): Promise<boolean> {
+  const host = place.kind === "house" || place.kind === "inside" ? place.hostId : null;
+  const at = place.kind === "inside" || place.kind === "arena" ? pos : null;
+  if (haveDevice) {
+    try {
+      const rows = (await sql`
+        insert into village_presence as v (user_id, place, host_id, x, y, facing, device, seen_at)
+        values (${me}::uuid, ${place.kind}, ${host}::uuid, ${at?.x ?? null}, ${at?.y ?? null}, ${at?.facing ?? null}, ${device}, now())
+        on conflict (user_id) do update set
+          place = excluded.place, host_id = excluded.host_id,
+          x = excluded.x, y = excluded.y, facing = excluded.facing,
+          device = excluded.device, seen_at = now()
+         where v.device is null or excluded.device is null or v.device = excluded.device
+            or v.seen_at < now() - ${ONLINE}::interval
+        returning 1 as ok
+      `) as { ok: number }[];
+      return rows.length > 0;
+    } catch (e) {
+      if (!/column "device"/i.test(String(e))) throw e;
+      haveDevice = false;
+    }
+  }
   await sql`
-    insert into village_presence (user_id, place, host_id, seen_at)
-    values (${me}::uuid, ${place.kind},
-            ${place.kind === "house" ? place.hostId : null}::uuid, now())
+    insert into village_presence (user_id, place, host_id, x, y, facing, seen_at)
+    values (${me}::uuid, ${place.kind}, ${host}::uuid, ${at?.x ?? null}, ${at?.y ?? null}, ${at?.facing ?? null}, now())
     on conflict (user_id) do update set
-      place = excluded.place, host_id = excluded.host_id, seen_at = now()
+      place = excluded.place, host_id = excluded.host_id,
+      x = excluded.x, y = excluded.y, facing = excluded.facing, seen_at = now()
   `;
+  return true;
+}
+
+/**
+ * This device is closing. If it's the one friends see, it lets go now — and
+ * I'm offline now, rather than once my last check-in goes stale — so another
+ * of my devices takes over at its next check-in.
+ */
+export async function releasePresence(me: string, device: string) {
+  if (!haveDevice) return;
+  await sql`
+    update village_presence
+       set device = null, seen_at = least(seen_at, now() - ${ONLINE}::interval)
+     where user_id = ${me}::uuid and device = ${device}
+  `.catch(() => {});
 }
 
 /* --------------------------------------------------------------- sessions */
@@ -175,19 +219,22 @@ export async function unseenNudges(me: string): Promise<NudgeView[]> {
 
 /* ------------------------------------------------------------------ pulse */
 
-/** One check-in: where I am, and what the village looks like from here. */
-export async function pulse(me: string, place: Place | null, pos: Pos | null = null): Promise<Pulse> {
+/**
+ * One check-in: where I am, and what the village looks like from here.
+ * `place` null moves nobody: it only keeps my seat at a table. `device`
+ * is which of my open apps is asking (see village_presence.device).
+ */
+export async function pulse(me: string, place: Place | null, pos: Pos | null = null, device: string | null = null): Promise<Pulse> {
   await sweepSessions();
   const friends = await friendIdsOf(me);
   const known = new Set([me, ...friends]);
 
-  // Inside a house or in the arena needs newer columns. If they're missing,
-  // keep the outdoor village working and count them as out on the square.
-  let shared = false;
-  if (place && (place.kind === "inside" || place.kind === "arena")) {
-    shared = await touchRoomPresence(me, place, pos, known).catch(() => false);
-    if (!shared) await touchPresence(me, { kind: "square" });
-  } else await touchPresence(me, place);
+  // Inside a house only if it's mine or a companion's; otherwise I'm out on
+  // the square. What this device sees is wherever it has me, even when
+  // another of my devices is the one friends see.
+  const at: Place | null = place?.kind === "inside" && !known.has(place.hostId) ? { kind: "square" } : place;
+  const elsewhere = at ? !(await writePresence(me, at, pos, device)) : false;
+  const shared = at?.kind === "inside" || at?.kind === "arena";
   const focusXp = await sessionHeartbeat(me);
 
   const presenceRows = (await sql`
@@ -220,15 +267,15 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
   // The shared space I'm in: who's there, and what's been said.
   let room: Pulse["room"] = null;
   let duels: Pulse["duels"] = [];
-  const space = shared || place?.kind === "hall" ? spaceOf(place) : null;
+  const space = shared || at?.kind === "hall" ? spaceOf(at) : null;
   try {
-    if (space && place)
+    if (space && at)
       room = {
         space,
-        people: place.kind === "hall" ? [] : await roomPeople(me, place, known),
+        people: at.kind === "hall" ? [] : await roomPeople(me, at, known),
         chat: await spaceChat(space, known),
       };
-    duels = await duelsFor(me, place?.kind === "arena" && shared);
+    duels = await duelsFor(me, at?.kind === "arena");
   } catch {
     /* db/schema.sql not run yet */
   }
@@ -243,6 +290,7 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
     nudges: await unseenNudges(me),
     room,
     duels,
+    elsewhere,
   };
 }
 

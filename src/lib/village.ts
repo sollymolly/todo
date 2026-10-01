@@ -11,6 +11,10 @@ import type { Appearance, Equipped } from "@/lib/types";
  * Where someone is. A place rather than a spot on a map: everyone's village
  * holds different people, so each viewer draws a friend at that place in
  * their own layout.
+ *
+ * "home" is being in the app but not in the village (on the quests page,
+ * say): drawn at their own front door. In the village, standing by your own
+ * house is "house" with your own id.
  */
 export type Place =
   | { kind: "home" }
@@ -51,11 +55,24 @@ export const SAY_MAX = 140;
 /** How long a line hangs over someone's head. */
 export const BUBBLE_MS = 7_000;
 
-/** Seen this recently counts as in the village right now. */
+/** Seen this recently counts as around right now. */
 export const ONLINE_MS = 45_000;
-/** How often an open village checks in; a session elsewhere, less often. */
+/** How often an open village checks in; the rest of the app, less often. */
 export const PULSE_MS = 5_000;
-export const SESSION_PULSE_MS = 20_000;
+export const APP_PULSE_MS = 20_000;
+
+/**
+ * What friends see of someone: not in the app (or not for a while), in the
+ * app but not the village, or in the village.
+ */
+export type Status = "offline" | "home" | "village";
+
+export function statusOf(p: { place: Place; seenAt: number } | undefined, now: number): Status {
+  if (!p || now - p.seenAt >= ONLINE_MS) return "offline";
+  return p.place.kind === "home" ? "home" : "village";
+}
+
+export const STATUS_LABEL: Record<Status, string> = { offline: "Offline", home: "At home", village: "In the village" };
 
 /* ------------------------------------------------------------------ houses */
 
@@ -215,6 +232,12 @@ export type Pulse = {
   room: { space: string; people: RoomPerson[]; chat: ChatLine[] } | null;
   /** Duels I'm in, or can watch from where I am. */
   duels: DuelView[];
+  /**
+   * I'm signed in on another device too, and that one got here first:
+   * friends see me where it has me until it's closed, and this check-in
+   * didn't move me.
+   */
+  elsewhere: boolean;
 };
 
 export type NudgeView = {

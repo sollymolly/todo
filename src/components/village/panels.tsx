@@ -27,11 +27,13 @@ import {
   NUDGE_MAX,
   NUDGE_PRESETS,
   ROOFS,
+  STATUS_LABEL,
   STYLES,
   tierFor,
   type HouseLook,
   type Neighbour,
   type SessionView,
+  type Status,
 } from "@/lib/village";
 import { MyQuestSwitch, QuestPicker, StartSessionForm, useMyQuests } from "@/components/village/SessionControls";
 
@@ -593,27 +595,32 @@ export function HallPanel({
 
 /* ------------------------------------------------------------- who's out */
 
+/** In the village first, then at home, then offline. */
+const STATUS_ORDER: Record<Status, number> = { village: 0, home: 1, offline: 2 };
+export const STATUS_DOT: Record<Status, string> = { village: "bg-grass-500", home: "bg-amber-400", offline: "bg-mud-300" };
+
 export function PeoplePanel({
   people,
   sheets,
   onGo,
   onClose,
 }: {
-  people: { n: Neighbour; online: boolean; where: string }[];
+  people: { n: Neighbour; status: Status; where: string }[];
   sheets: Record<string, string>;
   onGo: (id: string) => void;
   onClose: () => void;
 }) {
-  const sorted = [...people].sort((a, b) => Number(b.online) - Number(a.online) || a.n.name.localeCompare(b.n.name));
+  const sorted = [...people].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.n.name.localeCompare(b.n.name));
+  const count = (s: Status) => people.filter((p) => p.status === s).length;
   return (
-    <Panel title="Your companions" sub={`${people.filter((p) => p.online).length} in the village now`} onClose={onClose}>
+    <Panel title="Your companions" sub={`${count("village")} in the village · ${count("home")} at home`} onClose={onClose}>
       {sorted.length === 0 ? (
         <p className="text-sm text-mud-500">
           No companions yet. <Link href="/friends" className="font-semibold text-grass-700">Find some</Link> and their houses will appear here.
         </p>
       ) : (
         <ul className="space-y-1">
-          {sorted.map(({ n, online, where }) => (
+          {sorted.map(({ n, status, where }) => (
             <li key={n.id}>
               <button onClick={() => onGo(n.id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-mud-100">
                 <Face sheet={sheets[n.id]} size={30} />
@@ -621,7 +628,7 @@ export function PeoplePanel({
                   <span className="block truncate text-sm font-semibold text-mud-900">{n.name}</span>
                   <span className="block truncate text-xs text-mud-500">{where}</span>
                 </span>
-                <span className={`size-2 rounded-full ${online ? "bg-grass-500" : "bg-mud-300"}`} aria-label={online ? "In the village" : "Away"} />
+                <span className={`size-2 rounded-full ${STATUS_DOT[status]}`} aria-label={STATUS_LABEL[status]} />
               </button>
             </li>
           ))}

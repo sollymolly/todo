@@ -24,7 +24,13 @@ const RETRY_LATER_MS = 5 * 60_000;
 
 export function useVillageLive(
   space: string | null,
-  on: { pos: (p: LivePos) => void; poke: () => void; blow: (b: LiveBlow) => void; open: () => void }
+  on: {
+    pos: (p: LivePos) => void;
+    poke: () => void;
+    blow: (b: LiveBlow) => void;
+    /** A space joined, on connecting or moving: say where I stand there. */
+    joined: () => void;
+  }
 ): {
   connected: boolean;
   sendPos: (x: number, y: number, f: number, g: boolean) => void;
@@ -42,7 +48,10 @@ export function useVillageLive(
   useEffect(() => {
     spaceRef.current = space;
     const s = sock.current;
-    if (s?.readyState === WebSocket.OPEN) s.send(JSON.stringify({ t: "join", space }));
+    if (s?.readyState === WebSocket.OPEN) {
+      s.send(JSON.stringify({ t: "join", space }));
+      onRef.current.joined();
+    }
   }, [space]);
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export function useVillageLive(
         delay = 1000;
         setConnected(true);
         s.send(JSON.stringify({ t: "join", space: spaceRef.current }));
-        onRef.current.open();
+        onRef.current.joined();
         // Anything missed while disconnected: catch up now.
         onRef.current.poke();
       };

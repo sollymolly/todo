@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { composeSheet } from "@/lib/sprite";
 import type { Appearance, Equipped } from "@/lib/types";
+import { STATUS_LABEL, type Status } from "@/lib/village";
+
+/** In the village: green. In the app elsewhere: amber. Offline: no dot. */
+const DOT: Record<Status, string | null> = { village: "bg-grass-500", home: "bg-amber-400", offline: null };
 
 /* --------------------------------------------------------------------------
    Someone's knight, head and shoulders, in a circle — the profile picture
@@ -14,14 +18,15 @@ export default function Avatar({
   appearance,
   equipped,
   size = 40,
-  online = false,
+  status = "offline",
 }: {
   appearance: Appearance;
   equipped: Equipped;
   size?: number;
-  /** A small green dot: they're in the village right now. */
-  online?: boolean;
+  /** A small dot for where they are right now. */
+  status?: Status;
 }) {
+  const dot = DOT[status];
   const [sheet, setSheet] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -47,8 +52,11 @@ export default function Avatar({
           imageRendering: "pixelated",
         }}
       />
-      {online && (
-        <span className="absolute bottom-0 right-0 size-[28%] min-h-2.5 min-w-2.5 rounded-full bg-grass-500 ring-2 ring-mud-50" />
+      {dot && (
+        <span
+          title={STATUS_LABEL[status]}
+          className={`absolute bottom-0 right-0 size-[28%] min-h-2.5 min-w-2.5 rounded-full ${dot} ring-2 ring-mud-50`}
+        />
       )}
     </span>
   );

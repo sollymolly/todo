@@ -1,7 +1,7 @@
 import { findPath, nearestOpen, T, tileAt, walkable, type Facing, type Grid } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
-   Everyone who walks: you, and friends strolling about where they are.
+   Everyone who walks: you, and friends going where they are.
 
    Positions are world px at 1× — the point where the feet meet the ground.
    The loop moves each walker and writes its transform and sprite frame
@@ -26,11 +26,10 @@ export type Agent = {
   moving: boolean;
   speed: number;
   el: HTMLElement | null;
-  /** Sitting at a table: no strolling, facing the table. */
+  /** Sitting at a table, facing it. */
   seat: { x: number; y: number; face: Facing } | null;
-  /** Where they stroll around, and when they next set off. */
-  home: { x: number; y: number; r: number } | null;
-  nextStroll: number;
+  /** Outside: the tile they stand on where they are (Village.tsx). */
+  stand: { x: number; y: number } | null;
   /** Called once when the current path is finished. */
   onArrive?: () => void;
   /**
@@ -55,8 +54,7 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     speed,
     el: null,
     seat: null,
-    home: null,
-    nextStroll: 0,
+    stand: null,
     goal: null,
     guard: false,
   };
@@ -86,9 +84,14 @@ export const PLAYER_SPEED = RUN_SPEED;
 /** Further behind than this and they're simply put there. */
 const SNAP_PX = T * 4;
 
+/** Where someone stands, in the tiles the check-in and the live connection carry. */
+export function tilesOf(a: Agent): { x: number; y: number; facing: Facing } {
+  return { x: (a.x - T / 2) / T, y: (a.y - T / 2 - 8) / T, facing: a.dir };
+}
+
 /**
- * Follow someone to where they reported being, in tiles — the same numbers
- * the check-in and the live connection carry. `snap` places them at once.
+ * Follow someone to where they reported being, in tiles (tilesOf, on their
+ * screen). `snap` places them at once.
  */
 export function follow(a: Agent, x: number, y: number, dir: Facing, snap = false) {
   a.goal = { x: x * T + T / 2, y: y * T + T / 2 + 8, dir };
@@ -117,8 +120,11 @@ function faceToward(dx: number, dy: number): Facing {
   return Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 3) : dy < 0 ? 0 : 2;
 }
 
-/** Moves one walker along its path by dt seconds. */
-export function step(world: Grid, a: Agent, dt: number, now: number) {
+/**
+ * Moves one walker along its path by dt seconds. Nobody wanders: a walker
+ * moves only to follow someone, or to get to where they've gone.
+ */
+export function step(world: Grid, a: Agent, dt: number) {
   if (a.goal) {
     const g = a.goal;
     const dx = g.x - a.x;
@@ -155,15 +161,6 @@ export function step(world: Grid, a: Agent, dt: number, now: number) {
       a.dir = a.seat.face;
       return;
     }
-  } else if (!a.path.length && a.home && now >= a.nextStroll) {
-    // Idle: now and then, amble to somewhere nearby.
-    const r = a.home.r;
-    for (let tries = 0; tries < 6; tries++) {
-      const tx = a.home.x + Math.round((Math.random() * 2 - 1) * r);
-      const ty = a.home.y + Math.round((Math.random() * 2 - 1) * r);
-      if (walkable(world, tx, ty) && walkTo(world, a, tx, ty)) break;
-    }
-    a.nextStroll = now + 2500 + Math.random() * 5000;
   }
 
   if (!a.path.length) {
@@ -233,6 +230,9 @@ export function paint(a: Agent, scale: number) {
   if (!el) return;
   const frame = a.moving ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
   el.style.transform = `translate3d(${Math.round((a.x - FRAME / 2) * scale)}px, ${Math.round((a.y - FEET) * scale)}px, 0)`;
+  // Walkers start hidden (Village.tsx) so none shows at the scene's corner
+  // before its first placing.
+  if (el.style.visibility) el.style.visibility = "";
   el.style.zIndex = String(Math.round(a.y));
   const guard = a.guard ? "1" : "0";
   if (el.dataset.guard !== guard) el.dataset.guard = guard;

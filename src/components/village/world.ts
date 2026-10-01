@@ -278,6 +278,16 @@ export function nearestOpen(world: Grid, x: number, y: number): { x: number; y: 
   return { x: tx, y: ty };
 }
 
+/** Walkable tiles within r of (x, y), nearest first — places to stand around a spot. */
+export function tilesAround(world: Grid, x: number, y: number, r: number): { x: number; y: number }[] {
+  const out: { x: number; y: number; d: number }[] = [];
+  for (let dy = -r; dy <= r; dy++)
+    for (let dx = -r; dx <= r; dx++)
+      if (walkable(world, x + dx, y + dy)) out.push({ x: x + dx, y: y + dy, d: Math.hypot(dx, dy) });
+  // Ties broken the same way every time, so the same people end up in the same places.
+  return out.sort((a, b) => a.d - b.d || a.y - b.y || a.x - b.x).map(({ x, y }) => ({ x, y }));
+}
+
 /**
  * A* over the tile grid, 8 directions (no cutting corners past walls).
  * Returns tile centres from the step after `from` to `to`, or [] if there's

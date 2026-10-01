@@ -5,15 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { leaveSession } from "@/lib/village-actions";
 import { checkIn, clearMySession, serverNow, useSessionStore } from "@/lib/session-store";
-import { clock, focusPhase, SESSION_PULSE_MS } from "@/lib/village";
+import { clock, focusPhase } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    The running work session, wherever you are in the app: how long you've
    been at it, the shared focus clock if there is one, who's with you, and a
-   way out. Its check-ins are also what keep your seat — close every page and
-   the table lets you go after two minutes.
-
-   The village keeps the same store fresh itself, so this doesn't poll there.
+   way out. The check-ins that keep your seat are the village's and
+   Presence.tsx's — close every page and the table lets you go after two
+   minutes.
    -------------------------------------------------------------------------- */
 
 export default function SessionPill() {
@@ -23,18 +22,6 @@ export default function SessionPill() {
   const [leaving, setLeaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const inVillage = pathname === "/village";
-
-  // Once on arrival (a session may be running from another device), then
-  // regularly while there's a seat to keep.
-  useEffect(() => {
-    if (inVillage) return;
-    void checkIn(null);
-  }, [inVillage]);
-  useEffect(() => {
-    if (inVillage || !mine) return;
-    const id = setInterval(() => void checkIn(null), SESSION_PULSE_MS);
-    return () => clearInterval(id);
-  }, [inVillage, mine]);
 
   // The clocks tick every second.
   useEffect(() => {

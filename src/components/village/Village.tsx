@@ -11,15 +11,16 @@ import { DuelUI, HeadBar } from "@/components/village/DuelUI";
 import { ArenaGate, ArenaView, RoomView } from "@/components/village/scenes";
 import { buildArena, buildRoom, type ArenaScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
-import { follow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, walkTo, type Agent } from "@/components/village/engine";
-import { ATLAS, buildWorld, inRect, PROPS, T, type Grid, type World } from "@/components/village/world";
+import { follow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, tilesOf, walkTo, type Agent } from "@/components/village/engine";
+import { ATLAS, buildWorld, inRect, PROPS, T, tilesAround, type Grid, type World } from "@/components/village/world";
 import { composeSheet } from "@/lib/sprite";
-import { checkIn, patchDuelHp, publishPulse, serverNow, useSessionStore } from "@/lib/session-store";
+import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
 import { HIT_COOLDOWN_MS } from "@/lib/duel";
 import { useVillageLive } from "@/lib/live-client";
 import { challenge, loadInterior, markNudgesSeen, saveInterior } from "@/lib/village-actions";
 import { cleanInterior, FURNITURE, type FurnitureKind, type Interior } from "@/lib/furniture";
 import {
+  APP_PULSE_MS,
   bloomFor,
   BUBBLE_MS,
   LIVE_ROOM_PULSE_MS,
@@ -27,6 +28,8 @@ import {
   PULSE_MS,
   ROOM_PULSE_MS,
   spaceOf,
+  STATUS_LABEL,
+  statusOf,
   tierFor,
   type ChatLine,
   type DuelView,
@@ -82,6 +85,12 @@ function useScale() {
 
 /** A live position this recent outranks the check-in's. */
 const LIVE_FRESH_MS = 8_000;
+/**
+ * Standing still in a shared room, say where I am this often anyway: it
+ * keeps my live position fresh for everyone (so their check-ins, which can
+ * be seconds old, never pull me back), and mends any that went missing.
+ */
+const POS_HEARTBEAT_MS = 2_500;
 
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
 const promptKey = (p: Prompt) => (!p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind);
@@ -111,7 +120,8 @@ export default function Village({ data }: { data: VillageData }) {
   const [toasts, setToasts] = useState<{ id: string; text: string; nudge?: boolean }[]>([]);
   const [sheets, setSheets] = useState<Record<string, string>>({});
   const [scene, setScene] = useState<Scene>({ kind: "out" });
-  const [place, setPlace] = useState<Place>({ kind: "home" });
+  // In the village I start by my own front door ("home" is the app outside it).
+  const [place, setPlace] = useState<Place>({ kind: "house", hostId: data.me.id });
   const [said, setSaid] = useState<ChatLine[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [hits, setHits] = useState<Record<string, { dmg: number; blocked?: boolean; key: number }>>({});
@@ -175,10 +185,14 @@ export default function Village({ data }: { data: VillageData }) {
     return [...out.values()];
   }, [neighbours, online, indoors, seating, livePulse.sessions, me.id]);
 
+  const space = spaceOf(place);
+
   /** In a room or the arena: whoever the check-in says is here with me. */
   const roomPeople = useMemo(
-    () => (scene.kind !== "out" && livePulse.room && livePulse.room.space !== "hall" ? livePulse.room.people : []),
-    [scene.kind, livePulse.room]
+    // Only a check-in from this room counts: one sent from where I was
+    // before can still be on its way back.
+    () => (scene.kind !== "out" && livePulse.room && livePulse.room.space === space ? livePulse.room.people : []),
+    [scene.kind, livePulse.room, space]
   );
 
   /* ----------------------------------------------------------- sheets */
@@ -211,14 +225,27 @@ export default function Village({ data }: { data: VillageData }) {
 
   const agents = useRef(new Map<string, Agent>()); // outside
   const roomAgents = useRef(new Map<string, Agent>()); // in a room or the arena
-  /** When each person's position last arrived over the live connection. */
-  const liveSeen = useRef(new Map<string, number>());
+  /**
+   * The latest position from the live connection for each person in my
+   * room, and when it came — kept even before there's an agent to move, so
+   * one made later starts where they really are.
+   */
+  const lastLive = useRef(new Map<string, { x: number; y: number; f: Agent["dir"]; g: boolean; at: number }>());
   /** Check in right now; set up by the check-in loop further down. */
   const beatNow = useRef<() => void>(() => {});
   const player = useRef<Agent | null>(null);
+  /**
+   * Walkers' elements, by "out:id" / "room:id". A walker's element can
+   * mount before its agent exists (the agent is made in an effect, after
+   * the render that drew it), so a new agent picks its element up here.
+   */
+  const walkerEls = useRef(new Map<string, HTMLDivElement>());
   /** Hands a walker's element to its agent, so the loop can move it. */
   const bindAgent = useCallback(
     (where: "out" | "room" | "me", id: string) => (el: HTMLDivElement | null) => {
+      const key = `${where}:${id}`;
+      if (el) walkerEls.current.set(key, el);
+      else walkerEls.current.delete(key);
       const a = where === "me" ? player.current : (where === "out" ? agents.current : roomAgents.current).get(id);
       if (a) a.el = el;
     },
@@ -229,30 +256,38 @@ export default function Village({ data }: { data: VillageData }) {
     player.current = makeAgent(me.id, home.door.x, home.door.y + 1, PLAYER_SPEED);
   }
 
-  // Outside: where each visible friend should be, whenever the check-in changes.
+  // Outside: where each visible friend stands, whenever the check-in changes.
+  // Nobody wanders: someone who isn't going anywhere stands still, and walks
+  // only when where they are changes. Whoever's here when I arrive is
+  // simply there. People at the same place each get a tile of their own.
   useEffect(() => {
     const map = agents.current;
     const seen = new Set<string>();
     const hallSpot = { x: world.hall.door.x, y: world.hall.door.y + 2 };
+    const make = (id: string, x: number, y: number) => {
+      const a = makeAgent(id, x, y);
+      a.el = walkerEls.current.get(`out:${id}`) ?? null;
+      map.set(id, a);
+      return a;
+    };
+    /** Who's standing around each spot, by its middle tile. */
+    const around = new Map<string, { x: number; y: number; r: number; ids: string[] }>();
     for (const v of outdoorPeople) {
       seen.add(v.id);
       let a = map.get(v.id);
-      if (!a) {
-        const plot = plotOf.get(v.id);
-        const start = plot ? plot.door : world.hall.door;
-        a = makeAgent(v.id, start.x, start.y);
-        map.set(v.id, a);
-      }
       const seat = seating.get(v.id) ?? null;
       if (seat) {
+        if (!a) {
+          a = make(v.id, seat.x, seat.y);
+          a.dir = seat.face;
+        }
         if (!a.seat || a.seat.x !== seat.x || a.seat.y !== seat.y) {
           a.seat = seat;
-          a.home = null;
+          a.stand = null;
           a.path = [];
         }
         continue;
       }
-      a.seat = null;
       const p = livePulse.presence[v.id]?.place ?? { kind: "home" as const };
       let spot: { x: number; y: number; r: number };
       if (p.kind === "house" && plotOf.get(p.hostId)) {
@@ -260,6 +295,7 @@ export default function Village({ data }: { data: VillageData }) {
         spot = { x: d.x, y: d.y + 1, r: 1 };
       } else if (p.kind === "hall") spot = { ...hallSpot, r: 2 };
       else if (p.kind === "home" && plotOf.get(v.id)) {
+        // At home: in the app, but not in the village. By their own door.
         const d = plotOf.get(v.id)!.door;
         spot = { x: d.x, y: d.y + 1, r: 2 };
       } else {
@@ -267,9 +303,39 @@ export default function Village({ data }: { data: VillageData }) {
         const h = [...v.id].reduce((s, c) => s + c.charCodeAt(0), 0);
         spot = { x: world.hall.plaza.x + (h % world.hall.plaza.w), y: world.hall.plaza.y + 2 + (h % 2), r: 3 };
       }
-      if (!a.home || a.home.x !== spot.x || a.home.y !== spot.y) {
-        a.home = spot;
-        a.nextStroll = 0; // head there now
+      const key = `${spot.x},${spot.y}`;
+      const group = around.get(key);
+      if (group) {
+        group.ids.push(v.id);
+        group.r = Math.max(group.r, spot.r);
+      } else around.set(key, { ...spot, ids: [v.id] });
+    }
+    for (const g of around.values()) {
+      const tiles = tilesAround(world, g.x, g.y, g.r);
+      const free = new Set(tiles.map((t) => `${t.x},${t.y}`));
+      const placing: string[] = [];
+      // Anyone already standing on one of these keeps it.
+      for (const id of g.ids.sort()) {
+        const a = map.get(id);
+        const k = a?.stand && !a.seat ? `${a.stand.x},${a.stand.y}` : "";
+        if (k && free.has(k)) free.delete(k);
+        else placing.push(id);
+      }
+      for (const id of placing) {
+        // More people than room: the last ones share the middle.
+        const t = tiles.find((t) => free.has(`${t.x},${t.y}`)) ?? { x: g.x, y: g.y };
+        free.delete(`${t.x},${t.y}`);
+        let a = map.get(id);
+        if (!a) a = make(id, t.x, t.y);
+        else {
+          // Got up from a table, or went somewhere else: walk there.
+          a.seat = null;
+          if (!walkTo(world, a, t.x, t.y)) {
+            a.x = t.x * T + T / 2;
+            a.y = t.y * T + T / 2 + 8;
+          }
+        }
+        a.stand = t;
       }
     }
     for (const id of [...map.keys()]) if (!seen.has(id)) map.delete(id);
@@ -280,25 +346,32 @@ export default function Village({ data }: { data: VillageData }) {
     const map = roomAgents.current;
     if (scene.kind === "out") {
       map.clear();
+      lastLive.current.clear();
       return;
     }
     const entry = scene.kind === "room" ? scene.room.door : scene.arena.gate;
     const seen = new Set<string>();
     for (const p of roomPeople) {
       seen.add(p.villager.id);
+      // Someone whose position is arriving live (they send it every few
+      // seconds even standing still) is already where they should be; the
+      // check-in's copy is older and would pull them back.
+      const live = lastLive.current.get(p.villager.id);
+      const fresh = live && Date.now() - live.at < LIVE_FRESH_MS ? live : null;
       // 0,0 is what the check-in says for "no position yet": a wall corner.
       const known = p.x !== 0 || p.y !== 0;
       let a = map.get(p.villager.id);
       if (!a) {
         a = makeAgent(p.villager.id, entry.x, entry.y - 1, PLAYER_SPEED);
+        a.el = walkerEls.current.get(`room:${p.villager.id}`) ?? null;
         map.set(p.villager.id, a);
-        if (known) follow(a, p.x, p.y, p.facing, true);
+        if (fresh) {
+          follow(a, fresh.x, fresh.y, fresh.f, true);
+          a.guard = fresh.g;
+        } else if (known) follow(a, p.x, p.y, p.facing, true);
         continue;
       }
-      // Someone whose position is arriving live is already where they
-      // should be; the check-in's copy is older and would pull them back.
-      if (Date.now() - (liveSeen.current.get(p.villager.id) ?? 0) < LIVE_FRESH_MS) continue;
-      if (known) follow(a, p.x, p.y, p.facing);
+      if (!fresh && known) follow(a, p.x, p.y, p.facing);
     }
     for (const id of [...map.keys()]) if (!seen.has(id)) map.delete(id);
   }, [roomPeople, scene]);
@@ -315,16 +388,23 @@ export default function Village({ data }: { data: VillageData }) {
     [livePulse.duels, me.id, dismissed]
   );
   const fighting = myDuel?.status === "active";
+  const duelId = myDuel?.id;
+  const mySide = !myDuel ? null : myDuel.a.id === me.id ? "a" : "b";
 
-  // Fighters take their marks: challenger on the left, facing right.
+  // Fighters take their marks: challenger on the left, facing right. Once
+  // per duel — the duel itself comes anew with every check-in and every
+  // hit, and walking back to the mark each time would drag me there by
+  // myself whenever I stood still mid-fight.
+  const markedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (scene.kind !== "arena" || !fighting || !myDuel) return;
-    const mine = myDuel.a.id === me.id ? scene.arena.spots.a : scene.arena.spots.b;
+    if (scene.kind !== "arena" || !fighting || !duelId || !mySide || markedFor.current === duelId) return;
+    markedFor.current = duelId;
+    const mine = scene.arena.spots[mySide];
     const p = player.current!;
     walkTo(scene.arena, p, mine.x, mine.y, () => {
-      p.dir = myDuel.a.id === me.id ? 3 : 1;
+      p.dir = mySide === "a" ? 3 : 1;
     });
-  }, [scene, fighting, myDuel, me.id]);
+  }, [scene, fighting, duelId, mySide]);
 
   /** Numbers over heads for a moment: a hit (−1), or a hit caught on a guard. */
   const flashHit = useCallback((id: string, blocked: boolean) => {
@@ -371,8 +451,6 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ------------------------------------------------------------ live */
 
-  const space = spaceOf(place);
-
   // Pokes come in bursts — a move, then the round it settles — and one
   // check-in covers the lot.
   const pokeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -381,22 +459,51 @@ export default function Village({ data }: { data: VillageData }) {
     pokeTimer.current = setTimeout(() => beatNow.current(), 120);
   }, []);
 
-  /** Set on every (re)connect: send where I am even if I haven't moved. */
+  /** Set on every (re)connect and every room joined: send where I am even if I haven't moved. */
   const resendPos = useRef(false);
+
+  /**
+   * Whether friends see me through this device. Signed in on another that
+   * got here first, they see me where that one has me (Pulse.elsewhere),
+   * so this one keeps its steps to itself. Not until a check-in from here
+   * says so: the page's first pulse is from before any.
+   */
+  const shownHere = useRef(false);
+  const elsewhere = livePulse !== data.pulse && livePulse.elsewhere;
+  useEffect(() => {
+    if (livePulse === data.pulse) return;
+    const was = shownHere.current;
+    shownHere.current = !livePulse.elsewhere;
+    // Just took over from the other device: say where I am straight away.
+    if (shownHere.current && !was) resendPos.current = true;
+  }, [livePulse, data.pulse]);
+  /** At a table: kept while the village is hidden too. */
+  const seatedRef = useRef(false);
+  useEffect(() => {
+    seatedRef.current = !!livePulse.mySessionId;
+  }, [livePulse.mySessionId]);
 
   const live = useVillageLive(space, {
     poke: pokeBeat,
-    open: () => {
+    joined: () => {
       resendPos.current = true;
     },
     pos: ({ id, x, y, f, g }) => {
       const sc = sceneRef.current;
       if (sc.kind === "out") return;
+      const dir = (f % 4) as Agent["dir"];
+      const prev = lastLive.current.get(id);
+      const now = Date.now();
+      lastLive.current.set(id, { x, y, f: dir, g, at: now });
       const a = roomAgents.current.get(id);
-      // Someone new: the check-in brings what they look like.
-      if (!a) return pokeBeat();
-      liveSeen.current.set(id, Date.now());
-      follow(a, x, y, (f % 4) as Agent["dir"]);
+      // Someone new: the check-in brings what they look like, and they're
+      // placed from lastLive when it does. Asked once; the regular
+      // check-ins carry on after that.
+      if (!a) {
+        if (!prev || now - prev.at > LIVE_FRESH_MS) pokeBeat();
+        return;
+      }
+      follow(a, x, y, dir);
       a.guard = g;
     },
     blow: (b) => {
@@ -414,7 +521,6 @@ export default function Village({ data }: { data: VillageData }) {
 
   // The fight's clock, for the loop: when it starts (after the countdown)
   // and ends. Null when I'm not fighting.
-  const duelId = myDuel?.id;
   const startsAt = fighting ? myDuel!.startsAt : null;
   const endsAt = fighting ? myDuel!.endsAt : null;
   const fightRef = useRef<{ startsAt: number; endsAt: number } | null>(null);
@@ -481,7 +587,7 @@ export default function Village({ data }: { data: VillageData }) {
 
   const viewport = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
-  const placeRef = useRef<Place>({ kind: "home" });
+  const placeRef = useRef<Place>({ kind: "house", hostId: data.me.id });
   const promptRef = useRef<Prompt>(null);
   const enteredAt = useRef(0);
   const leaveRef = useRef<() => void>(() => {});
@@ -513,7 +619,7 @@ export default function Village({ data }: { data: VillageData }) {
       const vx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0);
       const vy = (k.has("down") ? 1 : 0) - (k.has("up") ? 1 : 0);
       if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, p.guard ? dt / 2 : dt);
-      else step(g, p, dt, t);
+      else step(g, p, dt);
       if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
       paint(p, S);
 
@@ -521,18 +627,21 @@ export default function Village({ data }: { data: VillageData }) {
       // moved a pixel, turned or guarded — the same numbers the check-in
       // sends, just sooner. At most ~7 a second; the last one, where I
       // stopped, always goes, because the key stays changed until it's sent.
-      if (sc.kind !== "out" && liveRef.current && t - sentAt > 140) {
+      // Standing still, the same again every POS_HEARTBEAT_MS.
+      if (sc.kind !== "out" && liveRef.current && shownHere.current) {
         const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.guard}`;
-        if (key !== sentKey || resendPos.current) {
+        const changed = key !== sentKey || resendPos.current;
+        if (t - sentAt > (changed ? 140 : POS_HEARTBEAT_MS)) {
           resendPos.current = false;
           sentKey = key;
           sentAt = t;
-          sendPosRef.current((p.x - T / 2) / T, (p.y - T / 2 - 8) / T, p.dir, p.guard);
+          const at = tilesOf(p);
+          sendPosRef.current(at.x, at.y, at.facing, p.guard);
         }
       }
       const others = sc.kind === "out" ? agents.current : roomAgents.current;
       for (const a of others.values()) {
-        step(g, a, dt, t);
+        step(g, a, dt);
         paint(a, S);
       }
 
@@ -567,7 +676,7 @@ export default function Village({ data }: { data: VillageData }) {
               bestD = d;
               best = { kind: "house", id: pl.owner };
             }
-            if (d < 3) where = pl.owner === me.id ? { kind: "home" } : { kind: "house", hostId: pl.owner };
+            if (d < 3) where = { kind: "house", hostId: pl.owner };
           }
           const dh = Math.hypot(tx - (world.hall.door.x + 0.5), ty - (world.hall.door.y + 0.5));
           if (inRect(world.hall.plaza, Math.floor(tx), Math.floor(ty)) || dh < 2) {
@@ -600,29 +709,63 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ---------------------------------------------------------- check-ins */
 
+  // Where I am, as every check-in says it — this loop's, and any other on
+  // the page (session-store.ts).
+  const here = useCallback(
+    () => ({ place: placeRef.current, pos: sceneRef.current.kind !== "out" ? tilesOf(player.current!) : null }),
+    []
+  );
+  useEffect(() => {
+    setVillageWhere(here);
+    return () => setVillageWhere(null);
+  }, [here]);
 
   const shownNudges = useRef(new Set<string>());
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastPlace = "";
+    let stopped = false;
+    // One at a time: asked again while one's out, it goes once that's back,
+    // from wherever I am by then.
+    let busy = false;
+    let again = false;
     const beat = async () => {
+      if (stopped) return;
+      if (busy) {
+        again = true;
+        return;
+      }
+      busy = true;
       clearTimeout(timer);
-      const inRoom = sceneRef.current.kind !== "out";
-      if (document.visibilityState === "visible") {
-        const p = player.current!;
-        const pos = inRoom ? { x: (p.x - T / 2) / T, y: (p.y - T / 2 - 8) / T, facing: p.dir } : null;
-        const r = await checkIn(placeRef.current, pos);
-        lastPlace = placeKey(placeRef.current);
-        if (r?.focusXp) toast(`+${r.focusXp} XP for focus time`);
-        for (const n of r?.nudges ?? []) {
-          if (shownNudges.current.has(n.id)) continue;
-          shownNudges.current.add(n.id);
-          setToasts((t) => [...t, { id: n.id, nudge: true, text: `${n.fromName} nudged you: “${n.body}”${n.about ? ` (${n.about})` : ""}` }]);
-        }
+      try {
+        if (document.visibilityState === "visible") {
+          const at = here();
+          const r = await checkIn(at.place, at.pos);
+          lastPlace = placeKey(at.place);
+          if (r?.focusXp) toast(`+${r.focusXp} XP for focus time`);
+          for (const n of r?.nudges ?? []) {
+            if (shownNudges.current.has(n.id)) continue;
+            shownNudges.current.add(n.id);
+            setToasts((t) => [...t, { id: n.id, nudge: true, text: `${n.fromName} nudged you: “${n.body}”${n.about ? ` (${n.about})` : ""}` }]);
+          }
+        } else if (seatedRef.current) keepSeat(); // working elsewhere: keep my place at the table
+      } finally {
+        busy = false;
+      }
+      if (stopped) return;
+      if (again) {
+        again = false;
+        return void beat();
       }
       timer = setTimeout(
         beat,
-        sceneRef.current.kind === "out" ? PULSE_MS : liveRef.current ? LIVE_ROOM_PULSE_MS : ROOM_PULSE_MS
+        document.visibilityState !== "visible"
+          ? APP_PULSE_MS
+          : sceneRef.current.kind === "out"
+            ? PULSE_MS
+            : liveRef.current
+              ? LIVE_ROOM_PULSE_MS
+              : ROOM_PULSE_MS
       );
     };
     beatNow.current = () => void beat();
@@ -631,14 +774,23 @@ export default function Village({ data }: { data: VillageData }) {
     const quick = setInterval(() => {
       if (placeKey(placeRef.current) !== lastPlace && document.visibilityState === "visible") void beat();
     }, 1000);
-    const onVis = () => document.visibilityState === "visible" && void beat();
+    const onVis = () => {
+      if (document.visibilityState === "visible") return void beat();
+      // Leaving the tab stops my live position, and soon everyone falls back
+      // on my last check-in — so make that where I actually stopped.
+      if (sceneRef.current.kind !== "out") {
+        const at = here();
+        void checkIn(at.place, at.pos);
+      }
+    };
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      stopped = true;
       clearTimeout(timer);
       clearInterval(quick);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [toast]);
+  }, [toast, here]);
 
   /* ------------------------------------------------- scene changes */
 
@@ -734,6 +886,9 @@ export default function Village({ data }: { data: VillageData }) {
     };
     const down = (e: KeyboardEvent) => {
       if (typing(e)) return;
+      // A shortcut (⌘A, Ctrl+S…) isn't a step — and on a Mac the letter's
+      // release never arrives while ⌘ is down, which left me walking.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const dir = map[e.code];
       if (dir) {
         e.preventDefault();
@@ -755,14 +910,19 @@ export default function Village({ data }: { data: VillageData }) {
       const dir = map[e.code];
       if (dir) keys.current.delete(dir);
       else if (e.code === "KeyG") keys.current.delete("guard");
+      // Any key let go under ⌘ never said so (above): start clean.
+      else if (e.key === "Meta") keys.current.clear();
     };
     const blur = () => keys.current.clear();
+    const hidden = () => document.visibilityState === "hidden" && keys.current.clear();
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    document.addEventListener("visibilitychange", hidden);
     window.addEventListener("blur", blur);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      document.removeEventListener("visibilitychange", hidden);
       window.removeEventListener("blur", blur);
     };
   }, [openPrompt]);
@@ -824,22 +984,30 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ------------------------------------------------------------- words */
 
+  const statusOfId = (id: string) => statusOf(livePulse.presence[id], now);
+
+  /** Their status, and where they are in it. */
   function whereIs(id: string): string {
-    if (seating.has(id)) return "Working at the town hall";
-    if (!online(id)) {
+    const status = statusOfId(id);
+    const label = STATUS_LABEL[status];
+    // Out of the village, a seat at a table is kept for them.
+    const seat = seating.has(id) ? " · keeping their seat at the town hall" : "";
+    if (status === "offline") {
+      if (seat) return label + seat;
       const seen = livePulse.presence[id]?.seenAt;
-      if (!seen) return "Hasn't been to the village yet";
+      if (!seen) return `${label} · hasn't been to the village yet`;
       const mins = Math.round((now - seen) / 60000);
-      return mins < 60 ? `Away · here ${mins} min ago` : mins < 1440 ? `Away · here ${Math.round(mins / 60)} h ago` : "Away";
+      return mins < 60 ? `${label} · here ${mins} min ago` : mins < 1440 ? `${label} · here ${Math.round(mins / 60)} h ago` : label;
     }
-    const p = livePulse.presence[id]?.place;
-    if (!p || p.kind === "home") return "At home";
-    if (p.kind === "hall") return "At the town hall";
-    if (p.kind === "square") return "Out on the square";
-    if (p.kind === "arena") return "In the arena";
-    if (p.kind === "inside") return p.hostId === me.id ? "Inside your house" : p.hostId === id ? "Inside at home" : `Inside ${byId.get(p.hostId)?.name ?? "someone"}'s house`;
-    if (p.hostId === me.id) return "At your house";
-    return `Visiting ${byId.get(p.hostId)?.name ?? "someone"}`;
+    if (status === "home") return label + seat;
+    if (seating.has(id)) return `${label} · working at the town hall`;
+    const p = livePulse.presence[id]!.place;
+    const whose = (host: string) => (host === me.id ? "your" : host === id ? "their" : `${byId.get(host)?.name ?? "someone"}'s`);
+    if (p.kind === "hall") return `${label} · at the town hall`;
+    if (p.kind === "arena") return `${label} · in the arena`;
+    if (p.kind === "inside") return `${label} · inside ${whose(p.hostId)} house`;
+    if (p.kind === "house") return `${label} · ${p.hostId === id ? "outside their house" : `at ${whose(p.hostId)} house`}`;
+    return `${label} · out on the square`;
   }
 
   const S = scale;
@@ -856,7 +1024,8 @@ export default function Village({ data }: { data: VillageData }) {
           : prompt.id === me.id
             ? "Go inside"
             : `Go into ${byId.get(prompt.id)?.name ?? ""}'s house`;
-  const onlineCount = neighbours.filter((n) => online(n.id)).length;
+  /** Companions in the village itself; "at home" ones are in the app elsewhere. */
+  const onlineCount = neighbours.filter((n) => statusOfId(n.id) === "village").length;
   const unreadNotes = data.notes.filter((n) => !n.read).length;
   const insideCount = useMemo(() => {
     const m = new Map<string, number>();
@@ -1073,8 +1242,14 @@ export default function Village({ data }: { data: VillageData }) {
         </p>
       )}
 
-      {toasts.length > 0 && (
+      {(toasts.length > 0 || elsewhere) && (
         <div className="absolute inset-x-0 top-14 z-[70000] flex flex-col items-center gap-2 px-3">
+          {elsewhere && (
+            <p role="status" className="panel max-w-md rounded-xl px-3 py-2 text-center text-xs text-mud-700 shadow-lg">
+              You&apos;re in the app on another device too. Your companions see you where that one has you until it&apos;s
+              closed.
+            </p>
+          )}
           {toasts.map((t) => (
             <div key={t.id} role="status" className="panel flex max-w-md items-center gap-3 rounded-xl px-3 py-2 text-sm text-mud-800 shadow-lg">
               <span className="min-w-0 flex-1">{t.text}</span>
@@ -1145,7 +1320,7 @@ export default function Village({ data }: { data: VillageData }) {
       {!deco && open?.kind === "hall" && <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "people" && (
         <PeoplePanel
-          people={neighbours.map((n) => ({ n, online: online(n.id) || seating.has(n.id), where: whereIs(n.id) }))}
+          people={neighbours.map((n) => ({ n, status: statusOfId(n.id), where: whereIs(n.id) }))}
           sheets={sheets}
           onGo={(id) => {
             setOpen(null);
@@ -1411,7 +1586,8 @@ function Walker({
       // The loop sets data-guard straight on this element (engine.ts paint),
       // so guarding shows without a re-render.
       className="group absolute left-0 top-0"
-      style={{ width: 64 * scale, height: 64 * scale, willChange: "transform" }}
+      // Hidden until the loop first places it (engine.ts paint).
+      style={{ width: 64 * scale, height: 64 * scale, willChange: "transform", visibility: "hidden" }}
       onPointerDown={
         onTap
           ? (e) => {

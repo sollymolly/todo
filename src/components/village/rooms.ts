@@ -57,8 +57,11 @@ export function buildRoom(tier: Tier, interior: Interior): RoomScene {
 }
 
 export function buildArena(): ArenaScene {
-  const w = 18;
-  const h = 13;
+  // Odd width and the ring on the middle column, so the gate, the ring and
+  // the two marks all sit on the arena's centre line; the ring's middle is
+  // the middle of the dirt both ways, and the marks stand level with it.
+  const w = 19;
+  const h = 14;
   // Fence all round; the stands along the back are for looking, not walking.
   const blocked = Array.from({ length: h }, (_, y) =>
     Array.from({ length: w }, (_, x) => y < 2 || y === h - 1 || x === 0 || x === w - 1)
@@ -71,7 +74,7 @@ export function buildArena(): ArenaScene {
     h,
     blocked,
     gate,
-    spots: { a: { x: 6, y: 6 }, b: { x: 11, y: 6 } },
-    ring: { cx: 9, cy: 6.5, r: 4 },
+    spots: { a: { x: 6, y: 7 }, b: { x: 12, y: 7 } },
+    ring: { cx: 9, cy: 7, r: 4 },
   };
 }

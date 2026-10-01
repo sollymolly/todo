@@ -23,18 +23,29 @@ import { landHit } from "@/lib/village-rooms";
    both fighters' own screens last had them. The database keeps the score.
    -------------------------------------------------------------------------- */
 
+type PosMessage = Extract<LiveMessage, { t: "pos" }>;
+
 type Conn = {
   ws: WebSocket;
   me: string;
   known: Set<string>;
   space: string | null;
-  sent: number[];
+  /** The newest position not yet passed on, and the space it was sent from. */
+  nextPos: { space: string; msg: PosMessage } | null;
+  /** Whether positions are being passed on right now (pumpPos). */
+  pumping: boolean;
+  lastPosAt: number;
   lastHit: number;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Positions a socket may send per second: the page sends ~7 while walking. */
-const POS_PER_SECOND = 8;
+/**
+ * The soonest one socket's positions are passed on again. The page sends
+ * ~7 a second while walking; any that come quicker are folded into the next.
+ */
+const POS_GAP_MS = 100;
+/** The longest a position's publish is waited for before the next goes anyway. */
+const POS_PUBLISH_WAIT_MS = 1_000;
 
 const bySpace = new Map<string, Set<Conn>>();
 /** The latest stance of everyone in the arena, as this instance has heard it. */
@@ -79,6 +90,7 @@ function leave(c: Conn) {
   const space = c.space;
   if (!space) return;
   c.space = null;
+  c.nextPos = null;
   if (space === "arena") stances.delete(c.me);
   const conns = bySpace.get(space);
   conns?.delete(c);
@@ -112,26 +124,52 @@ function join(c: Conn, space: string) {
 
 function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown }) {
   if (!c.space || c.space === "hall") return; // the hall has no floor to stand on
-  const now = Date.now();
-  c.sent = c.sent.filter((t) => now - t < 1000);
-  if (c.sent.length >= POS_PER_SECOND) return;
   const x = Number(m.x);
   const y = Number(m.y);
   const f = Number(m.f);
   if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 200 || Math.abs(y) > 200) return;
-  c.sent.push(now);
-  const msg = {
-    t: "pos" as const,
+  const msg: PosMessage = {
+    t: "pos",
     id: c.me,
     x: Math.round(x * 100) / 100,
     y: Math.round(y * 100) / 100,
     f: Number.isInteger(f) && f >= 0 && f <= 3 ? f : 2,
-    g: m.g === 1 ? (1 as const) : (0 as const),
+    g: m.g === 1 ? 1 : 0,
   };
   // Straight into this instance's picture of the arena too: a swing right
   // after a step is judged from the step.
   if (c.space === "arena") stances.set(c.me, { x: msg.x, y: msg.y, f: msg.f as Facing, g: msg.g === 1 });
-  void publishLive(c.space, msg);
+  // Only the newest matters: it replaces any still waiting to go.
+  c.nextPos = { space: c.space, msg };
+  void pumpPos(c);
+}
+
+/**
+ * Passes a socket's positions on one publish at a time, at most one per
+ * POS_GAP_MS. Each publish is its own HTTP request, so sent side by side
+ * they can land out of order — and where someone stopped would be
+ * overwritten by a step from just before, leaving them a step short on
+ * everyone else's screen. Whatever arrives meanwhile waits, newest only,
+ * so where they stopped always goes last.
+ */
+async function pumpPos(c: Conn) {
+  if (c.pumping) return;
+  c.pumping = true;
+  try {
+    while (c.nextPos) {
+      const wait = c.lastPosAt + POS_GAP_MS - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      const next = c.nextPos;
+      c.nextPos = null;
+      // Moved on (or gone) while it waited: it's no use to the old space.
+      if (!next || next.space !== c.space) continue;
+      c.lastPosAt = Date.now();
+      // A publish that hangs mustn't hold up every step after it.
+      await Promise.race([publishLive(next.space, next.msg), new Promise((r) => setTimeout(r, POS_PUBLISH_WAIT_MS))]);
+    }
+  } finally {
+    c.pumping = false;
+  }
 }
 
 async function onHit(c: Conn) {
@@ -154,7 +192,7 @@ async function onHit(c: Conn) {
 
 /** Takes over a freshly upgraded socket for the rest of its life. */
 export function attach(ws: WebSocket, me: string, known: Set<string>) {
-  const c: Conn = { ws, me, known, space: null, sent: [], lastHit: 0 };
+  const c: Conn = { ws, me, known, space: null, nextPos: null, pumping: false, lastPosAt: 0, lastHit: 0 };
 
   ws.on("message", (data) => {
     let m: { t?: unknown; space?: unknown };
