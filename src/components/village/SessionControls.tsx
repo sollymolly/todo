@@ -50,7 +50,8 @@ export function QuestPicker({
   );
 }
 
-export function StartSessionForm({ onDone }: { onDone?: () => void }) {
+/** Starting a table: by the town hall, or at a desk in the library (`spot`). */
+export function StartSessionForm({ onDone, spot = "hall" }: { onDone?: () => void; spot?: "hall" | "library" }) {
   const quests = useMyQuests();
   const [todo, setTodo] = useState("");
   const [focus, setFocus] = useState(true);
@@ -61,7 +62,7 @@ export function StartSessionForm({ onDone }: { onDone?: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await startSession({ focus, todoId: todo || null });
+      const r = await startSession({ focus, todoId: todo || null, spot });
       if (!r.ok) setError(r.error);
       else {
         await checkIn(null);

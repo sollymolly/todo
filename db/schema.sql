@@ -101,6 +101,12 @@ create table if not exists profiles (
 );
 alter table profiles add column if not exists streak_freezes integer not null default 2;
 alter table profiles add column if not exists freezes_month  date;
+-- The village store (src/lib/shop.ts). Coins are earned as XP is — one for
+-- every ten — so a balance is xp / 10 less coins_spent; nothing else to keep
+-- in step. bonus_freezes: streak freezes bought there, on top of the two a
+-- month (streak_freezes_left).
+alter table profiles add column if not exists coins_spent   integer not null default 0;
+alter table profiles add column if not exists bonus_freezes integer not null default 0;
 
 -- ---------------------------------------------------------------------------
 -- policy_acceptances: append-only record of agreement to the privacy policy.
@@ -440,7 +446,7 @@ create table if not exists village_presence (
   user_id  uuid primary key references users(id) on delete cascade,
   place    text not null default 'home'
              constraint village_presence_place_check
-             check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena')),
+             check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena', 'library', 'store')),
   /* place = 'house' or 'inside': whose house. */
   host_id  uuid references users(id) on delete set null,
   x        real,
@@ -457,6 +463,10 @@ alter table village_presence add column if not exists device text;
 -- Which village they're in: there's a new one for every 40 houses (plot / 40),
 -- each with its own town hall and arena, joined by trains.
 alter table village_presence add column if not exists village integer not null default 0;
+-- Inside a village's library or store, too (each its own room, like the arena).
+alter table village_presence drop constraint if exists village_presence_place_check;
+alter table village_presence add constraint village_presence_place_check
+  check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena', 'library', 'store'));
 
 -- A house's size follows its owner's level and is never stored. `interior`
 -- holds wallpaper, floor and furniture; null is the default room.
@@ -476,6 +486,15 @@ create table if not exists houses (
 alter table houses add column if not exists plot    integer check (plot >= 0);
 alter table houses add column if not exists plot_at timestamptz;
 create unique index if not exists houses_plot_key on houses(plot) where plot is not null;
+
+-- Things bought at the store to keep (a roof colour, a wallpaper…), one row
+-- each. Things used up (streak freezes) are counted on the profile instead.
+create table if not exists purchases (
+  user_id   uuid not null references users(id) on delete cascade,
+  item      text not null check (length(item) <= 40),
+  bought_at timestamptz not null default now(),
+  primary key (user_id, item)
+);
 
 -- Door notes are short plain text — unlike messages, not encrypted.
 create table if not exists door_notes (
@@ -519,6 +538,10 @@ create table if not exists work_sessions (
 create index if not exists work_sessions_open_idx on work_sessions(ended_at) where ended_at is null;
 -- The village whose town hall the table is in.
 alter table work_sessions add column if not exists village integer not null default 0;
+-- Where the table is: out by the town hall, or at a desk in the library.
+alter table work_sessions add column if not exists spot text not null default 'hall';
+alter table work_sessions drop constraint if exists work_sessions_spot_check;
+alter table work_sessions add constraint work_sessions_spot_check check (spot in ('hall', 'library'));
 
 create table if not exists session_members (
   id              uuid primary key default gen_random_uuid(),
@@ -1215,7 +1238,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- streak_freezes_left — two a month, shared by every habit, counted straight
+-- streak_freezes_left — two a month (plus any bought), shared by every habit, counted straight
 -- from the log: each frozen day is one spent. A freeze is spent the moment its
 -- day closes, so it comes out of the month of the day after (a freeze on the
 -- 30th of September is October's). Redeeming a frozen day hands it back.
@@ -1224,11 +1247,19 @@ $$;
 create or replace function streak_freezes_left(p_user uuid, p_today date)
 returns integer
 language sql stable as $$
-  select greatest(0, 2 - count(*)::integer)
-    from habit_log
-   where user_id = p_user
-     and frozen
-     and date_trunc('month', day + 1) = date_trunc('month', p_today);
+  -- Two a month, then any bought at the store (profiles.bonus_freezes),
+  -- which only go once a month's two have: every frozen day past two in a
+  -- month, this month and before, used one of them up.
+  with used as (
+    select date_trunc('month', day + 1) as m, count(*)::integer as n
+      from habit_log
+     where user_id = p_user and frozen
+     group by 1
+  )
+  select greatest(0, 2 - coalesce((select n from used where m = date_trunc('month', p_today)), 0))
+       + greatest(0,
+           coalesce((select bonus_freezes from profiles where id = p_user), 0)
+           - coalesce((select sum(greatest(0, n - 2)) from used where m <= date_trunc('month', p_today)), 0)::integer);
 $$;
 
 -- use_streak_freeze — whether a freeze is left to spend on p_day. The caller

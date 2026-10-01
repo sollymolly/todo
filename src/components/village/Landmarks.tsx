@@ -267,3 +267,19 @@ export function Station({ name }: { name: string }) {
     </svg>
   );
 }
+
+/** One tile of hedge: clipped, leafy, a little darker underneath. Run side by side, they join up. */
+export function Hedge() {
+  return (
+    <svg viewBox="0 0 32 40" className="h-full w-full" shapeRendering="crispEdges" aria-hidden>
+      <rect x="0" y="34" width="32" height="6" fill="#000" opacity="0.15" />
+      <rect x="-1" y="8" width="34" height="28" rx="6" fill="#3f6d2a" />
+      <rect x="-1" y="8" width="34" height="18" rx="6" fill="#4f8a34" />
+      <rect x="3" y="11" width="5" height="4" fill="#6aa848" />
+      <rect x="14" y="13" width="6" height="4" fill="#6aa848" />
+      <rect x="24" y="10" width="5" height="4" fill="#6aa848" />
+      <rect x="8" y="22" width="4" height="3" fill="#35602a" />
+      <rect x="21" y="24" width="4" height="3" fill="#35602a" />
+    </svg>
+  );
+}

@@ -25,7 +25,10 @@ export type Place =
      real shared rooms — the same layout for everyone — so they carry a
      position too. */
   | { kind: "inside"; hostId: string }
-  | { kind: "arena" };
+  | { kind: "arena" }
+  /* A village's library and store: rooms of their own, like the arena. */
+  | { kind: "library" }
+  | { kind: "store" };
 
 /** Where someone stands in a shared room, in tiles. */
 export type Pos = { x: number; y: number; facing: 0 | 1 | 2 | 3 };
@@ -47,7 +50,7 @@ export function spaceOf(p: Place | null, village: number): string | null {
   if (!p) return null;
   if (p.kind === "inside") return `inside:${p.hostId}`;
   if (p.kind === "arena") return arenaSpace(village);
-  if (p.kind === "hall") return `hall:${village}`;
+  if (p.kind === "hall" || p.kind === "library" || p.kind === "store") return `${p.kind}:${village}`;
   return null;
 }
 
@@ -55,10 +58,12 @@ export function spaceOf(p: Place | null, village: number): string | null {
 export const arenaSpace = (village: number) => `arena:${village}`;
 export const outsideSpace = (village: number) => `village:${village}`;
 
+type SpaceKind = "hall" | "arena" | "village" | "library" | "store" | "inside";
+
 /** A space's kind and village: "hall:2" → hall, 2. Rooms have no village. */
-export function readSpace(space: string): { kind: "hall" | "arena" | "village" | "inside"; village: number } | null {
-  const m = /^(hall|arena|village):(\d{1,6})$/.exec(space);
-  if (m) return { kind: m[1] as "hall" | "arena" | "village", village: Number(m[2]) };
+export function readSpace(space: string): { kind: SpaceKind; village: number } | null {
+  const m = /^(hall|arena|village|library|store):(\d{1,6})$/.exec(space);
+  if (m) return { kind: m[1] as SpaceKind, village: Number(m[2]) };
   return space.startsWith("inside:") ? { kind: "inside", village: -1 } : null;
 }
 
@@ -70,7 +75,7 @@ export function readSpace(space: string): { kind: "hall" | "arena" | "village" |
  */
 export function liveSpaceOf(p: Place | null, village: number): string | null {
   if (!p || p.kind === "home") return null;
-  if (p.kind === "inside" || p.kind === "arena") return spaceOf(p, village);
+  if (p.kind === "inside" || p.kind === "arena" || p.kind === "library" || p.kind === "store") return spaceOf(p, village);
   return outsideSpace(village);
 }
 
@@ -129,7 +134,8 @@ export const STYLES: { style: HouseStyle; label: string; level: number }[] = [
 ];
 
 /** Roof colours. All free: a colour is taste, not an achievement. */
-export const ROOFS: { id: string; label: string; fill: string; dark: string }[] = [
+/** Roof colours. `shop`: sold at the village store (src/lib/shop.ts), the rest free. */
+export const ROOFS: { id: string; label: string; fill: string; dark: string; shop?: boolean }[] = [
   { id: "red", label: "Red", fill: "#b5523b", dark: "#8a3a29" },
   { id: "slate", label: "Slate", fill: "#5d6b7a", dark: "#434e5a" },
   { id: "moss", label: "Moss", fill: "#5f7d3a", dark: "#465e2a" },
@@ -138,6 +144,8 @@ export const ROOFS: { id: string; label: string; fill: string; dark: string }[] 
   { id: "teal", label: "Teal", fill: "#3f7f80", dark: "#2d5f60" },
   { id: "ochre", label: "Ochre", fill: "#c07a2c", dark: "#94591c" },
   { id: "charcoal", label: "Charcoal", fill: "#3f3d3a", dark: "#2a2826" },
+  { id: "gold", label: "Gold leaf", fill: "#d9a92e", dark: "#a87a17", shop: true },
+  { id: "royal", label: "Royal blue", fill: "#2f4fa3", dark: "#22397a", shop: true },
 ];
 
 export const GARDENS: { garden: Garden; label: string }[] = [
@@ -154,10 +162,14 @@ export function bloomFor(streak: number): 0 | 1 | 2 | 3 {
   return 0;
 }
 
-export function cleanHouse(raw: Partial<HouseLook> | null | undefined, level: number): HouseLook {
+/**
+ * A house's look made safe. `owned` (what they've bought, src/lib/shop.ts)
+ * is checked when saving; a look already saved is shown as it is.
+ */
+export function cleanHouse(raw: Partial<HouseLook> | null | undefined, level: number, owned?: Set<string>): HouseLook {
   const r = raw ?? {};
   const style = STYLES.find((s) => s.style === r.style && level >= s.level)?.style ?? DEFAULT_HOUSE.style;
-  const roof = ROOFS.some((x) => x.id === r.roof) ? (r.roof as string) : DEFAULT_HOUSE.roof;
+  const roof = ROOFS.some((x) => x.id === r.roof && (!x.shop || !owned || owned.has(`roof:${x.id}`))) ? (r.roof as string) : DEFAULT_HOUSE.roof;
   const garden = GARDENS.some((g) => g.garden === r.garden) ? (r.garden as Garden) : DEFAULT_HOUSE.garden;
   return { style, roof, garden };
 }
@@ -209,6 +221,8 @@ export type SessionView = {
   hostId: string;
   /** Whose town hall the table is in. */
   village: number;
+  /** Out by the town hall, or at a desk in the library. */
+  spot: "hall" | "library";
   focus: boolean;
   /** Epoch ms the shared focus clock counts from. */
   focusFrom: number | null;

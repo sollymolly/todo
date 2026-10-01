@@ -43,7 +43,8 @@ export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: num
 
 export const KIND_LIST = Object.keys(FURNITURE) as FurnitureKind[];
 
-export const WALLS: { id: string; label: string; fill: string; line: string; level: number }[] = [
+/** Wallpapers and floors. `shop`: sold at the village store (src/lib/shop.ts), the rest by level. */
+export const WALLS: { id: string; label: string; fill: string; line: string; level: number; shop?: boolean }[] = [
   { id: "cream", label: "Cream", fill: "#f1e6cc", line: "#e2d3b0", level: 1 },
   { id: "sage", label: "Sage", fill: "#cfdcbc", line: "#b9caa3", level: 1 },
   { id: "rose", label: "Rose", fill: "#ecd0c8", line: "#dcb9ae", level: 1 },
@@ -52,15 +53,17 @@ export const WALLS: { id: string; label: string; fill: string; line: string; lev
   { id: "panel", label: "Wood panel", fill: "#b98d5e", line: "#936b43", level: 4 },
   { id: "brick", label: "Brick", fill: "#b3643f", line: "#8c4a2e", level: 6 },
   { id: "stone", label: "Stone", fill: "#aaa49a", line: "#857f76", level: 8 },
+  { id: "starry", label: "Starry night", fill: "#2c3a66", line: "#f2d27a", level: 1, shop: true },
 ];
 
-export const FLOORS: { id: string; label: string; a: string; b: string; level: number }[] = [
+export const FLOORS: { id: string; label: string; a: string; b: string; level: number; shop?: boolean }[] = [
   { id: "oak", label: "Oak", a: "#d4a66c", b: "#c49359", level: 1 },
   { id: "walnut", label: "Walnut", a: "#8f6240", b: "#7d5436", level: 1 },
   { id: "checker", label: "Checker", a: "#efe6d4", b: "#6e6258", level: 2 },
   { id: "carpet", label: "Red carpet", a: "#a8453b", b: "#9a3d34", level: 3 },
   { id: "moss", label: "Moss carpet", a: "#6f8f4a", b: "#65843f", level: 3 },
   { id: "stone", label: "Flagstone", a: "#b9b2a6", b: "#a39c90", level: 5 },
+  { id: "marble", label: "Marble", a: "#f2efe9", b: "#d9d3c8", level: 1, shop: true },
 ];
 
 export type Placed = { k: FurnitureKind; x: number; y: number };
@@ -110,10 +113,15 @@ export function defaultInterior(tier: Tier): Interior {
  * the room, not stacked on each other (a rug can go under things), and
  * never in front of the door. Anything that breaks a rule is dropped.
  */
-export function cleanInterior(raw: unknown, tier: Tier, level: number): Interior {
+/**
+ * A room's layout made safe. `owned` (what they've bought, src/lib/shop.ts)
+ * is checked when saving; a room already saved is shown as it is.
+ */
+export function cleanInterior(raw: unknown, tier: Tier, level: number, owned?: Set<string>): Interior {
   const r = (raw ?? {}) as Partial<Interior>;
-  const wall = WALLS.find((w) => w.id === r.wall && level >= w.level)?.id ?? "cream";
-  const floor = FLOORS.find((f) => f.id === r.floor && level >= f.level)?.id ?? "oak";
+  const has = (item: string) => !owned || owned.has(item);
+  const wall = WALLS.find((w) => w.id === r.wall && level >= w.level && (!w.shop || has(`wall:${w.id}`)))?.id ?? "cream";
+  const floor = FLOORS.find((f) => f.id === r.floor && level >= f.level && (!f.shop || has(`floor:${f.id}`)))?.id ?? "oak";
   return { wall, floor, items: cleanItems(Array.isArray(r.items) ? r.items : [], tier, level) };
 }
 

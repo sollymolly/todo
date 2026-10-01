@@ -126,7 +126,7 @@ export async function ensurePlot(me: string, friends: string[]): Promise<void> {
 function placeOf(kind: string, host: string | null): Place {
   if (kind === "house" && host) return { kind: "house", hostId: host };
   if (kind === "inside" && host) return { kind: "inside", hostId: host };
-  if (kind === "arena") return { kind: "arena" };
+  if (kind === "arena" || kind === "library" || kind === "store") return { kind };
   if (kind === "hall") return { kind: "hall" };
   if (kind === "square") return { kind: "square" };
   return { kind: "home" };
@@ -277,7 +277,7 @@ export async function leaveTable(me: string): Promise<number> {
 async function visibleSessions(me: string, known: Set<string>): Promise<SessionView[]> {
   const ids = [...known];
   const sessions = (await sql`
-    select s.id, s.host_id, s.village, s.focus, s.focus_from, s.started_at
+    select s.id, s.host_id, s.village, s.spot, s.focus, s.focus_from, s.started_at
       from work_sessions s
      where s.ended_at is null
        and exists (
@@ -286,7 +286,7 @@ async function visibleSessions(me: string, known: Set<string>): Promise<SessionV
        )
      order by s.started_at
      limit 20
-  `) as { id: string; host_id: string; village: number; focus: boolean; focus_from: unknown; started_at: unknown }[];
+  `) as { id: string; host_id: string; village: number; spot: "hall" | "library"; focus: boolean; focus_from: unknown; started_at: unknown }[];
   if (!sessions.length) return [];
 
   const members = (await sql`
@@ -313,6 +313,7 @@ async function visibleSessions(me: string, known: Set<string>): Promise<SessionV
     id: s.id,
     hostId: s.host_id,
     village: s.village,
+    spot: s.spot,
     focus: s.focus,
     focusFrom: s.focus_from ? ms(s.focus_from) : null,
     startedAt: ms(s.started_at),
@@ -384,7 +385,9 @@ export async function pulse(
   // another of my devices is the one friends see.
   const at: Place | null = place?.kind === "inside" && !known.has(place.hostId) ? { kind: "square" } : place;
   const elsewhere = at ? !(await writePresence(me, at, pos, device, here)) : false;
-  const shared = at?.kind === "inside" || at?.kind === "arena";
+  // A room everyone in it sees the same: a house, or one of this village's
+  // arena, library and store.
+  const shared = at?.kind === "inside" || at?.kind === "arena" || at?.kind === "library" || at?.kind === "store";
   const focusXp = await sessionHeartbeat(me);
 
   const presenceRows = (await sql`

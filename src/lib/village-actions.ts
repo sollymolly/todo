@@ -11,6 +11,7 @@ import { friendIdsOf, leaveTable, residents, villageCount } from "@/lib/village-
 import { villageOf } from "@/components/village/world";
 import { duelById, inSpace } from "@/lib/village-rooms";
 import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
+import { coinsLeft, goodById, XP_PER_COIN } from "@/lib/shop";
 import { COUNTDOWN_MS, DUEL_HP, DUEL_MS, INVITE_MS } from "@/lib/duel";
 import {
   cleanHouse,
@@ -49,7 +50,7 @@ async function areFriends(a: string, b: string): Promise<boolean> {
 export async function saveHouse(look: HouseLook): Promise<HouseLook> {
   const me = await requireUserId();
   const rows = (await sql`select xp from profiles where id = ${me}::uuid`) as { xp: number }[];
-  const clean = cleanHouse(look, levelFor(rows[0]?.xp ?? 0));
+  const clean = cleanHouse(look, levelFor(rows[0]?.xp ?? 0), await owned(me));
   await sql`
     insert into houses (user_id, style, roof, garden, updated_at)
     values (${me}::uuid, ${clean.style}, ${clean.roof}, ${clean.garden}, now())
@@ -88,6 +89,60 @@ export async function moveHouse(plot: number): Promise<Result> {
 async function myVillage(me: string): Promise<number> {
   const rows = (await sql`select village from village_presence where user_id = ${me}::uuid`) as { village: number }[];
   return rows[0]?.village ?? 0;
+}
+
+/* ------------------------------------------------------------------ store */
+
+/** Everything I've bought to keep (src/lib/shop.ts). */
+async function owned(me: string): Promise<Set<string>> {
+  const rows = (await sql`select item from purchases where user_id = ${me}::uuid`) as { item: string }[];
+  return new Set(rows.map((r) => r.item));
+}
+
+export type ShopState = { coins: number; owned: string[]; freezes: number };
+
+/** My coins, what I own, and how many freezes I've bought and not yet used. */
+export async function loadShop(): Promise<ShopState> {
+  const me = await requireUserId();
+  const rows = (await sql`
+    select xp, coins_spent,
+           streak_freezes_left(id, (now() at time zone coalesce(timezone, 'UTC'))::date) as freezes
+      from profiles where id = ${me}::uuid
+  `) as { xp: number; coins_spent: number; freezes: number }[];
+  const r = rows[0];
+  return { coins: coinsLeft(r?.xp ?? 0, r?.coins_spent ?? 0), owned: [...(await owned(me))], freezes: r?.freezes ?? 0 };
+}
+
+/**
+ * Buys something for coins. Keeps are recorded first and paid for after —
+ * taken back if the coins aren't there — so buying the same thing twice at
+ * once can't charge twice.
+ */
+export async function buyGood(id: string): Promise<{ ok: true; shop: ShopState } | { ok: false; error: string }> {
+  const me = await requireUserId();
+  const good = goodById(id);
+  if (!good) return { ok: false, error: "That's not for sale." };
+  if (await rateLimited("buy", me)) return { ok: false, error: TOO_MANY };
+  const pay = async () =>
+    ((await sql`
+      update profiles set coins_spent = coins_spent + ${good.price},
+             bonus_freezes = bonus_freezes + ${good.kind === "freeze" ? 1 : 0}
+       where id = ${me}::uuid and floor(xp / ${XP_PER_COIN}) - coins_spent >= ${good.price}
+      returning id
+    `) as unknown[]).length > 0;
+  if (good.kind === "freeze") {
+    if (!(await pay())) return { ok: false, error: "Not enough coins yet: finish a few more quests." };
+  } else {
+    const fresh = (await sql`
+      insert into purchases (user_id, item) values (${me}::uuid, ${good.id}) on conflict do nothing returning item
+    `) as unknown[];
+    if (!fresh.length) return { ok: false, error: "You have that already." };
+    if (!(await pay())) {
+      await sql`delete from purchases where user_id = ${me}::uuid and item = ${good.id}`;
+      return { ok: false, error: "Not enough coins yet: finish a few more quests." };
+    }
+  }
+  return { ok: true, shop: await loadShop() };
 }
 
 /* ------------------------------------------------------------------ notes */
@@ -215,7 +270,7 @@ export async function myOpenQuests(): Promise<{ id: string; title: string }[]> {
   `) as { id: string; title: string }[];
 }
 
-export async function startSession(input: { focus: boolean; todoId: string | null }): Promise<Result> {
+export async function startSession(input: { focus: boolean; todoId: string | null; spot?: "hall" | "library" }): Promise<Result> {
   const me = await requireUserId();
   if (await rateLimited("session", me)) return { ok: false, error: TOO_MANY };
   await leaveTable(me);
@@ -223,8 +278,9 @@ export async function startSession(input: { focus: boolean; todoId: string | nul
   // One statement, so the table never exists without anyone at it.
   await sql`
     with s as (
-      insert into work_sessions (host_id, focus, focus_from, village)
-      values (${me}::uuid, ${!!input.focus}, case when ${!!input.focus} then now() end, ${await myVillage(me)})
+      insert into work_sessions (host_id, focus, focus_from, village, spot)
+      values (${me}::uuid, ${!!input.focus}, case when ${!!input.focus} then now() end, ${await myVillage(me)},
+              ${input.spot === "library" ? "library" : "hall"})
       returning id
     )
     insert into session_members (session_id, user_id, todo_id)
@@ -307,7 +363,7 @@ export async function saveInterior(raw: Interior): Promise<Interior> {
   const me = await requireUserId();
   const rows = (await sql`select xp from profiles where id = ${me}::uuid`) as { xp: number }[];
   const level = levelFor(rows[0]?.xp ?? 0);
-  const clean = cleanInterior(raw, tierFor(level).tier, level);
+  const clean = cleanInterior(raw, tierFor(level).tier, level, await owned(me));
   await sql`
     insert into houses (user_id, interior, updated_at) values (${me}::uuid, ${JSON.stringify(clean)}::jsonb, now())
     on conflict (user_id) do update set interior = excluded.interior, updated_at = now()

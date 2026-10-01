@@ -1,6 +1,6 @@
 import { doorOf, FURNITURE, ROOM, type Interior } from "@/lib/furniture";
 import type { Tier } from "@/lib/village";
-import type { Grid } from "@/components/village/world";
+import type { Grid, Table } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The two kinds of shared room: inside a house, and the
@@ -77,4 +77,70 @@ export function buildArena(): ArenaScene {
     spots: { a: { x: 6, y: 7 }, b: { x: 12, y: 7 } },
     ring: { cx: 9, cy: 7, r: 4 },
   };
+}
+
+/**
+ * A village's library or store: a room of its own that everyone in that
+ * village who walks in shares, like the arena. The library has study desks
+ * (work sessions can sit there as well as at the town hall); the store a
+ * counter to buy things at.
+ */
+export type IndoorScene = Grid & {
+  kind: "library" | "store";
+  /** The door, in the middle of the front wall; stepping onto it leaves. */
+  door: { x: number; y: number };
+  /** The library's desks, each with its seats (the town hall's tables, indoors). */
+  desks: Table[];
+  /** The store's counter: stand in front of it to buy. */
+  counter: { x: number; y: number; w: number } | null;
+};
+
+function walled(w: number, h: number): boolean[][] {
+  return Array.from({ length: h }, (_, y) => Array.from({ length: w }, (_, x) => y < 2 || y === h - 1 || x === 0 || x === w - 1));
+}
+
+export function buildLibrary(): IndoorScene {
+  const w = 15;
+  const h = 11;
+  const blocked = walled(w, h);
+  const desks: Table[] = [];
+  for (const [x, y] of [
+    [2, 4],
+    [10, 4],
+    [2, 7],
+    [10, 7],
+  ]) {
+    for (let i = 0; i < 3; i++) blocked[y][x + i] = true;
+    desks.push({
+      x,
+      y,
+      w: 3,
+      seats: [
+        { x, y: y + 1, face: 0 },
+        { x: x + 1, y: y + 1, face: 0 },
+        { x: x + 2, y: y + 1, face: 0 },
+        { x: x - 1, y, face: 3 },
+        { x: x + 3, y, face: 1 },
+      ],
+    });
+  }
+  const door = { x: 7, y: h - 1 };
+  blocked[door.y][door.x] = false;
+  return { kind: "library", w, h, blocked, door, desks, counter: null };
+}
+
+export function buildStore(): IndoorScene {
+  const w = 13;
+  const h = 9;
+  const blocked = walled(w, h);
+  // Shelves down both sides, the counter across the back.
+  for (let y = 2; y < h - 2; y++) {
+    blocked[y][1] = true;
+    blocked[y][w - 2] = true;
+  }
+  const counter = { x: 4, y: 3, w: 5 };
+  for (let i = 0; i < counter.w; i++) blocked[counter.y][counter.x + i] = true;
+  const door = { x: 6, y: h - 1 };
+  blocked[door.y][door.x] = false;
+  return { kind: "store", w, h, blocked, door, desks: [], counter };
 }

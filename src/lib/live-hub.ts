@@ -88,7 +88,7 @@ function subscriber(): Redis {
 /** May this person be in this space at all? The same rule the check-in uses. */
 function allowed(c: Conn, space: string): boolean {
   const s = readSpace(space);
-  if (s?.kind === "arena" || s?.kind === "village") return true;
+  if (s && s.kind !== "inside" && s.kind !== "hall") return true;
   if (!space.startsWith("inside:")) return false;
   const host = space.slice("inside:".length);
   return UUID.test(host) && (host === c.me || c.known.has(host));

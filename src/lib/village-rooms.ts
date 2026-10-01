@@ -36,13 +36,13 @@ export async function roomPeople(me: string, place: Place, known: Set<string>, v
        where v.place = 'inside' and v.host_id = ${place.hostId}::uuid
          and v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
     `) as Row[];
-  } else if (place.kind === "arena") {
-    // Everyone in this village's arena. Strangers come back marked as such
-    // (known = false) and show as a knight and a name.
+  } else if (place.kind === "arena" || place.kind === "library" || place.kind === "store") {
+    // Everyone in this village's arena (or library, or store). Strangers
+    // come back marked as such (known = false) and show as a knight and a name.
     rows = (await sql`
       select v.user_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
         from village_presence v join profiles p on p.id = v.user_id
-       where v.place = 'arena' and v.village = ${village}
+       where v.place = ${place.kind} and v.village = ${village}
          and v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
     `) as Row[];
   }

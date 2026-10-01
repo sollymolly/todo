@@ -36,6 +36,8 @@ import {
   type Status,
 } from "@/lib/village";
 import { MyQuestSwitch, QuestPicker, StartSessionForm, useMyQuests } from "@/components/village/SessionControls";
+import { villageInfo } from "@/components/village/world";
+import { ownsGood, useShop } from "@/components/village/shop-state";
 
 /* --------------------------------------------------------------------------
    What opens in the village: a friend's house, your own, the town hall, and
@@ -364,6 +366,8 @@ export function MyHousePanel({
   const [tab, setTab] = useState<"notes" | "house">(notes.length ? "notes" : "house");
   const [list, setList] = useState(notes);
   const [look, setLook] = useState(me.house);
+  // Roof colours bought at the store join the rest (shop-state.ts).
+  const shop = useShop();
   const [saving, setSaving] = useState(false);
   const tier = tierFor(me.level);
 
@@ -439,7 +443,7 @@ export function MyHousePanel({
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-mud-400">Roof</p>
             <div className="flex flex-wrap gap-1.5">
-              {ROOFS.map((r) => (
+              {ROOFS.filter((r) => !r.shop || ownsGood(shop, `roof:${r.id}`)).map((r) => (
                 <button
                   key={r.id}
                   onClick={() => setLook({ ...look, roof: r.id })}
@@ -494,11 +498,14 @@ export function HallPanel({
   sessions,
   sheets,
   me,
+  spot = "hall",
   onClose,
 }: {
   sessions: SessionView[];
   sheets: Record<string, string>;
   me: Stats;
+  /** Opened at the town hall, or at a library desk: where a new table goes. */
+  spot?: "hall" | "library";
   onClose: () => void;
 }) {
   const { pulse, skew } = useSessionStore();
@@ -512,7 +519,11 @@ export function HallPanel({
   const mine = sessions.find((s) => s.id === pulse?.mySessionId) ?? null;
 
   return (
-    <Panel title="Town hall" sub={`Your focus: ${minutesLabel(me.focusToday)} today · ${minutesLabel(me.focusWeek)} this week`} onClose={onClose}>
+    <Panel
+      title={spot === "library" ? "Library desks" : "Town hall"}
+      sub={`Your focus: ${minutesLabel(me.focusToday)} today · ${minutesLabel(me.focusWeek)} this week`}
+      onClose={onClose}
+    >
       {sessions.length === 0 && !mine && <p className="mb-3 text-sm text-mud-500">Nobody&apos;s working here right now.</p>}
       <ul className="space-y-2.5">
         {sessions.map((s) => {
@@ -524,6 +535,9 @@ export function HallPanel({
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-mud-900">
                   {isMine ? "Your table" : `${host?.villager.name ?? "A"}'s table`}
+                  <span className="ml-1.5 text-xs font-normal text-mud-500">
+                    · {villageInfo(s.village ?? 0).name} {s.spot === "library" ? "library" : "town hall"}
+                  </span>
                 </p>
                 <p className="text-xs tabular-nums text-mud-600">
                   {phase ? `${phase.phase === "work" ? "Focus" : "Break"} ${clock(phase.left)}` : clock(now - s.startedAt)}
@@ -594,7 +608,7 @@ export function HallPanel({
       </ul>
       {!mine && (
         <div className="mt-4 border-t border-mud-200 pt-3">
-          <StartSessionForm />
+          <StartSessionForm spot={spot} />
         </div>
       )}
     </Panel>

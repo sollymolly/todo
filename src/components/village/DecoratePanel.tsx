@@ -4,6 +4,7 @@ import { useState } from "react";
 import Furniture from "@/components/village/Furniture";
 import { FLOORS, FURNITURE, KIND_LIST, MAX_ITEMS, WALLS, type FurnitureKind, type Interior } from "@/lib/furniture";
 import { Panel } from "@/components/village/panels";
+import { ownsGood, useShop } from "@/components/village/shop-state";
 
 /* --------------------------------------------------------------------------
    Decorating your house, Animal Crossing style: pick a piece, then tap the
@@ -37,6 +38,8 @@ export default function DecoratePanel({
   onSave: () => void;
   onCancel: () => void;
 }) {
+  // Wallpapers and floors bought at the store join the rest (shop-state.ts).
+  const shop = useShop();
   const [tab, setTab] = useState<"furniture" | "walls" | "floors">("furniture");
   const sel = selected != null ? draft.items[selected] : null;
 
@@ -100,7 +103,7 @@ export default function DecoratePanel({
       )}
       {tab === "walls" && (
         <div className="grid grid-cols-4 gap-1.5">
-          {WALLS.map((w) => (
+          {WALLS.filter((w) => !w.shop || ownsGood(shop, `wall:${w.id}`)).map((w) => (
             <button
               key={w.id}
               disabled={level < w.level}
@@ -115,7 +118,7 @@ export default function DecoratePanel({
       )}
       {tab === "floors" && (
         <div className="grid grid-cols-4 gap-1.5">
-          {FLOORS.map((f) => (
+          {FLOORS.filter((f) => !f.shop || ownsGood(shop, `floor:${f.id}`)).map((f) => (
             <button
               key={f.id}
               disabled={level < f.level}

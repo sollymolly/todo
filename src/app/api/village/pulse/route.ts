@@ -26,7 +26,9 @@ function readPlace(raw: unknown): Place | null {
     case "inside":
       return typeof p.hostId === "string" && UUID.test(p.hostId) ? { kind: p.kind, hostId: p.hostId } : null;
     case "arena":
-      return { kind: "arena" };
+    case "library":
+    case "store":
+      return { kind: p.kind };
     default:
       return null;
   }

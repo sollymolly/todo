@@ -78,6 +78,8 @@ export type World = {
   landmarks: Landmark[];
   /** Along the bottom: the station (its door opens onto the platform) and the line. */
   station: { body: Rect; door: { x: number; y: number }; platform: Rect; track: Rect };
+  /** Hedge tiles round the shops and the arena: only the front path leads in. */
+  hedges: { x: number; y: number }[];
   streets: Rect[];
   props: Prop[];
   /** blocked[y][x] */
@@ -252,6 +254,17 @@ export function buildWorld(v: number, owners: (string | null)[]): World {
   const arena = { body: { x: centreX, y: bandTop(1) + 1, w: 5, h: 4 }, door: { x: centreX + 2, y: bandTop(1) + 5 } };
   block(arena.body);
 
+  // A building beside the road sits behind hedges: along the back, and along
+  // the front either side of the path to its door (5 wide, door in the middle).
+  const hedges: { x: number; y: number }[] = [];
+  const hedgeRound = (x: number, y: number) => {
+    for (let i = 0; i < 5; i++) {
+      hedges.push({ x: x + i, y });
+      if (i !== 2) hedges.push({ x: x + i, y: y + 6 });
+    }
+  };
+  hedgeRound(arena.body.x, arena.body.y - 1);
+
   // The station, at the foot of the road, and the line along the bottom.
   const station = {
     body: { x: centreX + 4, y: RAIL_TOP, w: 6, h: 4 },
@@ -317,6 +330,7 @@ export function buildWorld(v: number, owners: (string | null)[]): World {
       if (BUILDINGS.includes(kind)) {
         const body = { x, y: y + 1, w: 5, h: 4 };
         block(body);
+        hedgeRound(x, y);
         landmarks.push({ kind, area, body, door: { x: x + 2, y: y + 5 } });
       } else {
         // A fountain or a well in the middle, trees at the back.
@@ -337,7 +351,9 @@ export function buildWorld(v: number, owners: (string | null)[]): World {
   blocked[hall.door.y][hall.door.x] = false;
   blocked[arena.door.y][arena.door.x] = false;
 
-  return { v, name, theme, w, h, plots, hall, arena, tables, landmarks, station, streets, props, blocked };
+  for (const t of hedges) block({ x: t.x, y: t.y, w: 1, h: 1 });
+
+  return { v, name, theme, w, h, plots, hall, arena, tables, landmarks, station, hedges, streets, props, blocked };
 }
 
 /* ------------------------------------------------------------ pathfinding */

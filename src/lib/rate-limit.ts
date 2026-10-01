@@ -55,6 +55,8 @@ export const LIMITS = {
   say: { limit: 30, windowSeconds: 60 },
   /** Per account. Challenges sent. */
   duel: { limit: 20, windowSeconds: 600 },
+  /** Per account. Things bought at the village store. */
+  buy: { limit: 30, windowSeconds: 600 },
 } as const satisfies Record<string, Limit>;
 
 /**

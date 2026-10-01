@@ -3,7 +3,7 @@
 import Furniture, { LIFT } from "@/components/village/Furniture";
 import { FLOORS, FURNITURE, WALLS } from "@/lib/furniture";
 import { T } from "@/components/village/world";
-import type { ArenaScene, RoomScene } from "@/components/village/rooms";
+import type { ArenaScene, IndoorScene, RoomScene } from "@/components/village/rooms";
 
 /* --------------------------------------------------------------------------
    Drawing the shared rooms. Positions are grid tiles × 32 × scale, the same
@@ -163,6 +163,104 @@ export function ArenaGate() {
       <path d="M21 5 L40 10 L21 16 Z" fill="#b5523b" />
       <rect x="138" y="4" width="3" height="26" fill="#3b2a1c" />
       <path d="M141 5 L122 10 L141 16 Z" fill="#b5523b" />
+    </svg>
+  );
+}
+
+const SPINES = ["#7a2a2a", "#2f4f7a", "#3f6b3a", "#a8782a", "#5a3e6e", "#8a5a2a"];
+
+/** A run of bookshelf, `w` px wide and `h` tall, books on every shelf. */
+function Shelf({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
+  const rows = Math.max(1, Math.floor((h - 6) / 14));
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill="#6b4a2b" stroke="#3b2a1c" strokeWidth="2" />
+      {Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: Math.floor((w - 6) / 5) }, (_, i) => (
+          <rect key={`${r}-${i}`} x={x + 3 + i * 5} y={y + 4 + r * 14 + (i % 3)} width="4" height={10 - (i % 3)} fill={SPINES[(i * 7 + r * 3) % SPINES.length]} />
+        ))
+      )}
+      {Array.from({ length: rows }, (_, r) => (
+        <rect key={r} x={x} y={y + 15 + r * 14} width={w} height="2" fill="#4a3320" />
+      ))}
+    </g>
+  );
+}
+
+/** The library: shelves all along the walls, four study desks with lamps, a rug down the aisle. */
+export function LibraryView({ scene, scale: S }: { scene: IndoorScene; scale: number }) {
+  const W = scene.w * T;
+  const H = scene.h * T;
+  return (
+    <svg aria-hidden className="pointer-events-none absolute left-0 top-0" style={{ width: W * S, height: H * S }} viewBox={`0 0 ${W} ${H}`} shapeRendering="crispEdges">
+      <rect width={W} height={H} fill="#2c2018" />
+      <rect x={T} y={2 * T} width={W - 2 * T} height={H - 3 * T} fill="#8f6240" />
+      {Array.from({ length: scene.h - 3 }, (_, r) => (
+        <rect key={r} x={T} y={(2 + r) * T + T - 2} width={W - 2 * T} height="2" fill="#7d5436" />
+      ))}
+      {/* The back wall is all books */}
+      <rect x={T} y={0} width={W - 2 * T} height={2 * T} fill="#5a3e28" />
+      {Array.from({ length: Math.floor((scene.w - 2) / 2) }, (_, i) => (
+        <Shelf key={i} x={T + i * 2 * T + 2} y={6} w={2 * T - 4} h={2 * T - 8} />
+      ))}
+      {/* A long rug from the door to the back */}
+      <rect x={(scene.door.x - 1) * T + 6} y={2 * T + 6} width={3 * T - 12} height={H - 3 * T - 6} fill="#7a2a2a" />
+      <rect x={(scene.door.x - 1) * T + 10} y={2 * T + 10} width={3 * T - 20} height={H - 3 * T - 14} fill="none" stroke="#c9a14a" strokeWidth="2" />
+      {scene.desks.map((d, i) => (
+        <g key={i}>
+          <rect x={d.x * T + 2} y={d.y * T + 4} width={d.w * T - 4} height={T - 4} fill="#a8703f" stroke="#3b2a1c" strokeWidth="2" />
+          <rect x={d.x * T + 2} y={d.y * T + 4} width={d.w * T - 4} height="5" fill="#c08a52" />
+          {/* A green-shaded lamp and open books */}
+          <rect x={d.x * T + d.w * T / 2 - 2} y={d.y * T - 8} width="4" height="14" fill="#5a3e28" />
+          <path d={`M${d.x * T + d.w * T / 2 - 9} ${d.y * T - 6} L${d.x * T + d.w * T / 2 + 9} ${d.y * T - 6} L${d.x * T + d.w * T / 2 + 6} ${d.y * T - 14} L${d.x * T + d.w * T / 2 - 6} ${d.y * T - 14} Z`} fill="#3f7a4a" stroke="#22422a" strokeWidth="1.5" />
+          <rect x={d.x * T + 10} y={d.y * T + 12} width="14" height="9" fill="#f4ecd6" stroke="#8a7a66" strokeWidth="1" />
+          <rect x={d.x * T + d.w * T - 26} y={d.y * T + 12} width="14" height="9" fill="#f4ecd6" stroke="#8a7a66" strokeWidth="1" />
+        </g>
+      ))}
+      <rect x={scene.door.x * T + 2} y={scene.door.y * T} width={T - 4} height={T} fill="#6b4226" />
+    </svg>
+  );
+}
+
+/** The store: shelves of goods down both sides, a counter at the back with a bell and the till. */
+export function StoreView({ scene, scale: S }: { scene: IndoorScene; scale: number }) {
+  const W = scene.w * T;
+  const H = scene.h * T;
+  const c = scene.counter!;
+  const goods = ["#d9432b", "#f2c14e", "#5f9e3a", "#4a7ab8", "#b86be0", "#f28a3c", "#7cc4f0"];
+  return (
+    <svg aria-hidden className="pointer-events-none absolute left-0 top-0" style={{ width: W * S, height: H * S }} viewBox={`0 0 ${W} ${H}`} shapeRendering="crispEdges">
+      <rect width={W} height={H} fill="#2c2018" />
+      <rect x={T} y={2 * T} width={W - 2 * T} height={H - 3 * T} fill="#c9a77a" />
+      {Array.from({ length: (scene.w - 2) * (scene.h - 3) }, (_, i) => {
+        const x = 1 + (i % (scene.w - 2));
+        const y = 2 + Math.floor(i / (scene.w - 2));
+        return (x + y) % 2 ? <rect key={i} x={x * T} y={y * T} width={T} height={T} fill="#b8966a" /> : null;
+      })}
+      <rect x={T} y={0} width={W - 2 * T} height={2 * T} fill="#efe3c8" />
+      {[T + 8, W - T - 72].map((x) => (
+        <g key={x}>
+          <rect x={x} y={10} width="64" height="40" fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
+          {goods.map((g, i) => (
+            <rect key={i} x={x + 5 + (i % 4) * 15} y={14 + Math.floor(i / 4) * 18} width="10" height="12" rx="2" fill={g} />
+          ))}
+        </g>
+      ))}
+      {/* Side shelves */}
+      {[T, W - 2 * T].map((x) => (
+        <g key={x}>
+          <rect x={x + 2} y={2 * T} width={T - 4} height={(scene.h - 4) * T} fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
+          {Array.from({ length: (scene.h - 4) * 2 }, (_, i) => (
+            <rect key={i} x={x + 8} y={2 * T + 6 + i * 16} width={T - 16} height="9" rx="2" fill={goods[(i + x) % goods.length]} />
+          ))}
+        </g>
+      ))}
+      {/* The counter */}
+      <rect x={c.x * T} y={c.y * T + 2} width={c.w * T} height={T - 2} fill="#a8703f" stroke="#3b2a1c" strokeWidth="2" />
+      <rect x={c.x * T} y={c.y * T + 2} width={c.w * T} height="6" fill="#c08a52" />
+      <circle cx={c.x * T + 20} cy={c.y * T + 6} r="5" fill="#e2c26a" stroke="#8a6a2a" strokeWidth="1.5" />
+      <rect x={(c.x + c.w) * T - 34} y={c.y * T - 8} width="24" height="16" fill="#5a6470" stroke="#3b2a1c" strokeWidth="1.5" />
+      <rect x={scene.door.x * T + 2} y={scene.door.y * T} width={T - 4} height={T} fill="#6b4226" />
     </svg>
   );
 }
