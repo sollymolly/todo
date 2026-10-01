@@ -8,6 +8,7 @@ import { Redis } from "@upstash/redis";
      pos   where someone is standing, straight from their screen
      poke  "something changed here — check in now" (a line said, a duel
            starting, someone arriving). Carries nothing, so it can't leak.
+     swing  someone in the arena swung, so everyone sees it at once
      hit / block   a duel blow the server judged (live-hub.ts), so
            everyone watching sees it the moment it lands
 
@@ -27,7 +28,9 @@ export type LiveMessage =
   /* A duel hit that landed: the fighters' health after it. */
   | { t: "hit"; duel: string; by: string; target: string; a: number; b: number }
   /* A hit caught on a guard. */
-  | { t: "block"; by: string; target: string };
+  | { t: "block"; by: string; target: string }
+  /* Someone swung, hit or miss: everyone watching sees the swing. */
+  | { t: "swing"; by: string };
 
 export const CHANNEL = "ql:space:";
 

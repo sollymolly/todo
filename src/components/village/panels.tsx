@@ -351,11 +351,14 @@ export function MyHousePanel({
   me,
   notes,
   onLook,
+  onMove,
   onClose,
 }: {
   me: Stats;
   notes: { id: string; from: string; body: string; at: number; read: boolean }[];
   onLook: (look: HouseLook) => void;
+  /** Pick an empty lot to move to. */
+  onMove?: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"notes" | "house">(notes.length ? "notes" : "house");
@@ -474,6 +477,11 @@ export function MyHousePanel({
           >
             {saving ? "Saving…" : "Save"}
           </button>
+          {onMove && (
+            <button className={BTN} onClick={onMove}>
+              Move to another lot
+            </button>
+          )}
         </div>
       )}
     </Panel>

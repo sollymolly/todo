@@ -31,6 +31,8 @@ export const VIEW_H = FRAME - CROP_TOP;
 export type Layer = {
   src: string;
   z: number;
+  /** Frame size when it isn't 64: long weapons' swings (128 or 192). */
+  frame?: number;
   baseRamp?: string;
   /**
    * Present on gear the fetch script found to be painted in a single cloth or
@@ -44,8 +46,15 @@ export type Layer = {
 /** A dye as the renderer needs it: a palette family plus a ramp within it. */
 type AppliedDye = { kind: DyeKind; id: string };
 
-/** Every item ships one layer list per body type — gear doesn't line up across them. */
-type SlotTable = Record<string, { name: string; bodies: Record<string, Layer[]> }>;
+/**
+ * Every item ships one layer list per body type — gear doesn't line up
+ * across them — for walking, and per duel animation (fetch-lpc-attack.py).
+ */
+type SlotTable = Record<string, { name: string; bodies: Record<string, Layer[]>; anims?: Partial<Record<Anim, Record<string, Layer[]>>> }>;
+
+/** A duel animation: the swing, and the thrust a pointy stick does instead. */
+export type Anim = "slash" | "thrust";
+const ANIM_FRAMES: Record<Anim, number> = { slash: 6, thrust: 8 };
 
 const SLOTS = manifest.slots as unknown as Record<string, SlotTable>;
 const PALETTES = manifest.palettes as unknown as Record<
@@ -125,6 +134,22 @@ export function ramp(kind: string, want: string, fallback: string): string[] {
 }
 
 const imageCache = new Map<string, Promise<CanvasImageSource>>();
+const rawCache = new Map<string, Promise<HTMLImageElement>>();
+
+/** A sheet as it is. */
+function loadRaw(src: string): Promise<HTMLImageElement> {
+  let p = rawCache.get(src);
+  if (!p) {
+    p = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`failed: ${src}`));
+      img.src = src;
+    });
+    rawCache.set(src, p);
+  }
+  return p;
+}
 
 /**
  * One layer's sheet, as the usual 9×4 grid of 64px frames. A few weapons
@@ -150,24 +175,32 @@ function asFrames(img: HTMLImageElement): CanvasImageSource {
   return out;
 }
 
+/** A walk sheet, as 64px frames (asFrames). */
 export function load(src: string): Promise<CanvasImageSource> {
   let p = imageCache.get(src);
   if (!p) {
-    p = new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(asFrames(img));
-      img.onerror = () => reject(new Error(`failed: ${src}`));
-      img.src = src;
-    });
+    p = loadRaw(src).then(asFrames);
     imageCache.set(src, p);
   }
   return p;
 }
 
-export type Job = { layer: Layer; recolor?: { from: string[]; to: string[] } };
+/** One layer to draw, and where it goes in the stack (`z`: its own, unless it's held — see below). */
+export type Job = { layer: Layer; recolor?: { from: string[]; to: string[] }; z: number };
 
-/** The layers that make up this knight, bottom first, each with its recolour. */
-export function spriteJobs(appearance: Appearance, equipped: Equipped): Job[] {
+/**
+ * Weapons and shields go underneath the knight, whatever z-order LPC gives
+ * them: what's held shows around the body, never over it. (A hand axe held
+ * across the chest is mostly hidden facing forward; its swing still shows.)
+ */
+const HELD = new Set(["weapon", "offhand"]);
+const UNDER = -1000;
+
+/**
+ * The layers that make up this knight, bottom first, each with its
+ * recolour: walking, or in a duel animation.
+ */
+export function spriteJobs(appearance: Appearance, equipped: Equipped, anim?: Anim): Job[] {
   // Friends' profiles are raw jsonb and predate this field, so don't trust it.
   const body: BodyType = appearance.body === "female" ? "female" : DEFAULT_BODY;
 
@@ -193,7 +226,8 @@ export function spriteJobs(appearance: Appearance, equipped: Equipped): Job[] {
     if (!id || id === "none") return;
     const item = SLOTS[slot]?.[id];
     if (!item) return;
-    const layers = item.bodies[body] ?? item.bodies[DEFAULT_BODY] ?? [];
+    const sheets = anim ? item.anims?.[anim] : item.bodies;
+    const layers = sheets?.[body] ?? sheets?.[DEFAULT_BODY] ?? [];
     for (const layer of layers) {
       let recolor;
       if (tint?.to.length) {
@@ -210,7 +244,7 @@ export function spriteJobs(appearance: Appearance, equipped: Equipped): Job[] {
         const to = PALETTES[dye.kind]?.[dye.id] ?? [];
         if (from.length && to.length) recolor = { from, to };
       }
-      jobs.push({ layer, recolor });
+      jobs.push({ layer, recolor, z: HELD.has(slot) ? layer.z + UNDER : layer.z });
     }
   };
 
@@ -244,7 +278,7 @@ export function spriteJobs(appearance: Appearance, equipped: Equipped): Job[] {
   push("offhand", equipped.offhand);
   push("weapon", equipped.weapon);
 
-  jobs.sort((a, b) => a.layer.z - b.layer.z);
+  jobs.sort((a, b) => a.z - b.z);
   return jobs;
 }
 
@@ -331,6 +365,69 @@ export function composeSheet(appearance: Appearance, equipped: Equipped): Promis
       return out.toDataURL("image/png");
     })();
     sheets.set(key, p);
+  }
+  return p;
+}
+
+/** A knight's duel sheet: `cols` frames a row, four rows, each frame `frame` px square. */
+export type AttackSheet = { url: string; frame: number; cols: number; anim: Anim };
+
+/**
+ * Which duel animation a knight has: the swing — or, for a weapon drawn
+ * without one (the pointy stick), the thrust, which suits it anyway.
+ */
+export function attackAnim(equipped: Equipped): Anim {
+  const weapon = SLOTS.weapon?.[equipped.weapon];
+  return !weapon || weapon.anims?.slash ? "slash" : weapon.anims?.thrust ? "thrust" : "slash";
+}
+
+const attacks = new Map<string, Promise<AttackSheet | null>>();
+
+/**
+ * This knight's duel animation, layered and recoloured like the walk sheet.
+ * Long weapons swing on bigger frames (128 or 192px) so the blade has room;
+ * every layer is centred in a frame as big as the biggest, so the knight
+ * stands in the same place in all of them as in their walk frames.
+ */
+export function composeAttack(appearance: Appearance, equipped: Equipped): Promise<AttackSheet | null> {
+  const key = spriteKey(appearance, equipped);
+  let p = attacks.get(key);
+  if (!p) {
+    p = (async () => {
+      const anim = attackAnim(equipped);
+      const cols = ANIM_FRAMES[anim];
+      const jobs = spriteJobs(appearance, equipped, anim);
+      if (!jobs.length) return null;
+      const images = await Promise.all(jobs.map((j) => loadRaw(j.layer.src).catch(() => null)));
+      const F = Math.max(FRAME, ...jobs.map((j) => j.layer.frame ?? FRAME));
+      const out = document.createElement("canvas");
+      out.width = F * cols;
+      out.height = F * 4;
+      const octx = out.getContext("2d");
+      if (!octx) return null;
+      octx.imageSmoothingEnabled = false;
+      images.forEach((img, i) => {
+        if (!img) return;
+        const f = jobs[i].layer.frame ?? FRAME;
+        const w = f * cols;
+        const buf = document.createElement("canvas");
+        buf.width = w;
+        buf.height = f * 4;
+        const bctx = buf.getContext("2d", { willReadFrequently: true });
+        if (!bctx) return;
+        bctx.imageSmoothingEnabled = false;
+        // Only the frames this animation uses: some sheets are padded wider.
+        bctx.drawImage(img, 0, 0, w, f * 4, 0, 0, w, f * 4);
+        const r = jobs[i].recolor;
+        if (r && r.from.length && r.to.length) recolorPixels(bctx, w, f * 4, r);
+        const pad = (F - f) / 2;
+        for (let row = 0; row < 4; row++)
+          for (let col = 0; col < cols; col++)
+            octx.drawImage(buf, col * f, row * f, f, f, col * F + pad, row * F + pad, f, f);
+      });
+      return { url: out.toDataURL("image/png"), frame: F, cols, anim };
+    })();
+    attacks.set(key, p);
   }
   return p;
 }

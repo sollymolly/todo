@@ -40,8 +40,8 @@ export const LIVE_ROOM_PULSE_MS = 5_000;
 
 /**
  * The space a place is, for talking: people in the same one can hear each
- * other. The square and house fronts aren't spaces — everyone's village is
- * laid out differently, so "near you" out there means nothing to anyone else.
+ * other. The square and house fronts aren't spaces for talking — nobody's
+ * near enough there to hear.
  */
 export function spaceOf(p: Place | null): string | null {
   if (!p) return null;
@@ -49,6 +49,18 @@ export function spaceOf(p: Place | null): string | null {
   if (p.kind === "arena") return "arena";
   if (p.kind === "hall") return "hall";
   return null;
+}
+
+/**
+ * The live connection's space for a place (src/lib/live-hub.ts): who hears
+ * whose footsteps. A room or the arena is its own; everywhere outside is
+ * "village", the town hall included. Being home in the app isn't anywhere.
+ */
+export const OUTSIDE = "village";
+export function liveSpaceOf(p: Place | null): string | null {
+  if (!p || p.kind === "home") return null;
+  if (p.kind === "inside" || p.kind === "arena") return spaceOf(p);
+  return OUTSIDE;
 }
 
 export const SAY_MAX = 140;
@@ -200,6 +212,31 @@ export type SessionView = {
 
 export type RoomPerson = { villager: Villager; known: boolean; x: number; y: number; facing: 0 | 1 | 2 | 3 };
 
+/**
+ * Someone with a house in the village — everyone who's been, since it's one
+ * village. Companions are `known`; for anyone else the village shows their
+ * house and their knight with a name, and nothing more.
+ */
+export type Resident = Villager & {
+  plot: number;
+  level: number;
+  /** Best habit streak, for the garden. */
+  streak: number;
+  house: HouseLook;
+  known: boolean;
+};
+
+/**
+ * Someone about in the village, outside, or in the app ("home"): where
+ * their own screen last had them, in tiles. No position when they're home.
+ */
+export type OutdoorPerson = {
+  villager: Villager;
+  known: boolean;
+  place: Place;
+  pos: Pos | null;
+};
+
 export type ChatLine = { id: string; authorId: string; name: string; body: string; at: number };
 
 /** A duel as either fighter or a spectator sees it. See src/lib/duel.ts. */
@@ -232,6 +269,10 @@ export type Pulse = {
   room: { space: string; people: RoomPerson[]; chat: ChatLine[] } | null;
   /** Duels I'm in, or can watch from where I am. */
   duels: DuelView[];
+  /** Everyone else outside in the village, or at home in the app. */
+  outdoors: OutdoorPerson[];
+  /** Changes whenever someone gets a plot or moves house: time to redraw the village. */
+  plotsAt: string;
   /**
    * I'm signed in on another device too, and that one got here first:
    * friends see me where it has me until it's closed, and this check-in

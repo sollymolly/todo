@@ -1,5 +1,6 @@
 /* --------------------------------------------------------------------------
-   The village's layout, worked out afresh on each device from who's in it.
+   The village's layout: one village for everyone, the same on every screen,
+   so a position here means the same thing to all who see it.
 
    All measurements are in tiles (32px, the LPC atlas's size) unless a name
    says px. The shape:
@@ -15,10 +16,10 @@
      └──────────────────────────────────────────────────────────┘
      forest margin
 
-   Your house is the first plot beside the hall; friends fill outward,
-   alphabetically, so a friend's house stays put as you add others.
-   Everything else is decided by a seeded random, so the trees are in the
-   same places every visit.
+   Everyone has a plot of their own (db: houses.plot; plotAt), numbered
+   outward from the hall, and more bands are added at the bottom as people
+   arrive — so nothing already there ever moves. Everything else is decided
+   by a seeded random, so the trees are in the same places for everyone.
    -------------------------------------------------------------------------- */
 
 export const T = 32;
@@ -34,6 +35,8 @@ export const WORLD_W = MARGIN * 2 + SIDE_PLOTS * PLOT_W * 2 + CENTRE_W;
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export type Plot = {
+  /** Its number (plotAt), the same for everyone. */
+  n: number;
   /** Owner's id, or null for an empty lot. */
   owner: string | null;
   /** The plot's top-left tile. */
@@ -117,38 +120,49 @@ function hash(str: string): number {
 }
 
 const centreX = MARGIN + SIDE_PLOTS * PLOT_W;
+export const PLOTS_PER_BAND = SIDE_PLOTS * 2;
+const bandTop = (b: number) => MARGIN + b * BAND_H;
 
-/** Plot slots in the order they're handed out: nearest the hall first. */
-function slotOrder(bands: number): { band: number; side: -1 | 1; i: number }[] {
-  const out: { band: number; side: -1 | 1; i: number }[] = [];
-  for (let band = 0; band < bands; band++)
-    for (let i = 0; i < SIDE_PLOTS; i++) {
-      out.push({ band, side: 1, i });
-      out.push({ band, side: -1, i });
-    }
-  return out;
+/**
+ * Where plot `n` is, its top-left tile. Numbered nearest the hall first —
+ * band by band, alternating sides — and fixed for good: the village only
+ * ever grows at the bottom, so nothing already there moves.
+ */
+export function plotAt(n: number): { x: number; y: number } {
+  const k = n % PLOTS_PER_BAND;
+  const side = k % 2 ? -1 : 1;
+  const i = Math.floor(k / 2);
+  return { x: side === 1 ? centreX + CENTRE_W + i * PLOT_W : centreX - (i + 1) * PLOT_W, y: bandTop(Math.floor(n / PLOTS_PER_BAND)) };
 }
 
-export function buildWorld(meId: string, friendIds: string[]): World {
-  const owners = [meId, ...friendIds];
-  const perBand = SIDE_PLOTS * 2;
-  // Always at least two bands, so a small village still has a road south.
-  const bands = Math.max(2, Math.ceil(owners.length / perBand));
+/**
+ * How many lots the village has, given its highest-numbered house: always
+ * a band of empty ones past it to move into, and at least two bands, so a
+ * small village still has a road south.
+ */
+export function lotsFor(highest: number): number {
+  return Math.max(2, Math.ceil((highest + 1) / PLOTS_PER_BAND) + 1) * PLOTS_PER_BAND;
+}
+
+/**
+ * The village: one for everyone, the same on every screen. `owners[n]` is
+ * whose house is on plot n (db: houses.plot), or nothing for an empty lot.
+ */
+export function buildWorld(owners: (string | null)[]): World {
+  const bands = lotsFor(owners.length - 1) / PLOTS_PER_BAND;
   const h = MARGIN * 2 + bands * BAND_H;
   const w = WORLD_W;
   const blocked = Array.from({ length: h }, () => Array<boolean>(w).fill(false));
   const block = (r: Rect) => {
     for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (blocked[y]) blocked[y][x] = true;
   };
-  const rand = seeded(hash(meId));
+  const rand = seeded(hash("village"));
 
   // Forest margin: solid, apart from the trees drawn on it.
   block({ x: 0, y: 0, w, h: MARGIN - 1 });
   block({ x: 0, y: h - MARGIN + 1, w, h: MARGIN - 1 });
   block({ x: 0, y: 0, w: MARGIN - 1, h });
   block({ x: w - MARGIN + 1, y: 0, w: MARGIN - 1, h });
-
-  const bandTop = (b: number) => MARGIN + b * BAND_H;
 
   // Streets along the bottom of every band, and the road down the middle.
   const streets: Rect[] = [];
@@ -191,13 +205,11 @@ export function buildWorld(meId: string, friendIds: string[]): World {
 
   // Plots.
   const plots: Plot[] = [];
-  const slots = slotOrder(bands);
-  slots.forEach((s, n) => {
-    const top = bandTop(s.band);
-    const x = s.side === 1 ? centreX + CENTRE_W + s.i * PLOT_W : centreX - (s.i + 1) * PLOT_W;
+  for (let n = 0; n < bands * PLOTS_PER_BAND; n++) {
+    const { x, y: top } = plotAt(n);
     const owner = owners[n] ?? null;
     const body = { x: x + 1, y: top + 1, w: 6, h: 5 };
-    const plot: Plot = { owner, x, y: top, door: { x: x + 4, y: top + 6 }, body };
+    const plot: Plot = { n, owner, x, y: top, door: { x: x + 4, y: top + 6 }, body };
     if (owner) {
       block(body);
       // Garden beds either side of the path to the door.
@@ -207,7 +219,7 @@ export function buildWorld(meId: string, friendIds: string[]): World {
       block({ x, y: top + 6, w: 1, h: 1 });
     }
     plots.push(plot);
-  });
+  }
 
   // Scenery. Trees on the forest margin, and something on every empty lot.
   const props: Prop[] = [];
@@ -226,7 +238,8 @@ export function buildWorld(meId: string, friendIds: string[]): World {
   }
   for (const p of plots) {
     if (p.owner) continue;
-    const r = rand();
+    // Each lot's own seed, so its trees stay put as the village grows.
+    const r = seeded(hash(`lot:${p.n}`))();
     if (r < 0.4) {
       place("oak", p.x + 2, p.y + 3);
       place("bush", p.x + 5, p.y + 5);
@@ -277,16 +290,6 @@ export function nearestOpen(world: Grid, x: number, y: number): { x: number; y: 
   return { x: tx, y: ty };
 }
 
-/** Walkable tiles within r of (x, y), nearest first — places to stand around a spot. */
-export function tilesAround(world: Grid, x: number, y: number, r: number): { x: number; y: number }[] {
-  const out: { x: number; y: number; d: number }[] = [];
-  for (let dy = -r; dy <= r; dy++)
-    for (let dx = -r; dx <= r; dx++)
-      if (walkable(world, x + dx, y + dy)) out.push({ x: x + dx, y: y + dy, d: Math.hypot(dx, dy) });
-  // Ties broken the same way every time, so the same people end up in the same places.
-  return out.sort((a, b) => a.d - b.d || a.y - b.y || a.x - b.x).map(({ x, y }) => ({ x, y }));
-}
-
 /**
  * A* over the tile grid, 8 directions (no cutting corners past walls).
  * Returns tile centres from the step after `from` to `to`, or [] if there's
@@ -305,7 +308,8 @@ export function findPath(
 
   const g = new Map<number, number>([[start, 0]]);
   const came = new Map<number, number>();
-  const open: { k: number; f: number }[] = [{ k: start, f: 0 }];
+  const open = new Heap();
+  open.push(start, 0);
   const closed = new Set<number>();
   const hf = (k: number) => {
     const dx = Math.abs((k % W) - to.x);
@@ -313,11 +317,11 @@ export function findPath(
     return Math.max(dx, dy) + 0.41 * Math.min(dx, dy);
   };
 
+  // Every tile at most once or twice over: plenty for the whole village.
   let guard = 0;
-  while (open.length && guard++ < 6000) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
-    const { k } = open.splice(bi, 1)[0];
+  const most = world.w * world.h * 2;
+  while (open.size && guard++ < most) {
+    const k = open.pop();
     if (k === goal) break;
     if (closed.has(k)) continue;
     closed.add(k);
@@ -335,7 +339,7 @@ export function findPath(
         if (cost < (g.get(nk) ?? Infinity)) {
           g.set(nk, cost);
           came.set(nk, k);
-          open.push({ k: nk, f: cost + hf(nk) });
+          open.push(nk, cost + hf(nk));
         }
       }
   }
@@ -344,6 +348,52 @@ export function findPath(
   const path: { x: number; y: number }[] = [];
   for (let k = goal; k !== start; k = came.get(k)!) path.push({ x: k % W, y: Math.floor(k / W) });
   return path.reverse();
+}
+
+/** The open set: tile keys by lowest score first, a binary heap. */
+class Heap {
+  private keys: number[] = [];
+  private scores: number[] = [];
+  get size() {
+    return this.keys.length;
+  }
+  push(k: number, f: number) {
+    const { keys, scores } = this;
+    let i = keys.length;
+    keys.push(k);
+    scores.push(f);
+    while (i > 0) {
+      const up = (i - 1) >> 1;
+      if (scores[up] <= f) break;
+      keys[i] = keys[up];
+      scores[i] = scores[up];
+      i = up;
+    }
+    keys[i] = k;
+    scores[i] = f;
+  }
+  pop(): number {
+    const { keys, scores } = this;
+    const top = keys[0];
+    const k = keys.pop()!;
+    const f = scores.pop()!;
+    const n = keys.length;
+    if (n) {
+      let i = 0;
+      for (;;) {
+        let c = 2 * i + 1;
+        if (c >= n) break;
+        if (c + 1 < n && scores[c + 1] < scores[c]) c++;
+        if (scores[c] >= f) break;
+        keys[i] = keys[c];
+        scores[i] = scores[c];
+        i = c;
+      }
+      keys[i] = k;
+      scores[i] = f;
+    }
+    return top;
+  }
 }
 
 /** The tile a px position stands on. */

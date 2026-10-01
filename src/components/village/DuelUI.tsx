@@ -174,7 +174,8 @@ export function DuelUI({
       </p>
       {!live && <p className="text-center text-xs font-semibold text-amber-700">Reconnecting to the arena…</p>}
       <p className="mt-1 text-center text-[11px] text-mud-500">
-        <b>WASD</b>/arrows move · <b>H</b> hit · hold <b>G</b> to guard. Stay in the ring; guarding blocks hits from the front but you can&apos;t hit.
+        <b>WASD</b>/arrows move · <b>H</b> hit · hold <b>G</b> to guard. Stay in the ring. Hits and guards work in every direction;
+        while guarding you move slowly and can&apos;t hit.
       </p>
       {/* For touch screens: the same as H and G. */}
       <div className="mt-3 grid grid-cols-2 gap-2">

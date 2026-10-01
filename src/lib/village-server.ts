@@ -9,17 +9,21 @@ import {
   type HouseLook,
   type Neighbour,
   type NudgeView,
+  type OutdoorPerson,
   type Place,
   type Pos,
   type Pulse,
+  type Resident,
   type SessionView,
 } from "@/lib/village";
+import { lotsFor, plotAt } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The village's queries, shared by the page, its actions and
-   the check-in route. Server-only; every read of another person is limited
-   to accepted friends — except the knight and name of someone sharing a
-   work-session table, which is what sitting at one means.
+   the check-in route. Server-only. It's one village for everyone: anyone's
+   house, and anyone about in it, is shown as a knight and a name. Anything
+   more (what they're working on, where they are when it isn't the village,
+   their notes and rooms) is for accepted friends only.
    -------------------------------------------------------------------------- */
 
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Number(v));
@@ -34,6 +38,108 @@ export async function friendIdsOf(me: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+/* ------------------------------------------------------------------ plots */
+
+/** Everyone with a house, wherever it stands: the whole village. `known`: me and my companions. */
+export async function residents(known: Set<string>): Promise<Resident[]> {
+  const rows = (await sql`
+    select h.user_id, h.plot, p.display_name, p.appearance, p.equipped, p.xp, h.style, h.roof, h.garden,
+           coalesce((select max(b.streak)::int from habits b where b.user_id = h.user_id and b.active), 0) as streak
+      from houses h join profiles p on p.id = h.user_id
+     where h.plot is not null
+  `) as ({ user_id: string; plot: number; display_name: string; appearance: Appearance; equipped: Equipped; xp: number; streak: number } & HouseLook)[];
+  return rows.map((r) => {
+    const level = levelFor(r.xp);
+    return {
+      id: r.user_id,
+      name: r.display_name,
+      appearance: r.appearance,
+      equipped: r.equipped,
+      plot: r.plot,
+      level,
+      streak: r.streak,
+      house: cleanHouse(r, level),
+      known: known.has(r.user_id),
+    };
+  });
+}
+
+/** Changes whenever a plot is given or moved (Pulse.plotsAt). */
+async function plotsVersion(): Promise<string> {
+  const rows = (await sql`select count(*)::int as n, max(plot_at) as at from houses where plot is not null`) as { n: number; at: unknown }[];
+  return `${rows[0]?.n ?? 0}:${rows[0]?.at ? ms(rows[0].at) : 0}`;
+}
+
+/**
+ * Gives me a plot on my first visit: the empty lot nearest my companions'
+ * houses — or nearest the hall if none of them has one yet — so friends end
+ * up neighbours. They can move later (village-actions.ts, moveHouse).
+ */
+export async function ensurePlot(me: string, friends: string[]): Promise<void> {
+  const mine = (await sql`select plot from houses where user_id = ${me}::uuid`) as { plot: number | null }[];
+  if (mine[0]?.plot != null) return;
+  const companions = new Set(friends);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const rows = (await sql`select user_id, plot from houses where plot is not null`) as { user_id: string; plot: number }[];
+    const taken = new Set(rows.map((r) => r.plot));
+    const near = rows.filter((r) => companions.has(r.user_id)).map((r) => plotAt(r.plot));
+    const highest = rows.reduce((m, r) => Math.max(m, r.plot), -1);
+    const score = (n: number) => {
+      if (!near.length) return n;
+      const p = plotAt(n);
+      return Math.min(...near.map((q) => Math.hypot(p.x - q.x, p.y - q.y)));
+    };
+    let pick = -1;
+    for (let n = 0; n < lotsFor(highest); n++)
+      if (!taken.has(n) && (pick < 0 || score(n) < score(pick))) pick = n;
+    try {
+      await sql`
+        insert into houses (user_id, plot, plot_at) values (${me}::uuid, ${pick}, now())
+        on conflict (user_id) do update set plot = excluded.plot, plot_at = now() where houses.plot is null
+      `;
+      return;
+    } catch (e) {
+      // Someone moved in there a moment ago: look again.
+      if (!/houses_plot_key|duplicate key/i.test(String(e))) throw e;
+    }
+  }
+}
+
+function placeOf(kind: string, host: string | null): Place {
+  if (kind === "house" && host) return { kind: "house", hostId: host };
+  if (kind === "inside" && host) return { kind: "inside", hostId: host };
+  if (kind === "arena") return { kind: "arena" };
+  if (kind === "hall") return { kind: "hall" };
+  if (kind === "square") return { kind: "square" };
+  return { kind: "home" };
+}
+
+/** Everyone else outside in the village, or at home in the app — friends or not. */
+async function outdoorsOf(me: string, known: Set<string>): Promise<OutdoorPerson[]> {
+  const rows = (await sql`
+    select v.user_id, v.place, v.host_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
+      from village_presence v join profiles p on p.id = v.user_id
+     where v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
+       and v.place in ('home', 'square', 'hall', 'house')
+  `) as {
+    user_id: string;
+    place: string;
+    host_id: string | null;
+    x: number | null;
+    y: number | null;
+    facing: number | null;
+    display_name: string;
+    appearance: Appearance;
+    equipped: Equipped;
+  }[];
+  return rows.map((r) => ({
+    villager: { id: r.user_id, name: r.display_name, appearance: r.appearance, equipped: r.equipped },
+    known: known.has(r.user_id),
+    place: placeOf(r.place, r.host_id),
+    pos: r.place !== "home" && r.x != null && r.y != null ? { x: r.x, y: r.y, facing: ((r.facing ?? 2) % 4) as Pos["facing"] } : null,
+  }));
+}
+
 /* --------------------------------------------------------------- presence */
 
 /** Until db/schema.sql's `device` column is added, every device writes, as before. */
@@ -43,11 +149,11 @@ let haveDevice = true;
  * Stores where I am, from this device (`device`, made up by each open app)
  * — unless another of my devices got here first and is still about: that
  * one keeps the row until it's closed, and this returns false. A position
- * goes with a shared room only.
+ * goes with anywhere in the village; at home in the app there's none.
  */
 async function writePresence(me: string, place: Place, pos: Pos | null, device: string | null): Promise<boolean> {
   const host = place.kind === "house" || place.kind === "inside" ? place.hostId : null;
-  const at = place.kind === "inside" || place.kind === "arena" ? pos : null;
+  const at = place.kind === "home" ? null : pos;
   if (haveDevice) {
     try {
       const rows = (await sql`
@@ -243,21 +349,7 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
   `) as { user_id: string; place: string; host_id: string | null; seen_at: unknown }[];
 
   const presence: Pulse["presence"] = {};
-  for (const r of presenceRows) {
-    const p: Place =
-      r.place === "house" && r.host_id
-        ? { kind: "house", hostId: r.host_id }
-        : r.place === "inside" && r.host_id
-          ? { kind: "inside", hostId: r.host_id }
-          : r.place === "arena"
-            ? { kind: "arena" }
-            : r.place === "hall"
-          ? { kind: "hall" }
-          : r.place === "square"
-            ? { kind: "square" }
-            : { kind: "home" };
-    presence[r.user_id] = { place: p, seenAt: ms(r.seen_at) };
-  }
+  for (const r of presenceRows) presence[r.user_id] = { place: placeOf(r.place, r.host_id), seenAt: ms(r.seen_at) };
 
   const sessions = await visibleSessions(me, known);
   const mine = (await sql`
@@ -291,6 +383,8 @@ export async function pulse(me: string, place: Place | null, pos: Pos | null = n
     room,
     duels,
     elsewhere,
+    outdoors: await outdoorsOf(me, known),
+    plotsAt: await plotsVersion(),
   };
 }
 
@@ -331,6 +425,8 @@ export async function focusTotals(ids: string[]): Promise<Map<string, { today: n
 export type VillageData = {
   me: Neighbour & { focusToday: number; focusWeek: number };
   neighbours: (Neighbour & { focusToday: number; focusWeek: number })[];
+  /** Everyone's house, mine included. */
+  residents: Resident[];
   pulse: Pulse;
   notes: { id: string; from: string; body: string; at: number; read: boolean }[];
 };
@@ -338,6 +434,7 @@ export type VillageData = {
 export async function loadVillage(me: string): Promise<VillageData> {
   const friends = await listFriends();
   const ids = [me, ...friends.map((f) => f.user_id)];
+  await ensurePlot(me, ids.slice(1));
 
   const [meRows, houses, totals] = await Promise.all([
     sql`
@@ -412,6 +509,7 @@ export async function loadVillage(me: string): Promise<VillageData> {
   return {
     me: meView,
     neighbours,
+    residents: await residents(new Set(ids)),
     pulse: await pulse(me, null),
     notes: noteRows.map((n) => ({ id: n.id, from: n.author, body: n.body, at: ms(n.created_at), read: n.read })),
   };

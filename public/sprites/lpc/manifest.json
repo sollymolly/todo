@@ -21,6 +21,40 @@
        "baseRamp": "light"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/body/bodies/male/slash.png",
+        "z": 10,
+        "baseRamp": "light"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/body/bodies/female/slash.png",
+        "z": 10,
+        "baseRamp": "light"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/body/bodies/male/thrust.png",
+        "z": 10,
+        "baseRamp": "light"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/body/bodies/female/thrust.png",
+        "z": 10,
+        "baseRamp": "light"
+       }
+      ]
+     }
     }
    },
    "head": {
@@ -40,6 +74,40 @@
        "baseRamp": "light"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/head/heads/human/male/slash.png",
+        "z": 100,
+        "baseRamp": "light"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/head/heads/human/female/slash.png",
+        "z": 100,
+        "baseRamp": "light"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/head/heads/human/male/thrust.png",
+        "z": 100,
+        "baseRamp": "light"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/head/heads/human/female/thrust.png",
+        "z": 100,
+        "baseRamp": "light"
+       }
+      ]
+     }
     }
    }
   },
@@ -63,6 +131,44 @@
        "baseRamp": "brown"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/slash/brown.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/slash/brown.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/thrust/brown.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/thrust/brown.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ]
+     }
     }
    },
    "tunic": {
@@ -84,6 +190,44 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/slash.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/slash.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/thrust.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/thrust.png",
+        "z": 35,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "jerkin": {
@@ -105,6 +249,44 @@
        "baseRamp": "leather"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/leather/male/slash.png",
+        "z": 60,
+        "dyeKind": "cloth",
+        "baseRamp": "leather"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/leather/female/slash.png",
+        "z": 60,
+        "dyeKind": "cloth",
+        "baseRamp": "leather"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/leather/male/thrust.png",
+        "z": 60,
+        "dyeKind": "cloth",
+        "baseRamp": "leather"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/leather/female/thrust.png",
+        "z": 60,
+        "dyeKind": "cloth",
+        "baseRamp": "leather"
+       }
+      ]
+     }
     }
    },
    "scale": {
@@ -126,6 +308,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/legion/male/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/legion/female/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/legion/male/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/legion/female/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "chain": {
@@ -147,6 +367,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/chainmail/male/slash.png",
+        "z": 50,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/chainmail/female/slash.png",
+        "z": 50,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/chainmail/male/thrust.png",
+        "z": 50,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/chainmail/female/thrust.png",
+        "z": 50,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "plate": {
@@ -168,6 +426,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/male/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/female/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/male/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/female/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "gilded": {
@@ -189,6 +485,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/male/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/female/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/male/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/female/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "dragonscale": {
@@ -210,6 +544,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/male/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/female/slash.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/male/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/torso/armour/plate/female/thrust.png",
+        "z": 60,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    }
   },
@@ -229,6 +601,22 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/polearm/cane/male/thrust/cane.png",
+        "z": 140
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/polearm/cane/female/thrust/cane.png",
+        "z": 140
+       }
+      ]
+     }
     }
    },
    "dagger": {
@@ -246,6 +634,44 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/dagger/behind/slash/dagger.png",
+        "z": 9
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/dagger/slash/dagger.png",
+        "z": 140
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/dagger/behind/slash/dagger.png",
+        "z": 9
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/dagger/slash/dagger.png",
+        "z": 140
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/dagger/thrust/dagger.png",
+        "z": 140
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/dagger/thrust/dagger.png",
+        "z": 140
+       }
+      ]
+     }
     }
    },
    "shortsword": {
@@ -271,6 +697,34 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/arming/attack_slash/bg/brass.png",
+        "z": 8,
+        "frame": 128
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/arming/attack_slash/fg/brass.png",
+        "z": 150,
+        "frame": 128
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/arming/attack_slash/bg/brass.png",
+        "z": 8,
+        "frame": 128
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/arming/attack_slash/fg/brass.png",
+        "z": 150,
+        "frame": 128
+       }
+      ]
+     }
     }
    },
    "axe": {
@@ -288,6 +742,34 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/blunt/waraxe/attack_slash/behind/waraxe.png",
+        "z": 8,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/blunt/waraxe/attack_slash/waraxe.png",
+        "z": 150,
+        "frame": 192
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/blunt/waraxe/attack_slash/behind/waraxe.png",
+        "z": 8,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/blunt/waraxe/attack_slash/waraxe.png",
+        "z": 150,
+        "frame": 192
+       }
+      ]
+     }
     }
    },
    "hammer": {
@@ -313,6 +795,48 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/blunt/mace/attack_slash/behind/mace.png",
+        "z": 9,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/blunt/mace/attack_slash/mace.png",
+        "z": 150,
+        "frame": 192
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/blunt/mace/attack_slash/behind/mace.png",
+        "z": 9,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/blunt/mace/attack_slash/mace.png",
+        "z": 150,
+        "frame": 192
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/blunt/mace/thrust/mace.png",
+        "z": 140
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/blunt/mace/thrust/mace.png",
+        "z": 140
+       }
+      ]
+     }
     }
    },
    "longsword": {
@@ -338,6 +862,60 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_slash/behind/longsword.png",
+        "z": -1,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_slash/longsword.png",
+        "z": 150,
+        "frame": 192
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_slash/behind/longsword.png",
+        "z": -1,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_slash/longsword.png",
+        "z": 150,
+        "frame": 192
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_thrust/behind/longsword.png",
+        "z": -1,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_thrust/longsword.png",
+        "z": 150,
+        "frame": 192
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_thrust/behind/longsword.png",
+        "z": -1,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/longsword/attack_thrust/longsword.png",
+        "z": 150,
+        "frame": 192
+       }
+      ]
+     }
     }
    },
    "flamebrand": {
@@ -363,6 +941,34 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/glowsword/attack_slash/behind/blue.png",
+        "z": 8,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/glowsword/attack_slash/blue.png",
+        "z": 150,
+        "frame": 192
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/glowsword/attack_slash/behind/blue.png",
+        "z": 8,
+        "frame": 192
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/glowsword/attack_slash/blue.png",
+        "z": 150,
+        "frame": 192
+       }
+      ]
+     }
     }
    },
    "runeblade": {
@@ -388,6 +994,34 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/katana/slash/behind/katana.png",
+        "z": 9,
+        "frame": 128
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+        "z": 140,
+        "frame": 128
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/katana/slash/behind/katana.png",
+        "z": 9,
+        "frame": 128
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/katana/slash/katana.png",
+        "z": 140,
+        "frame": 128
+       }
+      ]
+     }
     }
    },
    "dragonfang": {
@@ -413,6 +1047,34 @@
        "z": 140
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/weapon/sword/scimitar/slash/behind/scimitar.png",
+        "z": 9,
+        "frame": 128
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+        "z": 140,
+        "frame": 128
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/weapon/sword/scimitar/slash/behind/scimitar.png",
+        "z": 9,
+        "frame": 128
+       },
+       {
+        "src": "/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png",
+        "z": 140,
+        "frame": 128
+       }
+      ]
+     }
     }
    }
   },
@@ -436,6 +1098,44 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/cloth/bandana/adult/slash.png",
+        "z": 120,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/cloth/bandana/adult/slash.png",
+        "z": 120,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/cloth/bandana/adult/thrust.png",
+        "z": 120,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/cloth/bandana/adult/thrust.png",
+        "z": 120,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "cap": {
@@ -457,6 +1157,44 @@
        "baseRamp": "gray"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/cloth/leather_cap/adult/slash/gray.png",
+        "z": 130,
+        "dyeKind": "cloth",
+        "baseRamp": "gray"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/cloth/leather_cap/adult/slash/gray.png",
+        "z": 130,
+        "dyeKind": "cloth",
+        "baseRamp": "gray"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/cloth/leather_cap/adult/thrust/gray.png",
+        "z": 130,
+        "dyeKind": "cloth",
+        "baseRamp": "gray"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/cloth/leather_cap/adult/thrust/gray.png",
+        "z": 130,
+        "dyeKind": "cloth",
+        "baseRamp": "gray"
+       }
+      ]
+     }
     }
    },
    "helm": {
@@ -478,6 +1216,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/helmet/bascinet/adult/slash.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/helmet/bascinet/adult/slash.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/helmet/bascinet/adult/thrust.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/helmet/bascinet/adult/thrust.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "greathelm": {
@@ -499,6 +1275,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/helmet/greathelm/male/slash.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/helmet/greathelm/female/slash.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/helmet/greathelm/male/thrust.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/helmet/greathelm/female/thrust.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "crown": {
@@ -520,6 +1334,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/formal/crown/adult/slash/steel.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/formal/crown/adult/slash/steel.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/formal/crown/adult/thrust/steel.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/formal/crown/adult/thrust/steel.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    },
    "dragoncrown": {
@@ -541,6 +1393,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/helmet/horned/adult/slash.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/helmet/horned/adult/slash.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hat/helmet/horned/adult/thrust.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hat/helmet/horned/adult/thrust.png",
+        "z": 130,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    }
   },
@@ -576,6 +1466,68 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/tattered/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/tattered/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/tattered/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/tattered/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/tattered/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/tattered/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/tattered/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/tattered/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "traveler": {
@@ -609,6 +1561,68 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "heraldic": {
@@ -642,6 +1656,68 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "mantle": {
@@ -663,6 +1739,44 @@
        "baseRamp": "brown"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/trim/slash.png",
+        "z": 90,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/trim/slash.png",
+        "z": 90,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/trim/thrust.png",
+        "z": 90,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/trim/thrust.png",
+        "z": 90,
+        "dyeKind": "cloth",
+        "baseRamp": "brown"
+       }
+      ]
+     }
     }
    },
    "starcloak": {
@@ -696,6 +1810,68 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/slash.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/slash.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/cape/solid/bg/thrust.png",
+        "z": 5,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       },
+       {
+        "src": "/sprites/lpc/cape/solid/fg/thrust.png",
+        "z": 85,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    }
   },
@@ -715,6 +1891,36 @@
        "z": 110
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/round/slash/brown.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/round/slash/brown.png",
+        "z": 110
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/round/thrust/brown.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/round/thrust/brown.png",
+        "z": 110
+       }
+      ]
+     }
     }
    },
    "kite": {
@@ -740,6 +1946,36 @@
        "z": 110
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/heater/revised/wood/fg/slash.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/heater/revised/wood/fg/slash.png",
+        "z": 110
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/heater/revised/wood/fg/thrust.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/heater/revised/wood/fg/thrust.png",
+        "z": 110
+       }
+      ]
+     }
     }
    },
    "tower": {
@@ -757,6 +1993,36 @@
        "z": 110
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/heater/original/wood/fg/slash.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/heater/original/wood/fg/slash.png",
+        "z": 110
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/heater/original/wood/fg/thrust.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/heater/original/wood/fg/thrust.png",
+        "z": 110
+       }
+      ]
+     }
     }
    },
    "lantern": {
@@ -782,6 +2048,52 @@
        "z": 110
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/spartan/bg/slash/spartan.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/spartan/fg/slash/spartan.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/spartan/bg/slash/spartan.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/spartan/fg/slash/spartan.png",
+        "z": 110
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/spartan/bg/thrust/spartan.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/spartan/fg/thrust/spartan.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/spartan/bg/thrust/spartan.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/spartan/fg/thrust/spartan.png",
+        "z": 110
+       }
+      ]
+     }
     }
    },
    "aegis": {
@@ -807,6 +2119,52 @@
        "z": 110
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/crusader/bg/slash/crusader.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/crusader/fg/male/slash/crusader.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/crusader/bg/slash/crusader.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/crusader/fg/female/slash/crusader.png",
+        "z": 110
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/shield/crusader/bg/thrust/crusader.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/crusader/fg/male/thrust/crusader.png",
+        "z": 110
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/shield/crusader/bg/thrust/crusader.png",
+        "z": 2
+       },
+       {
+        "src": "/sprites/lpc/shield/crusader/fg/female/thrust/crusader.png",
+        "z": 110
+       }
+      ]
+     }
     }
    }
   },
@@ -830,6 +2188,44 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/legs/pants/male/slash.png",
+        "z": 20,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/legs/pants/thin/slash.png",
+        "z": 20,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/legs/pants/male/thrust.png",
+        "z": 20,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/legs/pants/thin/thrust.png",
+        "z": 20,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "armour": {
@@ -851,6 +2247,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/legs/armour/plate/male/slash.png",
+        "z": 20,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/legs/armour/plate/thin/slash.png",
+        "z": 20,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/legs/armour/plate/male/thrust.png",
+        "z": 20,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/legs/armour/plate/thin/thrust.png",
+        "z": 20,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    }
   },
@@ -874,6 +2308,44 @@
        "baseRamp": "white"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/feet/boots/basic/male/slash.png",
+        "z": 25,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/feet/boots/basic/thin/slash.png",
+        "z": 25,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/feet/boots/basic/male/thrust.png",
+        "z": 25,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/feet/boots/basic/thin/thrust.png",
+        "z": 25,
+        "dyeKind": "cloth",
+        "baseRamp": "white"
+       }
+      ]
+     }
     }
    },
    "armour": {
@@ -895,6 +2367,44 @@
        "baseRamp": "steel"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/feet/armour/plate/male/slash.png",
+        "z": 15,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/feet/armour/plate/thin/slash.png",
+        "z": 15,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/feet/armour/plate/male/thrust.png",
+        "z": 15,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/feet/armour/plate/thin/thrust.png",
+        "z": 15,
+        "dyeKind": "metal",
+        "baseRamp": "steel"
+       }
+      ]
+     }
     }
    }
   },
@@ -916,6 +2426,40 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/messy1/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/messy1/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/messy1/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/messy1/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    },
    "long": {
@@ -935,6 +2479,40 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/long/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/long/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/long/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/long/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    },
    "braided": {
@@ -964,6 +2542,60 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/braid/adult/bg/slash.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/braid/adult/fg/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/braid/adult/bg/slash.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/braid/adult/fg/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/braid/adult/bg/thrust.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/braid/adult/fg/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/braid/adult/bg/thrust.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/braid/adult/fg/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    },
    "ponytail": {
@@ -991,6 +2623,56 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/bg/slash.png",
+        "z": 9
+       },
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/fg/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/bg/slash.png",
+        "z": 9
+       },
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/fg/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/bg/thrust.png",
+        "z": 9
+       },
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/fg/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/bg/thrust.png",
+        "z": 9
+       },
+       {
+        "src": "/sprites/lpc/hair/ponytail/adult/fg/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    },
    "curly": {
@@ -1010,6 +2692,40 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/curly_short/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/curly_short/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/curly_short/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/curly_short/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    },
    "buzz": {
@@ -1029,6 +2745,40 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/buzzcut/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/buzzcut/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/buzzcut/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/buzzcut/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    },
    "topknot": {
@@ -1068,6 +2818,80 @@
        "baseRamp": "orange"
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/slash.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/parted_side_bangs/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/slash.png",
+        "z": 145,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/slash.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/parted_side_bangs/adult/slash.png",
+        "z": 120,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/slash.png",
+        "z": 145,
+        "baseRamp": "orange"
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/thrust.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/parted_side_bangs/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/thrust.png",
+        "z": 145,
+        "baseRamp": "orange"
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/thrust.png",
+        "z": 9,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/parted_side_bangs/adult/thrust.png",
+        "z": 120,
+        "baseRamp": "orange"
+       },
+       {
+        "src": "/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/thrust.png",
+        "z": 145,
+        "baseRamp": "orange"
+       }
+      ]
+     }
     }
    }
   },
@@ -1087,6 +2911,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/blue.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/blue.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/blue.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/blue.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "brown": {
@@ -1104,6 +2958,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/brown.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/brown.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/brown.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/brown.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "gray": {
@@ -1121,6 +3005,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/gray.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/gray.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/gray.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/gray.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "green": {
@@ -1138,6 +3052,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/green.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/green.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/green.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/green.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "orange": {
@@ -1155,6 +3099,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/orange.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/orange.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/orange.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/orange.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "purple": {
@@ -1172,6 +3146,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/purple.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/purple.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/purple.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/purple.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "red": {
@@ -1189,6 +3193,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/red.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/red.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/red.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/red.png",
+        "z": 101
+       }
+      ]
+     }
     }
    },
    "yellow": {
@@ -1206,6 +3240,36 @@
        "z": 101
       }
      ]
+    },
+    "anims": {
+     "slash": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/yellow.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/slash/yellow.png",
+        "z": 101
+       }
+      ]
+     },
+     "thrust": {
+      "male": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/yellow.png",
+        "z": 101
+       }
+      ],
+      "female": [
+       {
+        "src": "/sprites/lpc/eyes/human/adult/default/thrust/yellow.png",
+        "z": 101
+       }
+      ]
+     }
     }
    }
   }

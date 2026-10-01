@@ -44,61 +44,83 @@ function stonePaving(r: Rect): { x: number; y: number; w: number; h: number; fil
   return out;
 }
 
+/**
+ * Rows of tiles per canvas. The village grows downward as people arrive,
+ * and one canvas can only be so big (iOS draws nothing past ~16M pixels),
+ * so the ground is painted in strips of this many rows.
+ */
+const STRIP = 32;
+
 export default function Ground({ world, scale }: { world: World; scale: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const refs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const strips = Math.ceil(world.h / STRIP);
 
   useEffect(() => {
-    const canvas = ref.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
     let cancelled = false;
     const img = new Image();
     img.onload = () => {
       if (cancelled) return;
-      ctx.imageSmoothingEnabled = false;
-      const tile = (t: readonly [number, number], x: number, y: number) =>
-        ctx.drawImage(img, t[0] * T, t[1] * T, T, T, x * T, y * T, T, T);
-
       const doors = new Set(world.plots.filter((p) => p.owner).map((p) => `${p.door.x},${p.door.y}`));
-      for (let y = 0; y < world.h; y++)
-        for (let x = 0; x < world.w; x++) {
-          if (inRect(world.hall.plaza, x, y)) continue; // paved below
-          if (world.streets.some((s) => inRect(s, x, y)) || doors.has(`${x},${y}`))
-            tile((x * 7 + y * 13) % 5 === 0 ? GROUND.dirtPebbles : GROUND.dirt, x, y);
-          else tile(GROUND.grass, x, y);
+      const paving = stonePaving(world.hall.plaza);
+      refs.current.slice(0, strips).forEach((canvas, i) => {
+        const ctx = canvas?.getContext("2d");
+        if (!ctx) return;
+        const top = i * STRIP;
+        // Drawn in the village's own px; each strip shows its own rows.
+        ctx.setTransform(1, 0, 0, 1, 0, -top * T);
+        ctx.imageSmoothingEnabled = false;
+        const tile = (t: readonly [number, number], x: number, y: number) =>
+          ctx.drawImage(img, t[0] * T, t[1] * T, T, T, x * T, y * T, T, T);
+        for (let y = top; y < Math.min(world.h, top + STRIP); y++)
+          for (let x = 0; x < world.w; x++) {
+            if (inRect(world.hall.plaza, x, y)) continue; // paved below
+            if (world.streets.some((s) => inRect(s, x, y)) || doors.has(`${x},${y}`))
+              tile((x * 7 + y * 13) % 5 === 0 ? GROUND.dirtPebbles : GROUND.dirt, x, y);
+            else tile(GROUND.grass, x, y);
+          }
+        for (const s of paving) {
+          ctx.fillStyle = s.fill;
+          ctx.fillRect(s.x, s.y, s.w, s.h);
         }
-      for (const s of stonePaving(world.hall.plaza)) {
-        ctx.fillStyle = s.fill;
-        ctx.fillRect(s.x, s.y, s.w, s.h);
-      }
-      // A soft darkening at the forest's edge, so the margin reads as woods.
-      const g = ctx.createLinearGradient(0, 0, 0, 4 * T);
-      g.addColorStop(0, "rgba(20,40,20,0.35)");
-      g.addColorStop(1, "rgba(20,40,20,0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, world.w * T, 4 * T);
+        // A soft darkening at the forest's edge, so the margin reads as woods.
+        const g = ctx.createLinearGradient(0, 0, 0, 4 * T);
+        g.addColorStop(0, "rgba(20,40,20,0.35)");
+        g.addColorStop(1, "rgba(20,40,20,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, world.w * T, 4 * T);
+      });
     };
     img.src = ATLAS;
     return () => {
       cancelled = true;
     };
-  }, [world]);
+  }, [world, strips]);
 
   return (
-    <canvas
-      ref={ref}
-      width={world.w * T}
-      height={world.h * T}
-      aria-hidden
-      style={{
-        position: "absolute",
-        left: 0,
-        top: 0,
-        width: world.w * T * scale,
-        height: world.h * T * scale,
-        imageRendering: "pixelated",
-        background: "#7fae3f",
-      }}
-    />
+    <>
+      {Array.from({ length: strips }, (_, i) => {
+        const rows = Math.min(STRIP, world.h - i * STRIP);
+        return (
+          <canvas
+            key={i}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
+            width={world.w * T}
+            height={rows * T}
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: 0,
+              top: i * STRIP * T * scale,
+              width: world.w * T * scale,
+              height: rows * T * scale,
+              imageRendering: "pixelated",
+              background: "#7fae3f",
+            }}
+          />
+        );
+      })}
+    </>
   );
 }

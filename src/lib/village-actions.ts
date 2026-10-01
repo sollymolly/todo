@@ -7,7 +7,8 @@ import { poke } from "@/lib/live";
 import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { sendToUser } from "@/lib/push";
-import { friendIdsOf, leaveTable } from "@/lib/village-server";
+import { friendIdsOf, leaveTable, residents } from "@/lib/village-server";
+import { lotsFor } from "@/components/village/world";
 import { duelById, inSpace } from "@/lib/village-rooms";
 import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
 import { COUNTDOWN_MS, DUEL_HP, DUEL_MS, INVITE_MS } from "@/lib/duel";
@@ -17,9 +18,11 @@ import {
   NOTE_MAX,
   NUDGE_EVERY_MS,
   NUDGE_MAX,
+  OUTSIDE,
   SAY_MAX,
   tierFor,
   type HouseLook,
+  type Resident,
   type Tier,
 } from "@/lib/village";
 
@@ -52,6 +55,31 @@ export async function saveHouse(look: HouseLook): Promise<HouseLook> {
       style = excluded.style, roof = excluded.roof, garden = excluded.garden, updated_at = now()
   `;
   return clean;
+}
+
+/** Everyone's house, for redrawing the village after someone arrives or moves. */
+export async function loadResidents(): Promise<Resident[]> {
+  const me = await requireUserId();
+  return residents(new Set([me, ...(await friendIdsOf(me))]));
+}
+
+/** Moves my house to an empty lot. My rooms come with me. */
+export async function moveHouse(plot: number): Promise<Result> {
+  const me = await requireUserId();
+  if (!Number.isInteger(plot) || plot < 0) return { ok: false, error: "That's not a lot." };
+  const rows = (await sql`select coalesce(max(plot), -1)::int as highest from houses where plot is not null`) as { highest: number }[];
+  if (plot >= lotsFor(rows[0]?.highest ?? -1)) return { ok: false, error: "That's not a lot." };
+  try {
+    const moved = (await sql`
+      update houses set plot = ${plot}, plot_at = now() where user_id = ${me}::uuid and plot is not null returning plot
+    `) as { plot: number }[];
+    if (!moved.length) return { ok: false, error: "Open the village first: that's where your house is." };
+  } catch (e) {
+    if (/houses_plot_key|duplicate key/i.test(String(e))) return { ok: false, error: "Someone's just moved in there." };
+    throw e;
+  }
+  after(() => poke(OUTSIDE));
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ notes */
@@ -289,7 +317,9 @@ export async function say(space: string, text: string): Promise<Result> {
   if (!(await inSpace(me, space))) return { ok: false, error: "You've wandered off: nobody here to hear it." };
   if (await rateLimited("say", me)) return { ok: false, error: TOO_MANY };
   await sql`insert into space_chat (space, author_id, body) values (${space}, ${me}::uuid, ${body})`;
-  after(() => poke(space));
+  // The hall is out in the village, and its listeners on the live "village"
+  // space (village.ts, liveSpaceOf).
+  after(() => poke(space === "hall" ? OUTSIDE : space));
   return { ok: true };
 }
 

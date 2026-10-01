@@ -430,11 +430,11 @@ create index if not exists notification_log_sent_idx on notification_log(sent_at
 -- ===========================================================================
 -- The village
 --
--- Everyone's village is laid out differently — it holds *their* friends — so
--- presence outside is a place, not a coordinate. Inside a house or in the
--- arena the layout is shared, so presence there carries a position. A row is
--- refreshed every few seconds while the village is open; a stale `seen_at` is
--- what "gone home" means.
+-- One village for everyone, laid out the same on every screen, so presence
+-- carries a position everywhere in it — outside, inside a house, in the
+-- arena — along with the place it's at. "home" is being in the app but not
+-- the village (no position). A row is refreshed every few seconds while the
+-- village is open; a stale `seen_at` is what "offline" means.
 -- ===========================================================================
 create table if not exists village_presence (
   user_id  uuid primary key references users(id) on delete cascade,
@@ -465,6 +465,14 @@ create table if not exists houses (
   interior    jsonb,
   updated_at  timestamptz not null default now()
 );
+-- Where the house stands. The village is one map for everyone, and plot n
+-- is in the same place on every screen (src/components/village/world.ts,
+-- plotAt). Given on a first visit, near the owner's companions; they can
+-- move to any empty lot. plot_at: when it was last given or moved, so
+-- everyone's village can notice and redraw.
+alter table houses add column if not exists plot    integer check (plot >= 0);
+alter table houses add column if not exists plot_at timestamptz;
+create unique index if not exists houses_plot_key on houses(plot) where plot is not null;
 
 -- Door notes are short plain text — unlike messages, not encrypted.
 create table if not exists door_notes (

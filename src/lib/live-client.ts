@@ -28,6 +28,8 @@ export function useVillageLive(
     pos: (p: LivePos) => void;
     poke: () => void;
     blow: (b: LiveBlow) => void;
+    /** Someone in the arena swung (hit or miss). */
+    swing: (by: string) => void;
     /** A space joined, on connecting or moving: say where I stand there. */
     joined: () => void;
   }
@@ -93,6 +95,7 @@ export function useVillageLive(
         else if (m.t === "pos" && typeof m.id === "string")
           onRef.current.pos({ id: m.id, x: Number(m.x), y: Number(m.y), f: Number(m.f), g: m.g === 1 });
         else if (m.t === "hit" || m.t === "block") onRef.current.blow(m as LiveBlow);
+        else if (m.t === "swing" && typeof (m as { by?: unknown }).by === "string") onRef.current.swing((m as { by: string }).by);
       };
       s.onclose = () => {
         if (sock.current === s) sock.current = null;

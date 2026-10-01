@@ -19,6 +19,8 @@ Output:
     public/sprites/lpc/CREDITS.md attribution required by CC-BY-SA / GPL
 
 Run:  python3 scripts/fetch-lpc.py
+      then python3 scripts/fetch-lpc-attack.py (the duel animations; this
+      script rewrites the manifest without them)
 """
 
 import collections

@@ -5,9 +5,10 @@
    A duel is fought live, in the arena's ring:
 
      move    WASD or the arrow keys (fighters can't leave the ring)
-     hit     H — lands on an opponent within reach that you're facing
-     guard   hold G — blocks hits from the front, but you can't hit
-             while guarding and you move at half speed
+     hit     H — lands on an opponent within reach, whichever way
+             you're facing (you turn to swing at them)
+     guard   hold G — blocks hits from any direction; you move at half
+             speed and can't hit
 
    Everyone has 5 health and every hit that lands takes 1. First to 0
    loses. If time runs out, whoever has more health left wins; level is
@@ -25,36 +26,33 @@ export const COUNTDOWN_MS = 3_000;
 export const DUEL_MS = 90_000;
 /** The quickest you can swing again. */
 export const HIT_COOLDOWN_MS = 500;
+/**
+ * How long the server waits before judging a swing, so a guard raised at
+ * the same moment — still on its way from the other fighter — counts.
+ */
+export const HIT_GRACE_MS = 150;
 /** How close, in tiles (feet to feet), a hit reaches. A little generous, for lag. */
 export const REACH = 1.5;
 
 /** 0 up, 1 left, 2 down, 3 right — the same order as the sprite rows. */
 export type Facing = 0 | 1 | 2 | 3;
-const AHEAD: [number, number][] = [
-  [0, -1],
-  [-1, 0],
-  [0, 1],
-  [1, 0],
-];
 
-/** Is (dx, dy) in front of someone facing `f`? A wide cone: about ±70°. */
-export function inFront(f: Facing, dx: number, dy: number): boolean {
-  const d = Math.hypot(dx, dy);
-  if (d < 0.05) return true;
-  const [fx, fy] = AHEAD[f];
-  return (fx * dx + fy * dy) / d > 0.35;
+/** Which way to face to look at something (dx, dy) away. */
+export function facingToward(dx: number, dy: number): Facing {
+  return Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 3) : dy < 0 ? 0 : 2;
 }
 
 /** Where a fighter stands (tiles), which way they face, and whether they guard. */
 export type Stance = { x: number; y: number; f: Facing; g: boolean };
 
-/** What a swing from `att` does to `def`. */
+/**
+ * What a swing from `att` does to `def`. All the way round: a swing reaches
+ * whichever side they're on, and a guard covers every side.
+ */
 export function strike(att: Stance, def: Stance): "miss" | "blocked" | "hit" {
   if (att.g) return "miss";
-  const dx = def.x - att.x;
-  const dy = def.y - att.y;
-  if (Math.hypot(dx, dy) > REACH || !inFront(att.f, dx, dy)) return "miss";
-  if (def.g && inFront(def.f, -dx, -dy)) return "blocked";
+  if (Math.hypot(def.x - att.x, def.y - att.y) > REACH) return "miss";
+  if (def.g) return "blocked";
   return "hit";
 }
 

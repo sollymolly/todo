@@ -38,9 +38,21 @@ export type Agent = {
    * already walked the route themselves — so every screen ends up agreeing.
    */
   goal: { x: number; y: number; dir: Facing } | null;
-  /** Guarding, in a duel: shown as a shield over their head. */
+  /** Guarding, in a duel: held in the guard pose (paint). */
   guard: boolean;
+  /** When they last swung (performance.now()), for the swing animation; 0 never. */
+  swingAt: number;
 };
+
+/** How long a swing takes to play, start to finish. */
+export const SWING_MS = 360;
+/** Starts a swing (paint plays it) — once, however many times it's reported. */
+export function swingNow(a: Agent | null | undefined, now: number) {
+  if (a && now - a.swingAt > SWING_MS) a.swingAt = now;
+}
+
+/** The frame of the duel animation a guard holds: weapon drawn across the body. */
+const GUARD_FRAME = 1;
 
 export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED): Agent {
   return {
@@ -57,6 +69,7 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     stand: null,
     goal: null,
     guard: false,
+    swingAt: 0,
   };
 }
 
@@ -224,18 +237,42 @@ export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: n
   if (moved) a.stride += move;
 }
 
-/** Writes a walker onto its element. */
-export function paint(a: Agent, scale: number) {
+/**
+ * Writes a walker onto its element, at `now` (performance.now()). The
+ * element's first child is the walk sheet; the second, when it has one
+ * (data-cols), the duel sheet (sprite.ts, composeAttack), shown instead
+ * while they swing or guard.
+ */
+export function paint(a: Agent, scale: number, now: number) {
   const el = a.el;
   if (!el) return;
-  const frame = a.moving ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
   el.style.transform = `translate3d(${Math.round((a.x - FRAME / 2) * scale)}px, ${Math.round((a.y - FEET) * scale)}px, 0)`;
   // Walkers start hidden (Village.tsx) so none shows at the scene's corner
   // before its first placing.
   if (el.style.visibility) el.style.visibility = "";
   el.style.zIndex = String(Math.round(a.y));
-  const guard = a.guard ? "1" : "0";
-  if (el.dataset.guard !== guard) el.dataset.guard = guard;
   const sprite = el.firstElementChild as HTMLElement | null;
-  if (sprite) sprite.style.backgroundPosition = `${-frame * FRAME * scale}px ${-a.dir * FRAME * scale}px`;
+  const duel = sprite?.nextElementSibling as HTMLElement | null;
+  const cols = Number(duel?.dataset.cols || 0);
+  const swing = now - a.swingAt;
+  const pose = !cols ? -1 : swing >= 0 && swing < SWING_MS ? Math.floor((swing / SWING_MS) * cols) : a.guard ? GUARD_FRAME : -1;
+  if (sprite) {
+    show(sprite, pose < 0);
+    if (pose < 0) {
+      const frame = a.moving ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
+      sprite.style.backgroundPosition = `${-frame * FRAME * scale}px ${-a.dir * FRAME * scale}px`;
+    }
+  }
+  if (duel && cols) {
+    show(duel, pose >= 0);
+    if (pose >= 0) {
+      const f = Number(duel.dataset.frame) * scale;
+      duel.style.backgroundPosition = `${-pose * f}px ${-a.dir * f}px`;
+    }
+  }
+}
+
+function show(el: HTMLElement, on: boolean) {
+  const v = on ? "visible" : "hidden";
+  if (el.style.visibility !== v) el.style.visibility = v;
 }

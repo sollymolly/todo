@@ -1,8 +1,9 @@
 import Redis from "ioredis";
 import type { WebSocket } from "ws";
 import { CHANNEL, poke, publishLive, type LiveMessage } from "@/lib/live";
-import { HIT_COOLDOWN_MS, type Facing, type Stance } from "@/lib/duel";
+import { HIT_COOLDOWN_MS, HIT_GRACE_MS, type Facing, type Stance } from "@/lib/duel";
 import { landHit } from "@/lib/village-rooms";
+import { OUTSIDE } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
    One server instance's share of the live village: the sockets it holds,
@@ -14,9 +15,10 @@ import { landHit } from "@/lib/village-rooms";
      { t: "pos", x, y, f, g }  where I'm standing, in tiles; g = guarding
      { t: "hit" }              a swing, in a duel
 
-   Positions reach everyone in the same house or the arena — the arena is
-   one place for the whole village, so strangers there see each other too
-   (as a knight and a name; the check-in never tells them more).
+   Positions reach everyone in the same space: a house, the arena, or
+   "village" — everywhere outside, one map for everyone, so strangers there
+   see each other too (as a knight and a name; the check-in never tells
+   them more).
 
    Hits are judged here, by the instance holding the swinger's socket: it
    hears every arena position through its subscription, so it knows where
@@ -80,7 +82,7 @@ function subscriber(): Redis {
 
 /** May this person be in this space at all? The same rule the check-in uses. */
 function allowed(c: Conn, space: string): boolean {
-  if (space === "arena" || space === "hall") return true;
+  if (space === "arena" || space === OUTSIDE) return true;
   if (!space.startsWith("inside:")) return false;
   const host = space.slice("inside:".length);
   return UUID.test(host) && (host === c.me || c.known.has(host));
@@ -100,7 +102,9 @@ function leave(c: Conn) {
     void sub?.unsubscribe(CHANNEL + space).catch(() => {});
   }
   // Whoever's still there should see them go now, not at the next check-in.
-  void poke(space);
+  // Not outside: that's everyone in the village, and they'll notice soon
+  // enough without all checking in at once.
+  if (space !== OUTSIDE) void poke(space);
   if (bySpace.size === 0 && sub) {
     sub.disconnect();
     sub = null;
@@ -119,11 +123,12 @@ function join(c: Conn, space: string) {
     void subscriber().subscribe(CHANNEL + space).catch(() => {});
   }
   conns.add(c);
-  void poke(space);
+  // Outside, a newcomer's first footstep is what makes the others look.
+  if (space !== OUTSIDE) void poke(space);
 }
 
 function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown }) {
-  if (!c.space || c.space === "hall") return; // the hall has no floor to stand on
+  if (!c.space) return;
   const x = Number(m.x);
   const y = Number(m.y);
   const f = Number(m.f);
@@ -177,7 +182,9 @@ async function onHit(c: Conn) {
   const now = Date.now();
   if (now - c.lastHit < HIT_COOLDOWN_MS) return;
   c.lastHit = now;
+  void publishLive("arena", { t: "swing", by: c.me });
   try {
+    await new Promise((r) => setTimeout(r, HIT_GRACE_MS));
     const r = await landHit(c.me, (id) => stances.get(id) ?? null);
     if (r.kind === "hit") {
       await publishLive("arena", { t: "hit", duel: r.duelId, by: c.me, target: r.target, a: r.a, b: r.b });
