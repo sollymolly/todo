@@ -149,7 +149,11 @@ export default function CharacterStudio({
                   if (name.trim() && name !== profile.display_name) {
                     startSaving(async () => {
                       try {
-                        await saveDisplayName(name);
+                        const r = await saveDisplayName(name);
+                        if (!r.ok) {
+                          setError(r.error);
+                          setName(profile.display_name);
+                        }
                       } catch (e) {
                         setError(e instanceof Error ? e.message : "Could not save");
                       }

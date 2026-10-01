@@ -19,6 +19,7 @@ import {
   findItem,
 } from "@/lib/game";
 import { normalizeTodo } from "@/lib/types";
+import { badName, DEFAULT_DISPLAY_NAME, NAME_NOT_ALLOWED } from "@/lib/names";
 import type { Appearance, DyeSlot, Equipped, XpResult } from "@/lib/types";
 
 /* --------------------------------------------------------------------------
@@ -454,10 +455,12 @@ export async function saveEquipped(equipped: Equipped) {
   bump();
 }
 
-export async function saveDisplayName(name: string) {
+export async function saveDisplayName(name: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const userId = await requireUserId();
-  const clean = name.trim().slice(0, 40) || "Adventurer";
+  const clean = name.trim().slice(0, 40) || DEFAULT_DISPLAY_NAME;
+  if (badName(clean)) return { ok: false, error: NAME_NOT_ALLOWED };
 
   await sql`update profiles set display_name = ${clean} where id = ${userId}::uuid`;
   bump();
+  return { ok: true };
 }

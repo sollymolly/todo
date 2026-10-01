@@ -12,6 +12,7 @@ import { endSession, requireUserId, startSession } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { PRIVACY_VERSION } from "@/lib/policy";
 import { OWNER_EMAIL } from "@/lib/owner";
+import { badName, NAME_NOT_ALLOWED } from "@/lib/names";
 
 /* --------------------------------------------------------------------------
    Under auth_version 2 the browser derives an "auth secret" from the password
@@ -114,6 +115,8 @@ export async function signUp(input: {
       ok: false,
       error: "Username must be 3–20 characters: letters, numbers or underscore.",
     };
+  // Both names are what others see of you.
+  if (badName(username) || badName(input.displayName)) return { ok: false, error: NAME_NOT_ALLOWED };
   if (!input.authSecret || !input.publicKey || !input.wrappedPrivateKey)
     return { ok: false, error: "Your browser could not prepare encryption keys." };
   if (!wellFormedKeys(input.publicKey, input.wrappedPrivateKey))
