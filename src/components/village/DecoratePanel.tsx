@@ -38,7 +38,7 @@ export default function DecoratePanel({
   onSave: () => void;
   onCancel: () => void;
 }) {
-  // Wallpapers and floors bought at the store join the rest (shop-state.ts).
+  // Wallpapers, floors and furniture bought at the store join the rest (shop-state.ts).
   const shop = useShop();
   const [tab, setTab] = useState<"furniture" | "walls" | "floors">("furniture");
   const sel = selected != null ? draft.items[selected] : null;
@@ -77,7 +77,7 @@ export default function DecoratePanel({
 
       {tab === "furniture" && (
         <div className="grid grid-cols-4 gap-1.5">
-          {KIND_LIST.map((k) => {
+          {KIND_LIST.filter((k) => !FURNITURE[k].shop || ownsGood(shop, `furniture:${k}`)).map((k) => {
             const spec = FURNITURE[k];
             const locked = level < spec.level;
             return (

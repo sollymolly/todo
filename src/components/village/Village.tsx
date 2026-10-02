@@ -8,11 +8,12 @@ import Furniture from "@/components/village/Furniture";
 import ChatBar from "@/components/village/ChatBar";
 import DecoratePanel from "@/components/village/DecoratePanel";
 import { DuelUI, HeadBar } from "@/components/village/DuelUI";
-import { ArenaGate, ArenaView, LibraryView, RoomView, StoreView } from "@/components/village/scenes";
+import { ArenaGate, ArenaView, BakeryView, LibraryView, RoomView, StoreView } from "@/components/village/scenes";
 import { ShopPanel } from "@/components/village/ShopPanel";
+import { BakeryPanel } from "@/components/village/BakeryPanel";
 import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
-import { buildArena, buildLibrary, buildRoom, buildStore, type ArenaScene, type IndoorScene, type RoomScene } from "@/components/village/rooms";
+import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
 import { follow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, walkTo, type Agent } from "@/components/village/engine";
 import { ATLAS, buildWorld, inRect, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
@@ -67,6 +68,7 @@ type Open =
   | { kind: "duelist"; id: string }
   | { kind: "train" }
   | { kind: "shop" }
+  | { kind: "bakery" }
   | { kind: "desks" }
   | null;
 
@@ -75,7 +77,7 @@ type Prompt =
   | { kind: "hall" }
   | { kind: "arena" }
   | { kind: "station" }
-  | { kind: "indoor"; what: "library" | "store" }
+  | { kind: "indoor"; what: Indoor }
   | { kind: "counter" }
   | { kind: "desk" }
   | { kind: "leave" }
@@ -87,7 +89,7 @@ type Scene =
   | { kind: "arena"; arena: ArenaScene }
   | { kind: "indoor"; indoor: IndoorScene };
 
-/** The way out of a scene inside: a room's door, the arena's gate, the library's or store's door. */
+/** The way out of a scene inside: a room's door, the arena's gate, the library's, store's or bakery's door. */
 function exitOf(sc: Scene): { x: number; y: number } | null {
   return sc.kind === "room" ? sc.room.door : sc.kind === "arena" ? sc.arena.gate : sc.kind === "indoor" ? sc.indoor.door : null;
 }
@@ -788,7 +790,7 @@ export default function Village({ data }: { data: VillageData }) {
           const ds = Math.hypot(tx - (world.station.door.x + 0.5), ty - (world.station.door.y + 0.5));
           if (!best && ds < 1.7) best = { kind: "station" };
           for (const l of world.landmarks) {
-            if (best || !l.door || (l.kind !== "library" && l.kind !== "store")) continue;
+            if (best || !l.door || (l.kind !== "library" && l.kind !== "store" && l.kind !== "bakery")) continue;
             if (Math.hypot(tx - (l.door.x + 0.5), ty - (l.door.y + 0.5)) < 1.7) best = { kind: "indoor", what: l.kind };
           }
           if (placeKey(where) !== placeKey(placeRef.current)) {
@@ -798,7 +800,7 @@ export default function Village({ data }: { data: VillageData }) {
         } else {
           // Inside: the way out. Stepping onto it leaves.
           const exit = exitOf(sc)!;
-          // The store's counter, or a library desk: stand by it.
+          // The store's or the bakery's counter, or a library desk: stand by it.
           if (sc.kind === "indoor") {
             const c = sc.indoor.counter;
             if (c && ty >= c.y + 1 && ty < c.y + 2.6 && tx >= c.x - 0.5 && tx <= c.x + c.w + 0.5) best = { kind: "counter" };
@@ -953,10 +955,10 @@ export default function Village({ data }: { data: VillageData }) {
     beatNow.current();
   }, [world]);
 
-  /** Into this village's library or store, by its front door. */
+  /** Into this village's library, store or bakery, by its front door. */
   const enterIndoor = useCallback(
-    (what: "library" | "store") => {
-      const indoor = what === "library" ? buildLibrary() : buildStore();
+    (what: Indoor) => {
+      const indoor = buildIndoor(what);
       const door = world.landmarks.find((l) => l.kind === what)?.door;
       const p = player.current!;
       outsideAt.current = door ? { x: door.x, y: door.y + 1 } : null;
@@ -1008,7 +1010,10 @@ export default function Village({ data }: { data: VillageData }) {
       else if (p.kind === "arena") enterArena();
       else if (p.kind === "station") setOpen({ kind: "train" });
       else if (p.kind === "indoor") enterIndoor(p.what);
-      else if (p.kind === "counter") setOpen({ kind: "shop" });
+      else if (p.kind === "counter") {
+        const sc = sceneRef.current;
+        setOpen({ kind: sc.kind === "indoor" && sc.indoor.kind === "bakery" ? "bakery" : "shop" });
+      }
       else if (p.kind === "desk") setOpen({ kind: "desks" });
       else if (p.kind === "leave") leave();
       else void enterHouse(p.id);
@@ -1146,8 +1151,8 @@ export default function Village({ data }: { data: VillageData }) {
     walkTo(world, player.current!, world.arena.door.x, world.arena.door.y, () => enterArena());
   }
 
-  /** Walk to the store's or library's door, then in. */
-  function goInto(what: "store" | "library") {
+  /** Walk to the store's, library's or bakery's door, then in. */
+  function goInto(what: Indoor) {
     const door = world.landmarks.find((l) => l.kind === what)?.door;
     if (door) walkTo(world, player.current!, door.x, door.y, () => enterIndoor(what));
   }
@@ -1209,6 +1214,7 @@ export default function Village({ data }: { data: VillageData }) {
     if (p.kind === "arena") return `${named} · in the arena`;
     if (p.kind === "library") return `${named} · in the library`;
     if (p.kind === "store") return `${named} · in the store`;
+    if (p.kind === "bakery") return `${named} · in the bakery`;
     if (p.kind === "inside") return `${named} · inside ${whose(p.hostId)} house`;
     if (p.kind === "house") return `${named} · ${p.hostId === id ? "outside their house" : `at ${whose(p.hostId)} house`}`;
     return `${named} · out on the square`;
@@ -1225,9 +1231,9 @@ export default function Village({ data }: { data: VillageData }) {
       case "arena":
         return "Enter the arena";
       case "indoor":
-        return prompt.what === "library" ? "Go into the library" : "Go into the store";
+        return `Go into the ${prompt.what}`;
       case "counter":
-        return "Browse the store";
+        return scene.kind === "indoor" && scene.indoor.kind === "bakery" ? "Order at the counter" : "Browse the store";
       case "desk":
         return "Study at the desks";
       case "leave":
@@ -1302,7 +1308,13 @@ export default function Village({ data }: { data: VillageData }) {
           )}
           {scene.kind === "arena" && <ArenaView arena={scene.arena} scale={S} />}
           {scene.kind === "indoor" &&
-            (scene.indoor.kind === "library" ? <LibraryView scene={scene.indoor} scale={S} /> : <StoreView scene={scene.indoor} scale={S} />)}
+            (scene.indoor.kind === "library" ? (
+              <LibraryView scene={scene.indoor} scale={S} />
+            ) : scene.indoor.kind === "bakery" ? (
+              <BakeryView scene={scene.indoor} scale={S} />
+            ) : (
+              <StoreView scene={scene.indoor} scale={S} />
+            ))}
 
           {/* Where a piece being placed would go */}
           {deco?.pick && ghost && (
@@ -1402,7 +1414,7 @@ export default function Village({ data }: { data: VillageData }) {
               : scene.kind === "arena"
                 ? `${world.name} arena`
                 : scene.kind === "indoor"
-                  ? `${world.name} ${scene.indoor.kind === "library" ? "library" : "store"}`
+                  ? `${world.name} ${scene.indoor.kind}`
                   : `${hostName} ${roomTier}`}
           </h1>
         </div>
@@ -1655,6 +1667,7 @@ export default function Village({ data }: { data: VillageData }) {
         </Panel>
       )}
       {!deco && open?.kind === "shop" && <ShopPanel onClose={() => setOpen(null)} />}
+      {!deco && open?.kind === "bakery" && <BakeryPanel friends={neighbours.map((n) => ({ id: n.id, name: n.name }))} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "desks" && (
         <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} spot="library" onClose={() => setOpen(null)} />
       )}
@@ -1717,10 +1730,11 @@ function Outdoors({
   onHall: () => void;
   onArena: () => void;
   onLot: (plot: number) => void;
-  /** Walk into the store or the library. */
-  onEnter: (what: "store" | "library") => void;
+  /** Walk into the store, the library or the bakery. */
+  onEnter: (what: Indoor) => void;
   onStation: () => void;
 }) {
+  const hedgeAt = new Set(world.hedges.map((h) => `${h.x},${h.y}`));
   return (
     <>
       <Ground world={world} scale={S} />
@@ -1821,39 +1835,39 @@ function Outdoors({
               </div>
             </div>
           );
-        const Building = l.kind === "store" ? Store : l.kind === "library" ? Library : Bakery;
-        const what = l.kind === "store" || l.kind === "library" ? l.kind : null;
-        return what ? (
+        const what = l.kind;
+        const Building = what === "store" ? Store : what === "library" ? Library : Bakery;
+        return (
           <button
             key={i}
             onPointerDown={(e) => {
               e.stopPropagation();
               onEnter(what);
             }}
-            aria-label={what === "store" ? "Go into the general store" : "Go into the library"}
+            aria-label={what === "store" ? "Go into the general store" : `Go into the ${what}`}
             className="absolute"
             style={at(l.body, (l.body.y + l.body.h) * T)}
           >
             <Building />
           </button>
-        ) : (
-          <div key={i} aria-hidden className="pointer-events-none absolute" style={at(l.body, (l.body.y + l.body.h) * T)}>
-            <Building />
-          </div>
         );
       })}
 
       {/* Hedges round the shops and the arena, sorted with the walkers */}
-      {world.hedges.map((h) => (
-        <div
-          key={`hedge-${h.x}-${h.y}`}
-          aria-hidden
-          className="pointer-events-none absolute"
-          style={{ left: h.x * T * S, top: (h.y * T - 8) * S, width: T * S, height: 40 * S, zIndex: (h.y + 1) * T, filter: TREE_TINT[world.theme] }}
-        >
-          <Hedge />
-        </div>
-      ))}
+      {world.hedges.map((h) => {
+        // Joined to the hedge on each side, so a run reads as one.
+        const at = (x: number, y: number) => hedgeAt.has(`${x},${y}`);
+        return (
+          <div
+            key={`hedge-${h.x}-${h.y}`}
+            aria-hidden
+            className="pointer-events-none absolute"
+            style={{ left: h.x * T * S, top: (h.y * T - 8) * S, width: T * S, height: 40 * S, zIndex: (h.y + 1) * T, filter: TREE_TINT[world.theme] }}
+          >
+            <Hedge n={at(h.x, h.y - 1)} e={at(h.x + 1, h.y)} s={at(h.x, h.y + 1)} w={at(h.x - 1, h.y)} seed={h.x * 131 + h.y * 17 + world.v} />
+          </div>
+        );
+      })}
 
       {/* The station, at the foot of the road */}
       <button

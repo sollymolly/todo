@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { deleteHabit, setHabitActive, toggleHabit } from "@/lib/habit-actions";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  deleteHabit,
+  setHabitActive,
+  setHabitDay,
+  toggleHabit,
+  type DayState,
+} from "@/lib/habit-actions";
 import {
   describeDays,
   habitReward,
   isoWeekday,
   shiftDay,
   type Habit,
+  type HabitDay,
 } from "@/lib/habits";
 
 /* --------------------------------------------------------------------------
@@ -16,8 +23,12 @@ import {
    One row per habit, one column per day: a green check for a day kept, a red
    x for a day missed, a snowflake for a day a streak freeze covered. Today's
    cell can be pressed until 23:59:59 in the user's timezone; after that a day
-   is settled and stays that way — except a frozen day in the last week, which
-   can still be ticked late (it hands the freeze back).
+   is settled as kept or missed. For a week more it can still be changed from
+   a little menu on its box: ticked late (the penalty or freeze comes back and
+   the streak joins up), marked missed after all (the reward comes back off
+   and the streak breaks there), or given a streak freeze: which miss gets
+   one is the user's call. A miss left alone for its whole week gets one
+   then, if any are left (settle_habits); one set to missed by hand doesn't.
    -------------------------------------------------------------------------- */
 
 export type HabitTicked = {
@@ -88,17 +99,22 @@ export default function HabitGrid({
   const days = Array.from({ length: span }, (_, i) => shiftDay(start, i));
   const earliest = shiftDay(today, -179);
 
-  async function tick(h: Habit, day: string, e: React.MouseEvent) {
-    const late = day !== today;
-    if (busy || (late && !redeemable(h, day, today))) return;
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const origin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  // A closed day's menu: what it can be changed to, under its box.
+  const [menu, setMenu] = useState<{ habit: Habit; day: string; at: DOMRect } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  /** Today's box toggles; a closed day from the last week is set to `to`. */
+  async function change(h: Habit, day: string, to: DayState | null, at: DOMRect) {
+    const late = to !== null;
+    if (busy || (late && !changeable(h, day, today))) return;
+    const origin = { x: at.left + at.width / 2, y: at.top + at.height / 2 };
+    setMenu(null);
     setBusy(h.id);
     setError(null);
     // The device's own zone rides along, so "today" on the server is the
     // user's today even if the stored zone is stale.
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const res = await toggleHabit(h.id, day, zone);
+    const res = late ? await setHabitDay(h.id, day, to, zone) : await toggleHabit(h.id, day, zone);
     setBusy(null);
     if (!res.ok) {
       setError(res.error);
@@ -109,8 +125,10 @@ export default function HabitGrid({
       prev.map((x) => {
         if (x.id !== h.id) return x;
         const log = { ...x.log };
-        if (res.done) log[day] = { done: true, frozen: false, xp: res.delta };
-        else delete log[day];
+        if (late)
+          log[day] = { done: to === "done", frozen: to === "frozen", xp: (log[day]?.xp ?? 0) + res.delta, chosen: to === "missed" };
+        else if (res.done) log[day] = { done: true, frozen: false, xp: res.delta };
+        else delete log[day]; // today's goes back to open
         return {
           ...x,
           log,
@@ -121,7 +139,7 @@ export default function HabitGrid({
       })
     );
     onTicked?.({ delta: res.delta, xp: res.xp, origin });
-    // A late tick gives a freeze back and lengthens the days after it.
+    // A closed day moves a freeze or a penalty and the days after it.
     if (late) onChanged();
   }
 
@@ -144,7 +162,7 @@ export default function HabitGrid({
           {freezes !== undefined && (
             <span
               className="text-[11px] font-semibold text-sky-700"
-              title="A missed day spends one instead of breaking the streak. Two each month, shared by every habit."
+              title="Press a missed day from the last week to spend one on it: the streak holds instead of breaking. Two each month, shared by every habit."
             >
               ❄ {freezes} streak freeze{freezes === 1 ? "" : "s"} left this month
             </span>
@@ -260,7 +278,12 @@ export default function HabitGrid({
                       day={d}
                       today={today}
                       busy={busy === h.id}
-                      onTick={(e) => tick(h, d, e)}
+                      open={menu?.habit.id === h.id && menu.day === d}
+                      onTick={(e) => change(h, d, null, e.currentTarget.getBoundingClientRect())}
+                      onMenu={(e) => {
+                        const at = e.currentTarget.getBoundingClientRect();
+                        setMenu((m) => (m?.habit.id === h.id && m.day === d ? null : { habit: h, day: d, at }));
+                      }}
                     />
                   </td>
                 ))}
@@ -275,6 +298,117 @@ export default function HabitGrid({
           {error}
         </p>
       )}
+
+      {menu && menu.habit.log[menu.day] && (
+        <DayMenu
+          entry={menu.habit.log[menu.day]}
+          day={menu.day}
+          today={today}
+          at={menu.at}
+          freezes={freezes}
+          onPick={(to) => change(menu.habit, menu.day, to, menu.at)}
+          onClose={closeMenu}
+        />
+      )}
+    </div>
+  );
+}
+
+/** What a closed day can be changed to. */
+const STATES: { to: DayState; icon: string; label: string; tone: string }[] = [
+  { to: "done", icon: "✓", label: "Did it after all", tone: "bg-grass-600 text-white" },
+  { to: "frozen", icon: "❄", label: "Use a streak freeze", tone: "bg-sky-100 text-sky-600" },
+  { to: "missed", icon: "✕", label: "Missed it", tone: "bg-red-500 text-white" },
+];
+
+function stateOf(entry: HabitDay): DayState {
+  return entry.done ? "done" : entry.frozen ? "frozen" : "missed";
+}
+
+/**
+ * The menu under a closed day's box: the two things it isn't, and what each
+ * does. Fixed to the page, so the grid's scrolling can't clip it; it goes on
+ * a scroll, a press elsewhere or Escape.
+ */
+function DayMenu({
+  entry,
+  day,
+  today,
+  at,
+  freezes,
+  onPick,
+  onClose,
+}: {
+  entry: HabitDay;
+  day: string;
+  today: string;
+  at: DOMRect;
+  freezes?: number;
+  onPick: (to: DayState) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const away = (e: PointerEvent) => {
+      // Its own box toggles it, on the click that follows.
+      const t = e.target as Element;
+      if (!ref.current?.contains(t) && !t.closest?.('[aria-expanded="true"]')) onClose();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", key);
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    ref.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", key);
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  const now = stateOf(entry);
+  // A freeze comes out of the month of the day after; the count shown is this
+  // month's, so it only rules one out for a day that falls in it.
+  const noFreeze = freezes === 0 && shiftDay(day, 1).slice(0, 7) === today.slice(0, 7);
+  const hint: Record<DayState, string> = {
+    done: "XP back, the streak joins up",
+    frozen: noFreeze
+      ? "None left this month"
+      : `The streak holds${freezes !== undefined ? ` · ${freezes} left` : ""}`,
+    missed: `${now === "done" ? "Reward back off" : "Freeze back"}, -1, streak breaks for good`,
+  };
+  const below = at.bottom + 130 < window.innerHeight;
+  const left = Math.min(Math.max(8, at.left + at.width / 2 - 104), window.innerWidth - 216);
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label={`Change ${day}`}
+      className="panel fixed z-50 w-52 rounded-xl p-1 shadow-lg"
+      style={below ? { top: at.bottom + 6, left } : { top: at.top - 6, left, transform: "translateY(-100%)" }}
+    >
+      {STATES.filter((s) => s.to !== now).map((s) => (
+        <button
+          key={s.to}
+          role="menuitem"
+          disabled={s.to === "frozen" && noFreeze}
+          onClick={() => onPick(s.to)}
+          className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-mud-100 focus:bg-mud-100 focus:outline-none disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          <span className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${s.tone}`}>
+            {s.icon}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block text-xs font-bold text-mud-900">{s.label}</span>
+            <span className="block text-[11px] text-mud-500">{hint[s.to]}</span>
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -284,13 +418,19 @@ function Cell({
   day,
   today,
   busy,
+  open,
   onTick,
+  onMenu,
 }: {
   habit: Habit;
   day: string;
   today: string;
   busy: boolean;
-  onTick: (e: React.MouseEvent) => void;
+  /** This day's menu is showing. */
+  open: boolean;
+  onTick: (e: React.MouseEvent<HTMLElement>) => void;
+  /** Open a closed day's menu. */
+  onMenu: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
   const entry = h.log[day];
   const box =
@@ -321,41 +461,38 @@ function Cell({
     );
   }
 
-  // A settled day: kept, frozen or missed. Read-only.
+  // A settled day: kept, frozen or missed. For a week it opens a menu to
+  // change it; after that it's read-only.
   if (entry) {
-    if (entry.done)
+    const look = {
+      done: { tone: "border-grass-700 bg-grass-600 text-white", icon: "✓", title: `Kept (+${entry.xp} XP)` },
+      frozen: { tone: "border-sky-400 bg-sky-100 text-sky-600", icon: "❄", title: "Missed, but a streak freeze held the streak" },
+      missed: { tone: "border-red-600 bg-red-500 text-white", icon: "✕", title: `Missed (${entry.xp} XP)` },
+    }[stateOf(entry)];
+    // Left alone, a miss gets a freeze when its week is up, if there's one left.
+    const net = !entry.done && !entry.frozen && !entry.chosen;
+    if (!changeable(h, day, today))
       return (
-        <span className={`${box} border-grass-700 bg-grass-600 text-white`} title={`Kept (+${entry.xp} XP)`}>
-          ✓
-        </span>
-      );
-    if (entry.frozen && redeemable(h, day, today))
-      return (
-        <button
-          onClick={onTick}
-          disabled={busy}
-          aria-label={`Tick ${h.title} late for ${day}`}
-          title="A streak freeze covered this day. Did it after all? Press to tick it late and get the freeze back."
-          className={`${box} border-sky-400 bg-sky-100 text-sky-600 shadow-sm transition hover:border-grass-500 hover:bg-white hover:text-grass-500 ${
-            busy ? "animate-pulse" : ""
-          }`}
-        >
-          ❄
-        </button>
-      );
-    if (entry.frozen)
-      return (
-        <span
-          className={`${box} border-sky-400 bg-sky-100 text-sky-600`}
-          title="Missed, but a streak freeze held the streak"
-        >
-          ❄
+        <span className={`${box} ${look.tone}`} title={look.title}>
+          {look.icon}
         </span>
       );
     return (
-      <span className={`${box} border-red-600 bg-red-500 text-white`} title={`Missed (${entry.xp} XP)`}>
-        ✕
-      </span>
+      <button
+        onClick={onMenu}
+        disabled={busy}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`${h.title}, ${day}: ${look.title}. Change it`}
+        title={`${look.title}. Press to change it, for up to a week${
+          net ? " — left as it is, it gets a streak freeze then, if one's left" : ""
+        }.`}
+        className={`${box} ${look.tone} shadow-sm transition hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 ${
+          open ? "ring-2 ring-amber-400 ring-offset-1" : ""
+        } ${busy ? "animate-pulse" : ""}`}
+      >
+        {look.icon}
+      </button>
     );
   }
 
@@ -391,9 +528,9 @@ function Cell({
   );
 }
 
-/** A frozen day from the last week, which can still be ticked late. */
-function redeemable(h: Habit, day: string, today: string): boolean {
-  return !!h.log[day]?.frozen && day < today && day >= shiftDay(today, -7);
+/** A settled day from the last week, which can still be changed. */
+function changeable(h: Habit, day: string, today: string): boolean {
+  return !!h.log[day] && day < today && day >= shiftDay(today, -7);
 }
 
 function fmtRange(a: string, b: string): string {

@@ -12,6 +12,7 @@ import { villageOf } from "@/components/village/world";
 import { duelById, inSpace } from "@/lib/village-rooms";
 import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
 import { coinsLeft, goodById, XP_PER_COIN } from "@/lib/shop";
+import { treatById } from "@/lib/bakery";
 import { COUNTDOWN_MS, DUEL_HP, DUEL_MS, INVITE_MS } from "@/lib/duel";
 import {
   cleanHouse,
@@ -142,6 +143,44 @@ export async function buyGood(id: string): Promise<{ ok: true; shop: ShopState }
       return { ok: false, error: "Not enough coins yet: finish a few more quests." };
     }
   }
+  return { ok: true, shop: await loadShop() };
+}
+
+/* ----------------------------------------------------------------- bakery */
+
+/**
+ * Buys a treat at the bakery (src/lib/bakery.ts) and leaves it on a
+ * companion's door, with a note if there is one. Paid for and delivered in
+ * one statement: no coins, no treat.
+ */
+export async function sendTreat(
+  friendId: string,
+  treatId: string,
+  text: string
+): Promise<{ ok: true; shop: ShopState } | { ok: false; error: string }> {
+  const me = await requireUserId();
+  const treat = treatById(treatId);
+  if (!treat) return { ok: false, error: "The bakery doesn't make that." };
+  const body = cleanLine(text, NOTE_MAX);
+  if (!(await areFriends(me, friendId))) return { ok: false, error: "You can only send treats to companions." };
+  if (await rateLimited("treat", me)) return { ok: false, error: TOO_MANY };
+  const rows = (await sql`
+    with paid as (
+      update profiles set coins_spent = coins_spent + ${treat.price}
+       where id = ${me}::uuid and floor(xp / ${XP_PER_COIN}) - coins_spent >= ${treat.price}
+      returning display_name
+    )
+    insert into door_notes (owner_id, author_id, body, treat)
+    select ${friendId}::uuid, ${me}::uuid, ${body}, ${treat.id} from paid
+    returning (select display_name from paid) as from_name
+  `) as { from_name: string }[];
+  if (!rows.length) return { ok: false, error: "Not enough coins yet: finish a few more quests." };
+  await sendToUser(friendId, {
+    title: `${rows[0].from_name} sent you ${treat.a}`,
+    body: body || "It's waiting on your doorstep in the village.",
+    url: "/village",
+    tag: `treat-${me}`,
+  }).catch(() => 0);
   return { ok: true, shop: await loadShop() };
 }
 

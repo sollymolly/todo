@@ -268,18 +268,59 @@ export function Station({ name }: { name: string }) {
   );
 }
 
-/** One tile of hedge: clipped, leafy, a little darker underneath. Run side by side, they join up. */
-export function Hedge() {
+/** A box with each corner rounded by its own radius (top-left, top-right, bottom-right, bottom-left). */
+function box(x0: number, y0: number, x1: number, y1: number, [tl, tr, br, bl]: number[]) {
+  return `M${x0 + tl} ${y0} H${x1 - tr} Q${x1} ${y0} ${x1} ${y0 + tr} V${y1 - br} Q${x1} ${y1} ${x1 - br} ${y1} H${x0 + bl} Q${x0} ${y1} ${x0} ${y1 - bl} V${y0 + tl} Q${x0} ${y0} ${x0 + tl} ${y0} Z`;
+}
+
+/** A little seeded random: the same leaves on a tile every time it's drawn. */
+function leafDice(seed: number) {
+  let r = (seed * 2654435761) >>> 0 || 1;
+  return (m: number) => {
+    r ^= r << 13;
+    r ^= r >>> 17;
+    r ^= r << 5;
+    return (r >>> 0) % m;
+  };
+}
+
+/**
+ * One tile of hedge, joined to the hedge on each side it has a neighbour
+ * (n, e, s, w): a run reads as one long clipped hedge with rounded ends, and
+ * a corner turns without a seam. Seen from the front and a little above, as
+ * everything is: the top is the lighter green, and only a hedge's front
+ * edge shows its darker side and a shadow. `seed` varies the leaves.
+ */
+export function Hedge({ n = false, e = false, s = false, w = false, seed = 0 }: { n?: boolean; e?: boolean; s?: boolean; w?: boolean; seed?: number }) {
+  const R = 6;
+  const top = n ? 0 : 6;
+  const face = s ? 40 : 24;
+  const bottom = s ? 40 : 36;
+  const x0 = w ? 0 : 2;
+  const x1 = e ? 32 : 30;
+  const tl = !n && !w ? R : 0;
+  const tr = !n && !e ? R : 0;
+  // A few leaves picked out, different on every tile.
+  const next = leafDice(seed);
+  const lights = Array.from({ length: s ? 5 : 3 }, () => ({ x: x0 + 2 + next(Math.max(1, x1 - x0 - 8)), y: top + 3 + next(Math.max(1, face - top - 8)) }));
+  const darks = s ? [] : Array.from({ length: 2 }, () => ({ x: x0 + 3 + next(Math.max(1, x1 - x0 - 8)), y: 27 + next(5) }));
+  const flowers = next(4) === 0 ? Array.from({ length: 2 }, () => ({ x: x0 + 3 + next(Math.max(1, x1 - x0 - 6)), y: top + 2 + next(Math.max(1, face - top - 6)) })) : [];
   return (
     <svg viewBox="0 0 32 40" className="h-full w-full" shapeRendering="crispEdges" aria-hidden>
-      <rect x="0" y="34" width="32" height="6" fill="#000" opacity="0.15" />
-      <rect x="-1" y="8" width="34" height="28" rx="6" fill="#3f6d2a" />
-      <rect x="-1" y="8" width="34" height="18" rx="6" fill="#4f8a34" />
-      <rect x="3" y="11" width="5" height="4" fill="#6aa848" />
-      <rect x="14" y="13" width="6" height="4" fill="#6aa848" />
-      <rect x="24" y="10" width="5" height="4" fill="#6aa848" />
-      <rect x="8" y="22" width="4" height="3" fill="#35602a" />
-      <rect x="21" y="24" width="4" height="3" fill="#35602a" />
+      {!s && <rect x={x0} y="34" width={x1 - x0} height="6" fill="#000" opacity="0.15" />}
+      <path d={box(x0, top, x1, bottom, [tl, tr, !s && !e ? R : 0, !s && !w ? R : 0])} fill="#3f6d2a" />
+      <path d={box(x0, top, x1, face, [tl, tr, 0, 0])} fill="#4f8a34" />
+      {!n && <path d={box(w ? x0 : x0 + 2, top + 1, e ? x1 : x1 - 2, top + 4, [tl ? 3 : 0, tr ? 3 : 0, 0, 0])} fill="#5f9e3e" />}
+      {!s && <rect x={x0} y={face} width={x1 - x0} height="2" fill="#35602a" />}
+      {lights.map((l, i) => (
+        <rect key={i} x={l.x} y={l.y} width={4 + (i % 2)} height="3" fill="#6aa848" />
+      ))}
+      {darks.map((d, i) => (
+        <rect key={i} x={d.x} y={d.y} width="4" height="3" fill="#35602a" />
+      ))}
+      {flowers.map((f, i) => (
+        <rect key={i} x={f.x} y={f.y} width="2" height="2" fill={i ? "#f7d8e2" : "#ffffff"} />
+      ))}
     </svg>
   );
 }

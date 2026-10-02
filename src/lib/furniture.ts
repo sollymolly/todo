@@ -14,11 +14,13 @@ import type { Tier } from "@/lib/village";
 export type FurnitureKind =
   | "bed" | "table" | "chair" | "stool" | "plant" | "rug" | "lamp" | "chest"
   | "bookshelf" | "desk" | "sofa" | "armorstand" | "fireplace" | "trophy" | "throne"
-  | "painting" | "window" | "clock" | "mirror" | "banner";
+  | "painting" | "window" | "clock" | "mirror" | "banner"
+  | "piano" | "aquarium" | "telescope" | "stainedglass";
 
 export type Layer = "floor" | "rug" | "wall";
 
-export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: number; layer: Layer; level: number }> = {
+/** `shop`: sold at the village store as "furniture:<kind>" (src/lib/shop.ts), not unlocked by level. */
+export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: number; layer: Layer; level: number; shop?: boolean }> = {
   bed: { label: "Bed", w: 2, h: 2, layer: "floor", level: 1 },
   table: { label: "Table", w: 2, h: 1, layer: "floor", level: 1 },
   chair: { label: "Chair", w: 1, h: 1, layer: "floor", level: 1 },
@@ -39,11 +41,18 @@ export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: num
   clock: { label: "Clock", w: 1, h: 1, layer: "wall", level: 3 },
   mirror: { label: "Mirror", w: 1, h: 1, layer: "wall", level: 5 },
   banner: { label: "Banner", w: 1, h: 1, layer: "wall", level: 8 },
+  piano: { label: "Piano", w: 2, h: 1, layer: "floor", level: 1, shop: true },
+  aquarium: { label: "Aquarium", w: 2, h: 1, layer: "floor", level: 1, shop: true },
+  telescope: { label: "Telescope", w: 1, h: 1, layer: "floor", level: 1, shop: true },
+  stainedglass: { label: "Stained glass", w: 1, h: 1, layer: "wall", level: 1, shop: true },
 };
 
 export const KIND_LIST = Object.keys(FURNITURE) as FurnitureKind[];
 
-/** Wallpapers and floors. `shop`: sold at the village store (src/lib/shop.ts), the rest by level. */
+/**
+ * Wallpapers and floors. `shop`: sold at the village store (src/lib/shop.ts),
+ * the rest by level. A floor that's `tiles` is laid in squares, not boards.
+ */
 export const WALLS: { id: string; label: string; fill: string; line: string; level: number; shop?: boolean }[] = [
   { id: "cream", label: "Cream", fill: "#f1e6cc", line: "#e2d3b0", level: 1 },
   { id: "sage", label: "Sage", fill: "#cfdcbc", line: "#b9caa3", level: 1 },
@@ -54,16 +63,22 @@ export const WALLS: { id: string; label: string; fill: string; line: string; lev
   { id: "brick", label: "Brick", fill: "#b3643f", line: "#8c4a2e", level: 6 },
   { id: "stone", label: "Stone", fill: "#aaa49a", line: "#857f76", level: 8 },
   { id: "starry", label: "Starry night", fill: "#2c3a66", line: "#f2d27a", level: 1, shop: true },
+  { id: "ivy", label: "Ivy trellis", fill: "#e4e9cf", line: "#5f8a3a", level: 1, shop: true },
+  { id: "damask", label: "Rose damask", fill: "#7a2a3a", line: "#d99aa6", level: 1, shop: true },
+  { id: "gilded", label: "Gilded panels", fill: "#3a2a1c", line: "#d9a92e", level: 1, shop: true },
 ];
 
-export const FLOORS: { id: string; label: string; a: string; b: string; level: number; shop?: boolean }[] = [
+export const FLOORS: { id: string; label: string; a: string; b: string; level: number; shop?: boolean; tiles?: boolean }[] = [
   { id: "oak", label: "Oak", a: "#d4a66c", b: "#c49359", level: 1 },
   { id: "walnut", label: "Walnut", a: "#8f6240", b: "#7d5436", level: 1 },
-  { id: "checker", label: "Checker", a: "#efe6d4", b: "#6e6258", level: 2 },
+  { id: "checker", label: "Checker", a: "#efe6d4", b: "#6e6258", level: 2, tiles: true },
   { id: "carpet", label: "Red carpet", a: "#a8453b", b: "#9a3d34", level: 3 },
   { id: "moss", label: "Moss carpet", a: "#6f8f4a", b: "#65843f", level: 3 },
   { id: "stone", label: "Flagstone", a: "#b9b2a6", b: "#a39c90", level: 5 },
   { id: "marble", label: "Marble", a: "#f2efe9", b: "#d9d3c8", level: 1, shop: true },
+  { id: "cherry", label: "Cherry wood", a: "#a8503a", b: "#8c3f2c", level: 1, shop: true },
+  { id: "bluetile", label: "Blue tile", a: "#eef3f8", b: "#3a6aa8", level: 1, shop: true, tiles: true },
+  { id: "straw", label: "Woven straw", a: "#e3c27a", b: "#c9a55a", level: 1, shop: true },
 ];
 
 export type Placed = { k: FurnitureKind; x: number; y: number };
@@ -122,10 +137,10 @@ export function cleanInterior(raw: unknown, tier: Tier, level: number, owned?: S
   const has = (item: string) => !owned || owned.has(item);
   const wall = WALLS.find((w) => w.id === r.wall && level >= w.level && (!w.shop || has(`wall:${w.id}`)))?.id ?? "cream";
   const floor = FLOORS.find((f) => f.id === r.floor && level >= f.level && (!f.shop || has(`floor:${f.id}`)))?.id ?? "oak";
-  return { wall, floor, items: cleanItems(Array.isArray(r.items) ? r.items : [], tier, level) };
+  return { wall, floor, items: cleanItems(Array.isArray(r.items) ? r.items : [], tier, level, has) };
 }
 
-function cleanItems(raw: unknown[], tier: Tier, level: number): Placed[] {
+function cleanItems(raw: unknown[], tier: Tier, level: number, has: (item: string) => boolean = () => true): Placed[] {
   const { cols, rows } = ROOM[tier];
   const door = doorOf(tier);
   const taken = new Set<string>(door.clear.map((c) => `f:${c.x},${c.y}`));
@@ -134,7 +149,7 @@ function cleanItems(raw: unknown[], tier: Tier, level: number): Placed[] {
   for (const it of raw.slice(0, MAX_ITEMS * 2)) {
     const p = it as Partial<Placed>;
     const spec = p.k && FURNITURE[p.k as FurnitureKind];
-    if (!spec || level < spec.level) continue;
+    if (!spec || level < spec.level || (spec.shop && !has(`furniture:${p.k}`))) continue;
     const x = Math.round(Number(p.x));
     const y = Math.round(Number(p.y));
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;

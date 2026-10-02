@@ -238,6 +238,21 @@ create table if not exists habit_log (
   primary key (habit_id, day)
 );
 alter table habit_log add column if not exists frozen boolean not null default false;
+-- A miss the user set themselves (miss_habit_day), which the week-old safety
+-- net in settle_habits leaves alone.
+alter table habit_log add column if not exists chosen boolean not null default false;
+-- How far settle_habits' safety net has looked: every miss up to here that
+-- was left alone for its week has had its chance at a freeze. Habits from
+-- before the net start from where they'd settled, so old misses stay as
+-- they were.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                  where table_name = 'habits' and column_name = 'netted_through') then
+    alter table habits add column netted_through date;
+    update habits set netted_through = settled_through;
+  end if;
+end $$;
 create index if not exists habit_log_user_idx on habit_log(user_id, day desc);
 
 -- ---------------------------------------------------------------------------
@@ -446,7 +461,7 @@ create table if not exists village_presence (
   user_id  uuid primary key references users(id) on delete cascade,
   place    text not null default 'home'
              constraint village_presence_place_check
-             check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena', 'library', 'store')),
+             check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena', 'library', 'store', 'bakery')),
   /* place = 'house' or 'inside': whose house. */
   host_id  uuid references users(id) on delete set null,
   x        real,
@@ -463,10 +478,10 @@ alter table village_presence add column if not exists device text;
 -- Which village they're in: there's a new one for every 40 houses (plot / 40),
 -- each with its own town hall and arena, joined by trains.
 alter table village_presence add column if not exists village integer not null default 0;
--- Inside a village's library or store, too (each its own room, like the arena).
+-- Inside a village's library, store or bakery, too (each its own room, like the arena).
 alter table village_presence drop constraint if exists village_presence_place_check;
 alter table village_presence add constraint village_presence_place_check
-  check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena', 'library', 'store'));
+  check (place in ('home', 'square', 'hall', 'house', 'inside', 'arena', 'library', 'store', 'bakery'));
 
 -- A house's size follows its owner's level and is never stored. `interior`
 -- holds wallpaper, floor and furniture; null is the default room.
@@ -506,6 +521,12 @@ create table if not exists door_notes (
   read_at    timestamptz
 );
 create index if not exists door_notes_owner_idx on door_notes(owner_id, created_at desc);
+-- A treat from the village bakery (src/lib/bakery.ts) can come with a note, or
+-- be left on its own: then the note may be empty.
+alter table door_notes add column if not exists treat text check (length(treat) <= 20);
+alter table door_notes drop constraint if exists door_notes_body_check;
+alter table door_notes add constraint door_notes_body_check
+  check (length(body) <= 140 and (length(body) >= 1 or treat is not null));
 
 -- A nudge may point at one of the recipient's own quests; only its category
 -- and deadline are ever shown (quest_hint). Frequency is enforced by the app.
@@ -1239,9 +1260,11 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- streak_freezes_left — two a month (plus any bought), shared by every habit, counted straight
--- from the log: each frozen day is one spent. A freeze is spent the moment its
--- day closes, so it comes out of the month of the day after (a freeze on the
--- 30th of September is October's). Redeeming a frozen day hands it back.
+-- from the log: each frozen day is one spent. A freeze is spent on a missed
+-- day of the user's choosing (freeze_habit_day) or, failing that, by
+-- settle_habits once the miss is a week old; it comes out of the month of
+-- the day after it (a freeze on the 30th of September is October's).
+-- Ticking a frozen day late, or setting it back to missed, hands it back.
 -- (profiles.streak_freezes / freezes_month are no longer read.)
 -- ---------------------------------------------------------------------------
 create or replace function streak_freezes_left(p_user uuid, p_today date)
@@ -1276,11 +1299,12 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- settle_habits — settle every due day that ended without a tick. If a streak
--- freeze is left it's spent: the day is logged as frozen, costs nothing, and
--- the streak stays exactly where it was (it doesn't grow, so neither does the
--- reward). Otherwise it's a miss: -1 XP and the streak resets.
--- Returns the XP moved (zero or negative). Idempotent (a logged day is
+-- settle_habits — settle every due day that ended without a tick as a miss:
+-- -1 XP and the streak resets. The user picks which missed days get a streak
+-- freeze (freeze_habit_day), for up to a week. As a safety net, a miss still
+-- untouched when its week is up gets one then, if one is left and there's a
+-- streak to keep; one the user set to missed themselves (chosen) doesn't.
+-- Returns the XP moved. Idempotent (a logged day is
 -- skipped, settled_through only moves forward), so it runs on every page load.
 -- Paused habits aren't settled; resuming moves settled_through to yesterday.
 -- ---------------------------------------------------------------------------
@@ -1296,6 +1320,7 @@ declare
   v_logged integer;
   v_moved  integer;
   v_total  integer := 0;
+  v_net    json;
   h        habits%rowtype;
 begin
   select coalesce(timezone, 'UTC') into v_zone from profiles where id = p_user;
@@ -1320,17 +1345,11 @@ begin
       if is_habit_due(h.days, v_day)
          and not exists (select 1 from habit_log l where l.habit_id = h.id and l.day = v_day)
       then
-        if h.streak > 0 and use_streak_freeze(p_user, v_day) then
-          -- Only worth spending on a streak there is to keep.
-          insert into habit_log (habit_id, user_id, day, done, frozen, xp, streak)
-          values (h.id, p_user, v_day, false, true, 0, h.streak);
-        else
-          v_moved := habit_move_xp(p_user, -1, 'missed habit: ' || h.title);
-          insert into habit_log (habit_id, user_id, day, done, xp, streak)
-          values (h.id, p_user, v_day, false, v_moved, 0);
-          h.streak := 0;
-          v_total  := v_total + v_moved;
-        end if;
+        v_moved := habit_move_xp(p_user, -1, 'missed habit: ' || h.title);
+        insert into habit_log (habit_id, user_id, day, done, xp, streak)
+        values (h.id, p_user, v_day, false, v_moved, 0);
+        h.streak := 0;
+        v_total  := v_total + v_moved;
         v_logged := v_logged + 1;
       end if;
 
@@ -1341,6 +1360,27 @@ begin
       streak          = h.streak,
       settled_through = v_today - 1
     where id = h.id;
+  end loop;
+
+  -- The safety net, oldest miss first, so a freeze carries the streak on to
+  -- the next miss and that one can hold it too.
+  for h in
+    select * from habits
+     where user_id = p_user
+       and coalesce(netted_through, (created_at at time zone v_zone)::date - 1) < v_today - 8
+     for update
+  loop
+    for v_day in
+      select day from habit_log
+       where habit_id = h.id and not done and not frozen and not chosen
+         and day >  coalesce(h.netted_through, (h.created_at at time zone v_zone)::date - 1)
+         and day <= v_today - 8
+       order by day
+    loop
+      v_net := freeze_habit_day(p_user, h.id, v_day, true);
+      if v_net is not null then v_total := v_total + (v_net->>'delta')::integer; end if;
+    end loop;
+    update habits set netted_through = v_today - 8 where id = h.id;
   end loop;
 
   return v_total;
@@ -1412,13 +1452,85 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- redeem_habit_day — tick a day a streak freeze covered, up to a week late,
--- for when it was done but not ticked in time. It's paid as the tick it
--- would have been, the freeze goes back in the pool, and every later day in
--- the same unbroken run counts one more (rewards already paid stand).
--- Any other closed day stays closed.
+-- redeem_habit_day — tick a missed or frozen day up to a week late, for when
+-- it was done but not ticked in time. It's paid as the tick it would have
+-- been: a miss gives its penalty back too, and a freeze goes back in the
+-- pool. The run before the day carries on through it, so every later day in
+-- the same unbroken run counts that much more (rewards already paid stand).
+-- A kept day, or one more than a week old, stays as it is.
 -- ---------------------------------------------------------------------------
 create or replace function redeem_habit_day(p_user uuid, p_habit uuid, p_day date)
+returns json
+language plpgsql
+as $$
+declare
+  v_today  date;
+  v_streak integer;
+  v_gain   integer;
+  v_moved  integer;
+  v_break  date;
+  v_log    habit_log%rowtype;
+  h        habits%rowtype;
+begin
+  perform settle_habits(p_user);
+
+  select (now() at time zone coalesce(timezone, 'UTC'))::date into v_today
+    from profiles where id = p_user;
+
+  select * into h from habits where id = p_habit and user_id = p_user for update;
+  if not found then raise exception 'Habit not found'; end if;
+
+  select * into v_log from habit_log where habit_id = h.id and day = p_day for update;
+  if not found or v_log.done or p_day < v_today - 7 then
+    raise exception 'That day has closed — only a missed day from the last week can be ticked late.';
+  end if;
+
+  -- A frozen row holds the streak as it stood. A miss reset it to 0, so the
+  -- run it broke is the day before's.
+  if v_log.frozen then
+    v_streak := v_log.streak + 1;
+  else
+    v_streak := coalesce((select l.streak from habit_log l
+                           where l.habit_id = h.id and l.day < p_day
+                           order by l.day desc limit 1), 0) + 1;
+  end if;
+  v_gain  := v_streak - v_log.streak;
+  v_moved := habit_move_xp(p_user, habit_reward(v_streak) - v_log.xp, 'habit (late): ' || h.title);
+
+  update habit_log set done = true, frozen = false, xp = v_log.xp + v_moved, streak = v_streak
+   where habit_id = h.id and day = p_day;
+
+  -- The run carries on until the first real miss after it.
+  select min(day) into v_break from habit_log
+   where habit_id = h.id and day > p_day and not done and not frozen;
+
+  update habit_log set streak = streak + v_gain
+   where habit_id = h.id and day > p_day and (v_break is null or day < v_break);
+
+  update habits set
+    streak      = case when v_break is null then streak + v_gain else streak end,
+    best_streak = greatest(best_streak,
+                           (select max(streak) from habit_log where habit_id = h.id))
+   where id = h.id
+  returning streak into v_streak;
+
+  return json_build_object(
+    'done', true, 'delta', v_moved, 'streak', v_streak,
+    'xp', (select xp from profiles where id = p_user)
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- miss_habit_day — the other way round: a kept or frozen day up to a week
+-- old becomes a plain miss. A kept day's reward comes back off along with the
+-- miss's -1 (a frozen one hands its freeze back), and the run it was part of
+-- breaks there, so every later day in that run counts that much less
+-- (rewards already paid stand, as above). Ticking it late puts it back.
+-- A miss set here is the user's choice: the safety net won't freeze it.
+-- ---------------------------------------------------------------------------
+drop function if exists unkeep_habit_day(uuid, uuid, date);
+create or replace function miss_habit_day(p_user uuid, p_habit uuid, p_day date)
 returns json
 language plpgsql
 as $$
@@ -1439,35 +1551,165 @@ begin
   if not found then raise exception 'Habit not found'; end if;
 
   select * into v_log from habit_log where habit_id = h.id and day = p_day for update;
-  if not found or not v_log.frozen or p_day < v_today - 7 then
-    raise exception 'That day has closed — habits can only be ticked on the day.';
+  if not found or not (v_log.done or v_log.frozen) or p_day < v_today - 7 then
+    raise exception 'That day has closed — only a day from the last week can be changed.';
   end if;
 
-  -- The frozen row holds the streak as it stood; this tick extends it.
-  v_streak := v_log.streak + 1;
-  v_moved  := habit_move_xp(p_user, habit_reward(v_streak), 'habit (late): ' || h.title);
+  v_moved := habit_move_xp(p_user, -v_log.xp - 1,
+               case when v_log.done then 'habit (not done after all): ' else 'missed habit: ' end || h.title);
 
-  update habit_log set done = true, frozen = false, xp = v_moved, streak = v_streak
+  update habit_log set done = false, frozen = false, chosen = true, xp = v_log.xp + v_moved, streak = 0
    where habit_id = h.id and day = p_day;
 
-  -- The run carries on until the first real miss after it.
   select min(day) into v_break from habit_log
    where habit_id = h.id and day > p_day and not done and not frozen;
 
-  update habit_log set streak = streak + 1
+  update habit_log set streak = greatest(0, streak - v_log.streak)
    where habit_id = h.id and day > p_day and (v_break is null or day < v_break);
 
   update habits set
-    streak      = case when v_break is null then streak + 1 else streak end,
+    streak = case when v_break is null then greatest(0, streak - v_log.streak) else streak end
+   where id = h.id
+  returning streak into v_streak;
+
+  return json_build_object(
+    'done', false, 'delta', v_moved, 'streak', v_streak,
+    'xp', (select xp from profiles where id = p_user)
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- freeze_habit_day — spend a streak freeze on a missed day from the last
+-- week, the user's pick of which. The miss's -1 comes back, the day holds the
+-- streak as it stood the day before (it doesn't grow, so neither does the
+-- reward), and the run carries on through it, so every later day in that run
+-- counts that much more (rewards already paid stand). Only a day with a
+-- streak to keep is worth one; one out of freezes for its month is refused.
+-- p_auto is settle_habits' safety net: any age of miss, nothing settled
+-- first, and null instead of a refusal.
+-- ---------------------------------------------------------------------------
+drop function if exists freeze_habit_day(uuid, uuid, date);
+create or replace function freeze_habit_day(p_user uuid, p_habit uuid, p_day date, p_auto boolean default false)
+returns json
+language plpgsql
+as $$
+declare
+  v_today  date;
+  v_streak integer;
+  v_moved  integer;
+  v_break  date;
+  v_log    habit_log%rowtype;
+  h        habits%rowtype;
+begin
+  if not p_auto then perform settle_habits(p_user); end if;
+
+  select (now() at time zone coalesce(timezone, 'UTC'))::date into v_today
+    from profiles where id = p_user;
+
+  select * into h from habits where id = p_habit and user_id = p_user for update;
+  if not found then raise exception 'Habit not found'; end if;
+
+  select * into v_log from habit_log where habit_id = h.id and day = p_day for update;
+  if not found or v_log.done or v_log.frozen or (p_day < v_today - 7 and not p_auto) then
+    if p_auto then return null; end if;
+    raise exception 'That day has closed — only a missed day from the last week can take a freeze.';
+  end if;
+
+  v_streak := coalesce((select l.streak from habit_log l
+                         where l.habit_id = h.id and l.day < p_day
+                         order by l.day desc limit 1), 0);
+  if v_streak = 0 then
+    if p_auto then return null; end if;
+    raise exception 'That day had no streak to keep — a freeze would be wasted on it.';
+  end if;
+  if not use_streak_freeze(p_user, p_day) then
+    if p_auto then return null; end if;
+    raise exception 'That day''s month has no streak freezes left — more at the village store.';
+  end if;
+
+  v_moved := habit_move_xp(p_user, -v_log.xp,
+               case when p_auto then 'streak freeze (auto): ' else 'streak freeze: ' end || h.title);
+
+  update habit_log set frozen = true, chosen = false, xp = v_log.xp + v_moved, streak = v_streak
+   where habit_id = h.id and day = p_day;
+
+  select min(day) into v_break from habit_log
+   where habit_id = h.id and day > p_day and not done and not frozen;
+
+  update habit_log set streak = streak + v_streak
+   where habit_id = h.id and day > p_day and (v_break is null or day < v_break);
+
+  update habits set
+    streak      = case when v_break is null then streak + v_streak else streak end,
     best_streak = greatest(best_streak,
                            (select max(streak) from habit_log where habit_id = h.id))
    where id = h.id
   returning streak into v_streak;
 
   return json_build_object(
-    'done', true, 'delta', v_moved, 'streak', v_streak,
+    'done', false, 'delta', v_moved, 'streak', v_streak,
     'xp', (select xp from profiles where id = p_user)
   );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- set_habit_day — make a closed day from the last week kept ('done'),
+-- missed ('missed') or covered by a streak freeze ('frozen'), whatever it is
+-- now. A kept day goes to frozen by way of a miss, in the same statement, so
+-- if the freeze is refused the day stays kept.
+-- ---------------------------------------------------------------------------
+create or replace function set_habit_day(
+  p_user  uuid,
+  p_habit uuid,
+  p_day   date,
+  p_to    text,
+  p_zone  text default null
+) returns json
+language plpgsql
+as $$
+declare
+  v_today date;
+  v_log   habit_log%rowtype;
+  v_first json;
+  v_res   json;
+begin
+  if p_zone is not null and exists (select 1 from pg_timezone_names where name = p_zone) then
+    update profiles set timezone = p_zone
+     where id = p_user and coalesce(timezone, '') <> p_zone;
+  end if;
+
+  select (now() at time zone coalesce(timezone, 'UTC'))::date into v_today
+    from profiles where id = p_user;
+  if p_day >= v_today then
+    raise exception 'That day is still open — tick it in its box.';
+  end if;
+
+  select l.* into v_log from habit_log l join habits h on h.id = l.habit_id
+   where l.habit_id = p_habit and h.user_id = p_user and l.day = p_day;
+  if not found or p_day < v_today - 7 then
+    raise exception 'That day has closed — only a day from the last week can be changed.';
+  end if;
+
+  if p_to = 'done' then
+    if v_log.done then raise exception 'That day is already kept.'; end if;
+    return redeem_habit_day(p_user, p_habit, p_day);
+  elsif p_to = 'missed' then
+    if not (v_log.done or v_log.frozen) then raise exception 'That day is already missed.'; end if;
+    return miss_habit_day(p_user, p_habit, p_day);
+  elsif p_to = 'frozen' then
+    if v_log.frozen then raise exception 'That day is already frozen.'; end if;
+    if v_log.done then v_first := miss_habit_day(p_user, p_habit, p_day); end if;
+    v_res := freeze_habit_day(p_user, p_habit, p_day);
+    if v_first is null then return v_res; end if;
+    return json_build_object(
+      'done', false,
+      'delta', (v_first->>'delta')::integer + (v_res->>'delta')::integer,
+      'streak', v_res->'streak', 'xp', v_res->'xp'
+    );
+  end if;
+  raise exception 'That day can only be kept, missed or frozen.';
 end;
 $$;
 
@@ -1475,8 +1717,9 @@ $$;
 -- toggle_habit_day — tick or un-tick a day, which must be today in the
 -- user's own timezone: the box closes at 23:59:59 local, and days to come
 -- can't be ticked early. p_zone is the device's timezone, stored first so
--- "today" is always theirs. A closed day can only be a frozen one, which goes
--- to redeem_habit_day. (Past-day editing and its restreak_habit are gone.)
+-- "today" is always theirs. A closed day from the last week is changed with
+-- set_habit_day instead; one sent here just flips between kept and missed.
+-- (Past-day editing and its restreak_habit are gone.)
 -- ---------------------------------------------------------------------------
 drop function if exists toggle_habit_day(uuid, uuid, date);
 drop function if exists restreak_habit(uuid, date, integer);
@@ -1500,6 +1743,10 @@ begin
     from profiles where id = p_user;
 
   if p_day is not null and p_day < v_today then
+    if exists (select 1 from habit_log l join habits h on h.id = l.habit_id
+                where l.habit_id = p_habit and h.user_id = p_user and l.day = p_day and l.done) then
+      return miss_habit_day(p_user, p_habit, p_day);
+    end if;
     return redeem_habit_day(p_user, p_habit, p_day);
   end if;
   if p_day is not null and p_day > v_today then

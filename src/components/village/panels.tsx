@@ -38,6 +38,8 @@ import {
 import { MyQuestSwitch, QuestPicker, StartSessionForm, useMyQuests } from "@/components/village/SessionControls";
 import { villageInfo } from "@/components/village/world";
 import { ownsGood, useShop } from "@/components/village/shop-state";
+import TreatArt from "@/components/village/Treat";
+import { treatById } from "@/lib/bakery";
 
 /* --------------------------------------------------------------------------
    What opens in the village: a friend's house, your own, the town hall, and
@@ -357,7 +359,7 @@ export function MyHousePanel({
   onClose,
 }: {
   me: Stats;
-  notes: { id: string; from: string; body: string; at: number; read: boolean }[];
+  notes: { id: string; from: string; body: string; treat: string | null; at: number; read: boolean }[];
   onLook: (look: HouseLook) => void;
   /** Pick an empty lot to move to. */
   onMove?: () => void;
@@ -394,25 +396,38 @@ export function MyHousePanel({
           <p className="text-sm text-mud-500">Nothing pinned to your door yet.</p>
         ) : (
           <ul className="space-y-2">
-            {list.map((n) => (
-              <li key={n.id} className="rounded-lg bg-[#fff6d8] p-2.5 text-sm text-mud-800 shadow-sm ring-1 ring-[#eadba6]">
-                <p className="break-words">{n.body}</p>
-                <div className="mt-1 flex items-center justify-between text-[11px] text-mud-500">
-                  <span>
-                    {n.from} · {new Date(n.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                  <button
-                    className="hover:text-red-700"
-                    onClick={() => {
-                      setList((l) => l.filter((x) => x.id !== n.id));
-                      void deleteNote(n.id);
-                    }}
-                  >
-                    Take down
-                  </button>
-                </div>
-              </li>
-            ))}
+            {list.map((n) => {
+              const treat = treatById(n.treat);
+              return (
+                <li key={n.id} className="rounded-lg bg-[#fff6d8] p-2.5 text-sm text-mud-800 shadow-sm ring-1 ring-[#eadba6]">
+                  {treat && (
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="size-9 shrink-0">
+                        <TreatArt id={treat.id} />
+                      </span>
+                      <span className="text-xs font-semibold text-mud-700">
+                        {n.from} sent you {treat.a} from the bakery
+                      </span>
+                    </div>
+                  )}
+                  {n.body && <p className="break-words">{n.body}</p>}
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-mud-500">
+                    <span>
+                      {n.from} · {new Date(n.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                    <button
+                      className="hover:text-red-700"
+                      onClick={() => {
+                        setList((l) => l.filter((x) => x.id !== n.id));
+                        void deleteNote(n.id);
+                      }}
+                    >
+                      {treat ? "Clear away" : "Take down"}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )
       ) : (

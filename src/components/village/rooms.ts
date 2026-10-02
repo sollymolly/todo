@@ -79,19 +79,22 @@ export function buildArena(): ArenaScene {
   };
 }
 
+/** The buildings on a village's road you can walk into (world.ts, BUILDINGS). */
+export type Indoor = "library" | "store" | "bakery";
+
 /**
- * A village's library or store: a room of its own that everyone in that
- * village who walks in shares, like the arena. The library has study desks
- * (work sessions can sit there as well as at the town hall); the store a
- * counter to buy things at.
+ * A village's library, store or bakery: a room of its own that everyone in
+ * that village who walks in shares, like the arena. The library has study
+ * desks (work sessions can sit there as well as at the town hall); the store
+ * and the bakery a counter to buy things at.
  */
 export type IndoorScene = Grid & {
-  kind: "library" | "store";
+  kind: Indoor;
   /** The door, in the middle of the front wall; stepping onto it leaves. */
   door: { x: number; y: number };
   /** The library's desks, each with its seats (the town hall's tables, indoors). */
   desks: Table[];
-  /** The store's counter: stand in front of it to buy. */
+  /** The store's or the bakery's counter: stand in front of it to buy. */
   counter: { x: number; y: number; w: number } | null;
 };
 
@@ -144,3 +147,22 @@ export function buildStore(): IndoorScene {
   blocked[door.y][door.x] = false;
   return { kind: "store", w, h, blocked, door, desks: [], counter };
 }
+
+export function buildBakery(): IndoorScene {
+  const w = 13;
+  const h = 9;
+  const blocked = walled(w, h);
+  // The display case on the left, a café table on the right, flour sacks in
+  // the back corner; the ovens are in the back wall.
+  const counter = { x: 2, y: 3, w: 5 };
+  for (let i = 0; i < counter.w; i++) blocked[counter.y][counter.x + i] = true;
+  blocked[2][w - 2] = true;
+  blocked[3][w - 2] = true;
+  blocked[5][9] = true;
+  const door = { x: 6, y: h - 1 };
+  blocked[door.y][door.x] = false;
+  return { kind: "bakery", w, h, blocked, door, desks: [], counter };
+}
+
+export const buildIndoor = (what: Indoor): IndoorScene =>
+  what === "library" ? buildLibrary() : what === "store" ? buildStore() : buildBakery();

@@ -28,6 +28,7 @@ function readPlace(raw: unknown): Place | null {
     case "arena":
     case "library":
     case "store":
+    case "bakery":
       return { kind: p.kind };
     default:
       return null;

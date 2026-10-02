@@ -254,14 +254,16 @@ export function buildWorld(v: number, owners: (string | null)[]): World {
   const arena = { body: { x: centreX, y: bandTop(1) + 1, w: 5, h: 4 }, door: { x: centreX + 2, y: bandTop(1) + 5 } };
   block(arena.body);
 
-  // A building beside the road sits behind hedges: along the back, and along
-  // the front either side of the path to its door (5 wide, door in the middle).
+  // A building beside the road sits inside a hedge: along the back, down
+  // both sides of its forecourt, and along the front either side of the path
+  // to its door (5 wide, door in the middle) — the only way in.
   const hedges: { x: number; y: number }[] = [];
   const hedgeRound = (x: number, y: number) => {
     for (let i = 0; i < 5; i++) {
       hedges.push({ x: x + i, y });
       if (i !== 2) hedges.push({ x: x + i, y: y + 6 });
     }
+    hedges.push({ x, y: y + 5 }, { x: x + 4, y: y + 5 });
   };
   hedgeRound(arena.body.x, arena.body.y - 1);
 

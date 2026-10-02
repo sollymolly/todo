@@ -42,9 +42,11 @@ export function habitReward(streak: number): number {
 
 /**
  * One settled day: a tick (done), a miss, or a miss covered by a streak
- * freeze (frozen: no XP moved, streak held) — and the XP it moved.
+ * freeze (frozen: no XP moved, streak held) — and the XP it moved. `chosen`:
+ * a miss the user set themselves, which won't get a freeze automatically
+ * when its week is up.
  */
-export type HabitDay = { done: boolean; frozen: boolean; xp: number };
+export type HabitDay = { done: boolean; frozen: boolean; xp: number; chosen?: boolean };
 
 export type Habit = {
   id: string;

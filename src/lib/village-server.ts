@@ -126,7 +126,7 @@ export async function ensurePlot(me: string, friends: string[]): Promise<void> {
 function placeOf(kind: string, host: string | null): Place {
   if (kind === "house" && host) return { kind: "house", hostId: host };
   if (kind === "inside" && host) return { kind: "inside", hostId: host };
-  if (kind === "arena" || kind === "library" || kind === "store") return { kind };
+  if (kind === "arena" || kind === "library" || kind === "store" || kind === "bakery") return { kind };
   if (kind === "hall") return { kind: "hall" };
   if (kind === "square") return { kind: "square" };
   return { kind: "home" };
@@ -386,8 +386,8 @@ export async function pulse(
   const at: Place | null = place?.kind === "inside" && !known.has(place.hostId) ? { kind: "square" } : place;
   const elsewhere = at ? !(await writePresence(me, at, pos, device, here)) : false;
   // A room everyone in it sees the same: a house, or one of this village's
-  // arena, library and store.
-  const shared = at?.kind === "inside" || at?.kind === "arena" || at?.kind === "library" || at?.kind === "store";
+  // arena, library, store and bakery.
+  const shared = at?.kind === "inside" || at?.kind === "arena" || at?.kind === "library" || at?.kind === "store" || at?.kind === "bakery";
   const focusXp = await sessionHeartbeat(me);
 
   const presenceRows = (await sql`
@@ -476,7 +476,8 @@ export type VillageData = {
   /** Everyone's house, mine included. */
   residents: Resident[];
   pulse: Pulse;
-  notes: { id: string; from: string; body: string; at: number; read: boolean }[];
+  /** `treat`: a treat from the bakery left with it (src/lib/bakery.ts). */
+  notes: { id: string; from: string; body: string; treat: string | null; at: number; read: boolean }[];
 };
 
 export async function loadVillage(me: string): Promise<VillageData> {
@@ -556,18 +557,18 @@ export async function loadVillage(me: string): Promise<VillageData> {
   for (const n of neighbours) n.duels = records.get(n.id) ?? { wins: 0, losses: 0 };
 
   const noteRows = (await sql`
-    select n.id, p.display_name as author, n.body, n.created_at, n.read_at is not null as read
+    select n.id, p.display_name as author, n.body, n.treat, n.created_at, n.read_at is not null as read
       from door_notes n join profiles p on p.id = n.author_id
      where n.owner_id = ${me}::uuid
      order by n.created_at desc
      limit 30
-  `) as { id: string; author: string; body: string; created_at: unknown; read: boolean }[];
+  `) as { id: string; author: string; body: string; treat: string | null; created_at: unknown; read: boolean }[];
 
   return {
     me: meView,
     neighbours,
     residents: await residents(new Set(ids)),
     pulse: await pulse(me, null),
-    notes: noteRows.map((n) => ({ id: n.id, from: n.author, body: n.body, at: ms(n.created_at), read: n.read })),
+    notes: noteRows.map((n) => ({ id: n.id, from: n.author, body: n.body, treat: n.treat, at: ms(n.created_at), read: n.read })),
   };
 }

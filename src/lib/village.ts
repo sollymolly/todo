@@ -26,9 +26,10 @@ export type Place =
      position too. */
   | { kind: "inside"; hostId: string }
   | { kind: "arena" }
-  /* A village's library and store: rooms of their own, like the arena. */
+  /* A village's library, store and bakery: rooms of their own, like the arena. */
   | { kind: "library" }
-  | { kind: "store" };
+  | { kind: "store" }
+  | { kind: "bakery" };
 
 /** Where someone stands in a shared room, in tiles. */
 export type Pos = { x: number; y: number; facing: 0 | 1 | 2 | 3 };
@@ -50,7 +51,7 @@ export function spaceOf(p: Place | null, village: number): string | null {
   if (!p) return null;
   if (p.kind === "inside") return `inside:${p.hostId}`;
   if (p.kind === "arena") return arenaSpace(village);
-  if (p.kind === "hall" || p.kind === "library" || p.kind === "store") return `${p.kind}:${village}`;
+  if (p.kind === "hall" || p.kind === "library" || p.kind === "store" || p.kind === "bakery") return `${p.kind}:${village}`;
   return null;
 }
 
@@ -58,11 +59,11 @@ export function spaceOf(p: Place | null, village: number): string | null {
 export const arenaSpace = (village: number) => `arena:${village}`;
 export const outsideSpace = (village: number) => `village:${village}`;
 
-type SpaceKind = "hall" | "arena" | "village" | "library" | "store" | "inside";
+type SpaceKind = "hall" | "arena" | "village" | "library" | "store" | "bakery" | "inside";
 
 /** A space's kind and village: "hall:2" → hall, 2. Rooms have no village. */
 export function readSpace(space: string): { kind: SpaceKind; village: number } | null {
-  const m = /^(hall|arena|village|library|store):(\d{1,6})$/.exec(space);
+  const m = /^(hall|arena|village|library|store|bakery):(\d{1,6})$/.exec(space);
   if (m) return { kind: m[1] as SpaceKind, village: Number(m[2]) };
   return space.startsWith("inside:") ? { kind: "inside", village: -1 } : null;
 }
@@ -75,7 +76,7 @@ export function readSpace(space: string): { kind: SpaceKind; village: number } |
  */
 export function liveSpaceOf(p: Place | null, village: number): string | null {
   if (!p || p.kind === "home") return null;
-  if (p.kind === "inside" || p.kind === "arena" || p.kind === "library" || p.kind === "store") return spaceOf(p, village);
+  if (p.kind === "inside" || p.kind === "arena" || p.kind === "library" || p.kind === "store" || p.kind === "bakery") return spaceOf(p, village);
   return outsideSpace(village);
 }
 
@@ -146,6 +147,9 @@ export const ROOFS: { id: string; label: string; fill: string; dark: string; sho
   { id: "charcoal", label: "Charcoal", fill: "#3f3d3a", dark: "#2a2826" },
   { id: "gold", label: "Gold leaf", fill: "#d9a92e", dark: "#a87a17", shop: true },
   { id: "royal", label: "Royal blue", fill: "#2f4fa3", dark: "#22397a", shop: true },
+  { id: "copper", label: "Verdigris copper", fill: "#5fa391", dark: "#3f7a6a", shop: true },
+  { id: "blossom", label: "Blossom", fill: "#e08aa4", dark: "#b2607a", shop: true },
+  { id: "amethyst", label: "Amethyst", fill: "#6a4fb0", dark: "#4b3585", shop: true },
 ];
 
 export const GARDENS: { garden: Garden; label: string }[] = [

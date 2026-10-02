@@ -13,6 +13,7 @@ export const LIFT: Record<FurnitureKind, number> = {
   bed: 14, table: 10, chair: 16, stool: 6, plant: 22, rug: 0, lamp: 30, chest: 8,
   bookshelf: 44, desk: 14, sofa: 16, armorstand: 34, fireplace: 40, trophy: 22, throne: 44,
   painting: 0, window: 0, clock: 0, mirror: 0, banner: 0,
+  piano: 30, aquarium: 26, telescope: 30, stainedglass: 0,
 };
 
 const INK = "#3b2a1c";
@@ -204,6 +205,61 @@ function body(kind: FurnitureKind, w: number, h: number): React.ReactNode {
           <rect x={4} y={2} width={24} height={3} fill={WOOD_D} />
           <path d="M7 5 L25 5 L25 32 L16 26 L7 32 Z" fill="#a8453b" stroke={INK} strokeWidth={2} />
           <path d="M16 11 L19 16 L16 21 L13 16 Z" fill="#e8c47a" />
+        </g>
+      );
+    case "piano":
+      return (
+        <g>
+          <rect x={2} y={-30} width={W - 4} height={H + 26} fill="#2a1d16" stroke={INK} strokeWidth={2} />
+          <rect x={6} y={-24} width={W - 12} height={14} fill="#3d2a1f" />
+          <rect x={W / 2 - 8} y={-22} width={16} height={10} fill="#f4ecd6" stroke="#8a7a66" strokeWidth={1} />
+          <rect x={0} y={0} width={W} height={12} fill="#3d2a1f" stroke={INK} strokeWidth={2} />
+          <rect x={3} y={2} width={W - 6} height={8} fill="#fbf7ee" />
+          {Array.from({ length: 9 }, (_, i) =>
+            i % 7 === 2 || i % 7 === 6 ? null : <rect key={i} x={7 + i * 6.4} y={2} width={3} height={5} fill="#1a1410" />
+          )}
+          <rect x={6} y={12} width={4} height={H - 14} fill="#2a1d16" />
+          <rect x={W - 10} y={12} width={4} height={H - 14} fill="#2a1d16" />
+          <rect x={W / 2 - 4} y={H - 6} width={8} height={4} fill="#d9a92e" />
+        </g>
+      );
+    case "aquarium":
+      return (
+        <g>
+          <rect x={2} y={8} width={W - 4} height={H - 8} fill={WOOD_D} stroke={INK} strokeWidth={2} />
+          <rect x={2} y={-26} width={W - 4} height={36} fill="#7fc4e0" stroke={INK} strokeWidth={2} />
+          <rect x={4} y={-22} width={W - 8} height={4} fill="#a9dcef" />
+          <rect x={4} y={2} width={W - 8} height={6} fill="#e3d2a4" />
+          <path d="M12 6 Q8 -6 13 -14 M16 6 Q19 -4 15 -10" fill="none" stroke="#3f7a3a" strokeWidth={2} />
+          <ellipse cx={40} cy={-10} rx={6} ry={4} fill="#f28a3c" stroke={INK} strokeWidth={1} />
+          <path d="M34 -10 L29 -14 L29 -6 Z" fill="#f28a3c" stroke={INK} strokeWidth={1} />
+          <ellipse cx={30} cy={0} rx={4} ry={2.5} fill="#f2c14e" />
+          <path d="M34 0 L37 -2 L37 2 Z" fill="#f2c14e" />
+          {[[50, -6], [52, -14], [49, -20]].map(([x, y]) => (
+            <circle key={y} cx={x} cy={y} r={1.6} fill="none" stroke="#ffffff" strokeWidth={1} />
+          ))}
+        </g>
+      );
+    case "telescope":
+      return (
+        <g>
+          <path d="M16 6 L7 30 M16 6 L25 30 M16 6 L16 30" stroke={WOOD_D} strokeWidth={3} />
+          <g transform="rotate(-30 16 -6)">
+            <rect x={2} y={-11} width={28} height={9} rx={2} fill="#c9a24a" stroke={INK} strokeWidth={2} />
+            <rect x={26} y={-13} width={6} height={13} rx={1} fill="#8a6a2a" stroke={INK} strokeWidth={1.5} />
+          </g>
+          <circle cx={16} cy={5} r={3} fill="#5a3e28" stroke={INK} strokeWidth={1} />
+        </g>
+      );
+    case "stainedglass":
+      return (
+        <g>
+          <path d="M5 32 V12 A11 11 0 0 1 27 12 V32 Z" fill="#3b2a1c" stroke={INK} strokeWidth={2} />
+          <path d="M8 30 V13 A8 8 0 0 1 16 5 V30 Z" fill="#c0392b" />
+          <path d="M16 5 A8 8 0 0 1 24 13 V30 H16 Z" fill="#2f4fa3" />
+          <rect x={8} y={18} width={16} height={6} fill="#f2c14e" />
+          <path d="M16 5 V30 M8 18 H24 M8 24 H24" stroke="#3b2a1c" strokeWidth={1.5} />
+          <circle cx={16} cy={13} r={2.5} fill="#5f9e3a" stroke="#3b2a1c" strokeWidth={1} />
         </g>
       );
   }

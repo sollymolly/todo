@@ -52,8 +52,9 @@ function cleanDays(days: number[]): number[] | null {
 }
 
 /**
- * Settles every due day that has ended without a tick: a streak freeze if one
- * is left (streak held, no XP), otherwise -1 XP and the streak resets. Idempotent, so it runs on every load next to sweepOverdue.
+ * Settles every due day that has ended without a tick: -1 XP and the streak
+ * resets. A streak freeze is only spent where the user puts one (setHabitDay).
+ * Idempotent, so it runs on every load next to sweepOverdue.
  * Returns the XP it moved (zero or negative).
  */
 export async function syncHabits(): Promise<number> {
@@ -111,7 +112,7 @@ export async function listHabits(): Promise<HabitBoard> {
        order by h.active desc, h.created_at
     `,
     sql`
-      select habit_id, day::text as day, done, frozen, xp
+      select habit_id, day::text as day, done, frozen, xp, chosen
         from habit_log
        where user_id = ${userId}::uuid
          and day > current_date - ${HISTORY_DAYS}::int
@@ -120,7 +121,7 @@ export async function listHabits(): Promise<HabitBoard> {
 
   const byHabit: Record<string, Record<string, HabitDay>> = {};
   for (const l of logs as (HabitDay & { habit_id: string; day: string })[])
-    (byHabit[l.habit_id] ??= {})[l.day] = { done: l.done, frozen: l.frozen, xp: l.xp };
+    (byHabit[l.habit_id] ??= {})[l.day] = { done: l.done, frozen: l.frozen, xp: l.xp, chosen: l.chosen };
 
   const me = (meRows as { today: string; zone: string | null; freezes: number }[])[0];
   const today = me?.today ?? new Date().toISOString().slice(0, 10);
@@ -181,6 +182,44 @@ export async function toggleHabit(
     const msg = e instanceof Error ? e.message : "";
     if (/toggle_habit_day.* does not exist/i.test(msg))
       return { ok: false, error: "Run db/schema.sql to tick habits." };
+    return {
+      ok: false,
+      error: /^That (habit|day)/.test(msg) ? msg : "Could not update that habit.",
+    };
+  }
+}
+
+/** What a closed day can be made into. */
+export type DayState = "done" | "missed" | "frozen";
+
+/**
+ * Changes a closed day from the last week: ticks it late, marks it missed,
+ * or spends a streak freeze on it (the user's choice of which miss gets one).
+ * `done` in the result is whether the day ends up kept.
+ */
+export async function setHabitDay(
+  id: string,
+  day: string,
+  to: DayState,
+  zone?: string
+): Promise<HabitTick> {
+  const userId = await requireUserId();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !["done", "missed", "frozen"].includes(to))
+    return { ok: false, error: "Could not update that habit." };
+  const tz = zone && /^[A-Za-z0-9+_\-/]{1,64}$/.test(zone) ? zone : null;
+  try {
+    const rows = (await sql`
+      select set_habit_day(${userId}::uuid, ${id}::uuid, ${day}::date, ${to}, ${tz}::text) as result
+    `) as {
+      result: { done: boolean; delta: number; streak: number; xp: number };
+    }[];
+    revalidatePath("/habits");
+    revalidatePath("/");
+    return { ok: true, ...rows[0].result };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (/set_habit_day.* does not exist/i.test(msg))
+      return { ok: false, error: "Run db/schema.sql to change past days." };
     return {
       ok: false,
       error: /^That (habit|day)/.test(msg) ? msg : "Could not update that habit.",
