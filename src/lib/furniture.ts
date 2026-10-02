@@ -15,11 +15,12 @@ export type FurnitureKind =
   | "bed" | "table" | "chair" | "stool" | "plant" | "rug" | "lamp" | "chest"
   | "bookshelf" | "desk" | "sofa" | "armorstand" | "fireplace" | "trophy" | "throne"
   | "painting" | "window" | "clock" | "mirror" | "banner"
-  | "piano" | "aquarium" | "telescope" | "stainedglass";
+  | "piano" | "aquarium" | "telescope" | "stainedglass"
+  | "breadoven" | "cakestand" | "breadbasket" | "pans";
 
 export type Layer = "floor" | "rug" | "wall";
 
-/** `shop`: sold at the village store as "furniture:<kind>" (src/lib/shop.ts), not unlocked by level. */
+/** `shop`: sold for coins as "furniture:<kind>" (src/lib/shop.ts: the store, or the bakery), not unlocked by level. */
 export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: number; layer: Layer; level: number; shop?: boolean }> = {
   bed: { label: "Bed", w: 2, h: 2, layer: "floor", level: 1 },
   table: { label: "Table", w: 2, h: 1, layer: "floor", level: 1 },
@@ -45,6 +46,10 @@ export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: num
   aquarium: { label: "Aquarium", w: 2, h: 1, layer: "floor", level: 1, shop: true },
   telescope: { label: "Telescope", w: 1, h: 1, layer: "floor", level: 1, shop: true },
   stainedglass: { label: "Stained glass", w: 1, h: 1, layer: "wall", level: 1, shop: true },
+  breadoven: { label: "Bread oven", w: 2, h: 1, layer: "floor", level: 1, shop: true },
+  cakestand: { label: "Cake stand", w: 1, h: 1, layer: "floor", level: 1, shop: true },
+  breadbasket: { label: "Bread basket", w: 1, h: 1, layer: "floor", level: 1, shop: true },
+  pans: { label: "Copper pans", w: 1, h: 1, layer: "wall", level: 1, shop: true },
 };
 
 export const KIND_LIST = Object.keys(FURNITURE) as FurnitureKind[];

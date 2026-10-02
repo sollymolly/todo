@@ -11,6 +11,7 @@ import { DuelUI, HeadBar } from "@/components/village/DuelUI";
 import { ArenaGate, ArenaView, BakeryView, LibraryView, RoomView, StoreView } from "@/components/village/scenes";
 import { ShopPanel } from "@/components/village/ShopPanel";
 import { BakeryPanel } from "@/components/village/BakeryPanel";
+import { goodById } from "@/lib/shop";
 import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
 import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
@@ -42,6 +43,7 @@ import {
   type Place,
   type Resident,
   type SessionView,
+  type Tier,
   type Villager,
 } from "@/lib/village";
 import type { VillageData } from "@/lib/village-server";
@@ -67,9 +69,9 @@ type Open =
   | { kind: "people" }
   | { kind: "duelist"; id: string }
   | { kind: "train" }
-  | { kind: "shop" }
+  | { kind: "shop"; focus?: string }
   | { kind: "bakery" }
-  | { kind: "desks" }
+  | { kind: "desks"; spot: "library" | "bakery" }
   | null;
 
 type Prompt =
@@ -80,6 +82,7 @@ type Prompt =
   | { kind: "indoor"; what: Indoor }
   | { kind: "counter" }
   | { kind: "desk" }
+  | { kind: "display"; good: string }
   | { kind: "leave" }
   | null;
 
@@ -124,7 +127,8 @@ const TREE_TINT: Record<Theme, string | undefined> = {
 };
 
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
-const promptKey = (p: Prompt) => (!p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind === "indoor" ? `indoor:${p.what}` : p.kind);
+const promptKey = (p: Prompt) =>
+  !p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind === "indoor" ? `indoor:${p.what}` : p.kind === "display" ? `display:${p.good}` : p.kind;
 
 export default function Village({ data }: { data: VillageData }) {
   const [me, setMe] = useState<Stats>(data.me);
@@ -149,8 +153,13 @@ export default function Village({ data }: { data: VillageData }) {
   const villages = useMemo(() => Math.max(1, ...residents.map((r) => villageOf(r.plot) + 1)), [residents]);
   const world: World = useMemo(() => {
     const owners: (string | null)[] = Array(PLOTS_PER_VILLAGE).fill(null);
-    for (const r of residents) if (villageOf(r.plot) === v) owners[r.plot % PLOTS_PER_VILLAGE] = r.id;
-    return buildWorld(v, owners);
+    const tiers: (Tier | null)[] = Array(PLOTS_PER_VILLAGE).fill(null);
+    for (const r of residents)
+      if (villageOf(r.plot) === v) {
+        owners[r.plot % PLOTS_PER_VILLAGE] = r.id;
+        tiers[r.plot % PLOTS_PER_VILLAGE] = tierFor(r.level).tier;
+      }
+    return buildWorld(v, owners, tiers);
   }, [residents, v]);
   const plotOf = useMemo(() => new Map(world.plots.filter((p) => p.owner).map((p) => [p.owner!, p])), [world]);
 
@@ -388,17 +397,17 @@ export default function Village({ data }: { data: VillageData }) {
   }, [sceneKey]);
 
   /**
-   * In the library: whoever's keeping a seat at one of its desks without
-   * being here — at home in the app, or away — sat at it. (Those who are
-   * here walk about like anyone else.)
+   * In the library or the bakery: whoever's keeping a seat at one of its
+   * desks or tables without being here — at home in the app, or away — sat
+   * at it. (Those who are here walk about like anyone else.)
    */
   const deskSitters = useMemo(() => {
     const out: { villager: Villager; known: boolean; seat: { x: number; y: number; face: 0 | 1 | 2 | 3 } }[] = [];
-    if (scene.kind !== "indoor" || scene.indoor.kind !== "library") return out;
-    const desks = scene.indoor.desks;
+    if (scene.kind !== "indoor" || !scene.indoor.desks.length) return out;
+    const { desks, kind } = scene.indoor;
     const here = new Set(roomPeople.map((p) => p.villager.id));
     livePulse.sessions
-      .filter((s) => (s.village ?? 0) === v && s.spot === "library")
+      .filter((s) => (s.village ?? 0) === v && s.spot === kind)
       .sort((a, b) => a.startedAt - b.startedAt)
       .forEach((s, i) => {
         const desk = desks[i % desks.length];
@@ -806,6 +815,10 @@ export default function Village({ data }: { data: VillageData }) {
             if (c && ty >= c.y + 1 && ty < c.y + 2.6 && tx >= c.x - 0.5 && tx <= c.x + c.w + 0.5) best = { kind: "counter" };
             for (const d of sc.indoor.desks)
               if (!best && d.seats.some((st: { x: number; y: number }) => Math.hypot(tx - (st.x + 0.5), ty - (st.y + 0.5)) < 1.3)) best = { kind: "desk" };
+            // Something for sale on a stand: stand next to it.
+            for (const d of sc.indoor.displays)
+              if (!best && !d.wall && Array.from({ length: d.w }, (_, i) => Math.hypot(tx - (d.x + i + 0.5), ty - (d.y + 0.5))).some((r) => r < 1.4))
+                best = { kind: "display", good: d.good };
           }
           const d = Math.hypot(tx - (exit.x + 0.5), ty - (exit.y + 0.5));
           if (d < 1.8) best = { kind: "leave" };
@@ -1003,6 +1016,12 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ------------------------------------------------------------- input */
 
+  /** The tables in the room I'm in: the library's desks or the bakery's. */
+  const openDesks = useCallback(() => {
+    const sc = sceneRef.current;
+    setOpen({ kind: "desks", spot: sc.kind === "indoor" && sc.indoor.kind === "bakery" ? "bakery" : "library" });
+  }, []);
+
   const openPrompt = useCallback(
     (p: Prompt) => {
       if (!p) return;
@@ -1014,11 +1033,12 @@ export default function Village({ data }: { data: VillageData }) {
         const sc = sceneRef.current;
         setOpen({ kind: sc.kind === "indoor" && sc.indoor.kind === "bakery" ? "bakery" : "shop" });
       }
-      else if (p.kind === "desk") setOpen({ kind: "desks" });
+      else if (p.kind === "desk") openDesks();
+      else if (p.kind === "display") setOpen({ kind: "shop", focus: p.good });
       else if (p.kind === "leave") leave();
       else void enterHouse(p.id);
     },
-    [enterArena, enterHouse, enterIndoor, leave]
+    [enterArena, enterHouse, enterIndoor, leave, openDesks]
   );
 
   useEffect(() => {
@@ -1235,7 +1255,9 @@ export default function Village({ data }: { data: VillageData }) {
       case "counter":
         return scene.kind === "indoor" && scene.indoor.kind === "bakery" ? "Order at the counter" : "Browse the store";
       case "desk":
-        return "Study at the desks";
+        return scene.kind === "indoor" && scene.indoor.kind === "bakery" ? "Work at a café table" : "Study at the desks";
+      case "display":
+        return `Look at the ${goodById(prompt.good)?.name.toLowerCase() ?? "goods"}`;
       case "leave":
         return scene.kind === "arena" ? "Leave the arena" : "Go outside";
       case "house":
@@ -1380,7 +1402,7 @@ export default function Village({ data }: { data: VillageData }) {
                 label={d.villager.name}
                 stranger={!d.known}
                 bind={bindAgent("room", d.villager.id)}
-                onTap={() => setOpen({ kind: "desks" })}
+                onTap={openDesks}
               />
             ))}
           <Walker
@@ -1666,10 +1688,10 @@ export default function Village({ data }: { data: VillageData }) {
           <p className="mt-3 text-xs text-mud-500">A new village opens when the last one fills up.</p>
         </Panel>
       )}
-      {!deco && open?.kind === "shop" && <ShopPanel onClose={() => setOpen(null)} />}
+      {!deco && open?.kind === "shop" && <ShopPanel focus={open.focus} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "bakery" && <BakeryPanel friends={neighbours.map((n) => ({ id: n.id, name: n.name }))} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "desks" && (
-        <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} spot="library" onClose={() => setOpen(null)} />
+        <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} spot={open.spot} onClose={() => setOpen(null)} />
       )}
       {!deco && open?.kind === "duelist" && byId.get(open.id) && (
         <DuelistCard
@@ -1959,7 +1981,9 @@ function Outdoors({
                 onHouse(p.owner!);
               }}
               aria-label={isMe ? "Go into your house" : n.known ? `Go into ${n.name}'s house` : `${n.name}'s house`}
-              className="absolute [&>svg]:h-full [&>svg]:w-full"
+              // Only what's drawn takes a press, so the grass round a tent is
+              // somewhere to walk, not the door.
+              className="pointer-events-none absolute [&>svg]:h-full [&>svg]:w-full [&_svg_*]:pointer-events-auto"
               style={{ left: p.x * T * S, top: p.y * T * S, width: 8 * T * S, height: 7 * T * S, zIndex: (p.y + 6) * T }}
             >
               <House

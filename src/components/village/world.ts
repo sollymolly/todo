@@ -22,6 +22,8 @@
    by a seeded random, so the trees are in the same places for everyone.
    -------------------------------------------------------------------------- */
 
+import type { Tier } from "@/lib/village";
+
 export const T = 32;
 
 const MARGIN = 4; // forest around the edge
@@ -44,8 +46,21 @@ export type Plot = {
   y: number;
   /** Where to stand to knock: the tile in front of the door. */
   door: { x: number; y: number };
-  /** Walls and roof, which can't be walked through. */
+  /** Where the building is drawn: walls and roof. */
   body: Rect;
+};
+
+/**
+ * What of a plot can't be walked through, by house size, in tiles from the
+ * plot's top-left (House.tsx draws it). A tent is a triangle of canvas with
+ * grass all round it, so only the canvas blocks; anything bigger fills its
+ * 6×5 body.
+ */
+const FOOTPRINT: Partial<Record<Tier, Rect[]>> = {
+  tent: [
+    { x: 3, y: 3, w: 2, h: 1 },
+    { x: 2, y: 4, w: 4, h: 2 },
+  ],
 };
 
 export type Table = { x: number; y: number; w: number; seats: { x: number; y: number; face: Facing }[] };
@@ -194,9 +209,9 @@ export function plotAt(n: number): { x: number; y: number } {
 /**
  * Village `v`, the same on every screen. `owners[i]` is whose house is on
  * its i-th plot — plot v × PLOTS_PER_VILLAGE + i (db: houses.plot) — or
- * nothing for an empty lot.
+ * nothing for an empty lot, and `tiers[i]` how big that house is.
  */
-export function buildWorld(v: number, owners: (string | null)[]): World {
+export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | null)[] = []): World {
   const { name, theme } = villageInfo(v);
   const bands = BANDS;
   const h = RAIL_TOP + 7 + MARGIN;
@@ -286,7 +301,10 @@ export function buildWorld(v: number, owners: (string | null)[]): World {
     const body = { x: x + 1, y: top + 1, w: 6, h: 5 };
     const plot: Plot = { n, owner, x, y: top, door: { x: x + 4, y: top + 6 }, body };
     if (owner) {
-      block(body);
+      const tier = tiers[i];
+      const foot = tier ? FOOTPRINT[tier] : undefined;
+      if (foot) for (const r of foot) block({ ...r, x: x + r.x, y: top + r.y });
+      else block(body);
       // Garden beds either side of the path to the door.
       block({ x: x + 1, y: top + 6, w: 2, h: 1 });
       block({ x: x + 5, y: top + 6, w: 2, h: 1 });

@@ -3,18 +3,44 @@
 import { useState } from "react";
 import { Panel } from "@/components/village/panels";
 import TreatArt from "@/components/village/Treat";
+import { GoodRow } from "@/components/village/ShopPanel";
 import { setShop, useShop } from "@/components/village/shop-state";
-import { sendTreat } from "@/lib/village-actions";
+import { buyGood, sendTreat } from "@/lib/village-actions";
+import { BAKERY_GOODS } from "@/lib/shop";
 import { TREATS, type TreatId } from "@/lib/bakery";
 import { NOTE_MAX } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
-   The bakery's counter (src/lib/bakery.ts): pick a treat, pick a companion,
-   add a note if you like, and it's left on their door. Paid for in the
-   store's coins (shop-state.ts).
+   The bakery's counter (src/lib/bakery.ts). Two sides to it: a treat for a
+   companion — pick one, pick them, add a note if you like, and it's left on
+   their door — and things for your own house (src/lib/shop.ts,
+   BAKERY_GOODS), bought like the store's. All in the store's coins
+   (shop-state.ts).
    -------------------------------------------------------------------------- */
 
 export function BakeryPanel({ friends, onClose }: { friends: { id: string; name: string }[]; onClose: () => void }) {
+  const shop = useShop();
+  const [tab, setTab] = useState<"treats" | "home">("treats");
+
+  return (
+    <Panel title="Bakery" sub={shop ? `${shop.coins} coins · fresh from the oven` : "Warming up…"} onClose={onClose}>
+      <div className="mb-3 flex gap-1 rounded-lg bg-mud-100 p-1 text-xs font-semibold">
+        {(["treats", "home"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 rounded-md px-2 py-1 transition ${tab === t ? "bg-white text-mud-900 shadow-sm" : "text-mud-500"}`}
+          >
+            {t === "treats" ? "Send a treat" : "For your house"}
+          </button>
+        ))}
+      </div>
+      {tab === "treats" ? <Treats friends={friends} /> : <ForHome />}
+    </Panel>
+  );
+}
+
+function Treats({ friends }: { friends: { id: string; name: string }[] }) {
   const shop = useShop();
   const [pick, setPick] = useState<TreatId | null>(null);
   const [to, setTo] = useState(friends[0]?.id ?? "");
@@ -38,7 +64,7 @@ export function BakeryPanel({ friends, onClose }: { friends: { id: string; name:
   }
 
   return (
-    <Panel title="Bakery" sub={shop ? `${shop.coins} coins · fresh from the oven` : "Warming up…"} onClose={onClose}>
+    <>
       <p className="mb-2 text-xs text-mud-500">Send a companion something sweet. It waits on their door with your note.</p>
       <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         {TREATS.map((t) => {
@@ -105,6 +131,35 @@ export function BakeryPanel({ friends, onClose }: { friends: { id: string; name:
       {note && (
         <p className={`mt-3 rounded-md px-2 py-1 text-xs ${note.ok ? "bg-grass-100 text-grass-700" : "bg-red-50 text-red-800"}`}>{note.text}</p>
       )}
-    </Panel>
+    </>
+  );
+}
+
+/** Kitchen things for your own house, kept like the store's furniture. */
+function ForHome() {
+  const shop = useShop();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  async function buy(id: string) {
+    setBusy(id);
+    setNote(null);
+    const r = await buyGood(id).catch(() => ({ ok: false as const, error: "Couldn't buy that just now." }));
+    setBusy(null);
+    if (!r.ok) return setNote(r.error);
+    setShop(r.shop);
+    setNote("Bought. Find it when you decorate inside your house.");
+  }
+
+  return (
+    <>
+      <p className="mb-2 text-xs text-mud-500">A bit of the bakery to take home: yours to keep and place when you decorate.</p>
+      <ul className="space-y-1.5">
+        {BAKERY_GOODS.map((g) => (
+          <GoodRow key={g.id} good={g} shop={shop} busy={busy === g.id} onBuy={() => void buy(g.id)} />
+        ))}
+      </ul>
+      {note && <p className="mt-3 text-xs text-mud-700">{note}</p>}
+    </>
   );
 }

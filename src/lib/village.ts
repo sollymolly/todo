@@ -31,6 +31,14 @@ export type Place =
   | { kind: "store" }
   | { kind: "bakery" };
 
+/** Where a work session's table is: by the town hall, or in one of the rooms with tables. */
+export type Spot = "hall" | "library" | "bakery";
+
+/** "the library", for "· Ashford library". */
+export const SPOT_LABEL: Record<Spot, string> = { hall: "town hall", library: "library", bakery: "bakery" };
+
+export const readSpot = (raw: unknown): Spot => (raw === "library" || raw === "bakery" ? raw : "hall");
+
 /** Where someone stands in a shared room, in tiles. */
 export type Pos = { x: number; y: number; facing: 0 | 1 | 2 | 3 };
 
@@ -225,11 +233,13 @@ export type SessionView = {
   hostId: string;
   /** Whose town hall the table is in. */
   village: number;
-  /** Out by the town hall, or at a desk in the library. */
-  spot: "hall" | "library";
+  /** Out by the town hall, at a desk in the library, or at a bakery table. */
+  spot: Spot;
   focus: boolean;
   /** Epoch ms the shared focus clock counts from. */
   focusFrom: number | null;
+  /** The clock's rhythm: minutes of work, then of break (RHYTHMS). */
+  rhythm: Rhythm;
   startedAt: number;
   members: {
     villager: Villager;
@@ -325,14 +335,35 @@ export type NudgeView = {
 
 /* ------------------------------------------------------------ focus clock */
 
-export const ROUND_MS = 25 * 60 * 1000;
-export const BREAK_MS = 5 * 60 * 1000;
+/** A shared focus clock's rhythm: minutes of work, then minutes of break. */
+export type Rhythm = { work: number; rest: number };
+
+/** The rhythms a table can keep. The first is the default. */
+export const RHYTHMS: (Rhythm & { label: string; blurb: string })[] = [
+  { work: 25, rest: 5, label: "25 / 5", blurb: "Short sprints" },
+  { work: 50, rest: 10, label: "50 / 10", blurb: "Settled work" },
+  { work: 90, rest: 15, label: "90 / 15", blurb: "Deep work" },
+];
+
+/** One of RHYTHMS, or the first if it isn't. */
+export function cleanRhythm(r: unknown): Rhythm {
+  const x = r as Partial<Rhythm> | null;
+  const hit = RHYTHMS.find((k) => k.work === x?.work && k.rest === x?.rest) ?? RHYTHMS[0];
+  return { work: hit.work, rest: hit.rest };
+}
+
+export const rhythmLabel = (r: Rhythm) => `${r.work} / ${r.rest}`;
 
 /** Where a shared focus clock is: which phase, and how long is left in it. */
-export function focusPhase(from: number, now: number): { phase: "work" | "break"; left: number } {
-  const t = (((now - from) % (ROUND_MS + BREAK_MS)) + (ROUND_MS + BREAK_MS)) % (ROUND_MS + BREAK_MS);
-  return t < ROUND_MS ? { phase: "work", left: ROUND_MS - t } : { phase: "break", left: ROUND_MS + BREAK_MS - t };
+export function focusPhase(from: number, now: number, rhythm: Rhythm = RHYTHMS[0]): { phase: "work" | "break"; left: number } {
+  const work = rhythm.work * 60_000;
+  const cycle = work + rhythm.rest * 60_000;
+  const t = (((now - from) % cycle) + cycle) % cycle;
+  return t < work ? { phase: "work", left: work - t } : { phase: "break", left: cycle - t };
 }
+
+/** Focus XP for one 25-minute stretch at a table with `others` there too (db: award_focus_xp). */
+export const focusXp = (others: number) => 3 + Math.min(3, others);
 
 export function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));

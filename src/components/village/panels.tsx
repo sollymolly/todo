@@ -14,7 +14,7 @@ import {
   nudgeTargets,
   saveHouse,
   sendNudge,
-  setFocusRounds,
+  setFocusRhythm,
 } from "@/lib/village-actions";
 import { checkIn, clearMySession, serverNow, useSessionStore } from "@/lib/session-store";
 import {
@@ -32,10 +32,12 @@ import {
   tierFor,
   type HouseLook,
   type Neighbour,
+  SPOT_LABEL,
   type SessionView,
+  type Spot,
   type Status,
 } from "@/lib/village";
-import { MyQuestSwitch, QuestPicker, StartSessionForm, useMyQuests } from "@/components/village/SessionControls";
+import { MyQuestSwitch, QuestPicker, RhythmPicker, StartSessionForm, useMyQuests } from "@/components/village/SessionControls";
 import { villageInfo } from "@/components/village/world";
 import { ownsGood, useShop } from "@/components/village/shop-state";
 import TreatArt from "@/components/village/Treat";
@@ -519,8 +521,8 @@ export function HallPanel({
   sessions: SessionView[];
   sheets: Record<string, string>;
   me: Stats;
-  /** Opened at the town hall, or at a library desk: where a new table goes. */
-  spot?: "hall" | "library";
+  /** Opened at the town hall, a library desk or a bakery table: where a new table goes. */
+  spot?: Spot;
   onClose: () => void;
 }) {
   const { pulse, skew } = useSessionStore();
@@ -535,14 +537,14 @@ export function HallPanel({
 
   return (
     <Panel
-      title={spot === "library" ? "Library desks" : "Town hall"}
+      title={spot === "library" ? "Library desks" : spot === "bakery" ? "Bakery tables" : "Town hall"}
       sub={`Your focus: ${minutesLabel(me.focusToday)} today · ${minutesLabel(me.focusWeek)} this week`}
       onClose={onClose}
     >
       {sessions.length === 0 && !mine && <p className="mb-3 text-sm text-mud-500">Nobody&apos;s working here right now.</p>}
       <ul className="space-y-2.5">
         {sessions.map((s) => {
-          const phase = s.focus && s.focusFrom ? focusPhase(s.focusFrom, now) : null;
+          const phase = s.focus && s.focusFrom ? focusPhase(s.focusFrom, now, s.rhythm) : null;
           const isMine = s.id === mine?.id;
           const host = s.members.find((m) => m.villager.id === s.hostId) ?? s.members[0];
           return (
@@ -551,7 +553,7 @@ export function HallPanel({
                 <p className="text-sm font-semibold text-mud-900">
                   {isMine ? "Your table" : `${host?.villager.name ?? "A"}'s table`}
                   <span className="ml-1.5 text-xs font-normal text-mud-500">
-                    · {villageInfo(s.village ?? 0).name} {s.spot === "library" ? "library" : "town hall"}
+                    · {villageInfo(s.village ?? 0).name} {SPOT_LABEL[s.spot ?? "hall"]}
                   </span>
                 </p>
                 <p className="text-xs tabular-nums text-mud-600">
@@ -592,15 +594,15 @@ export function HallPanel({
                       <MyQuestSwitch />
                     </div>
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-mud-700">
-                    <input
-                      type="checkbox"
-                      checked={s.focus}
-                      onChange={(e) => void setFocusRounds(e.target.checked).then(() => checkIn(null))}
-                      className="size-4 accent-grass-600"
-                    />
-                    Shared focus rounds (25 / 5)
-                  </label>
+                  <div className="text-xs font-semibold text-mud-600">
+                    Shared focus rounds
+                    <div className="mt-1">
+                      <RhythmPicker
+                        value={s.focus ? s.rhythm : null}
+                        onChange={(r) => void setFocusRhythm(r).then(() => checkIn(null))}
+                      />
+                    </div>
+                  </div>
                   <button
                     className={BTN}
                     onClick={async () => {

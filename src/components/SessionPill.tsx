@@ -35,7 +35,7 @@ export default function SessionPill() {
   const now = serverNow(skew);
   const me = mine?.members.find((m) => m.villager.id === pulse?.me) ?? null;
   const since = me ? me.joinedAt : now;
-  const phase = mine?.focus && mine.focusFrom ? focusPhase(mine.focusFrom, now) : null;
+  const phase = mine?.focus && mine.focusFrom ? focusPhase(mine.focusFrom, now, mine.rhythm) : null;
   const others = mine ? mine.members.length - 1 : 0;
 
   return (

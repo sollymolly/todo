@@ -33,6 +33,8 @@ export type Good = {
   kind: "freeze" | "roof" | "wall" | "floor" | "furniture";
   /** A swatch for the counter. */
   color: string;
+  /** Sold at the bakery's counter rather than the store's. */
+  at?: "bakery";
 };
 
 export const COIN_GOODS: Good[] = [
@@ -61,7 +63,15 @@ export const COIN_GOODS: Good[] = [
   { id: "furniture:aquarium", name: "Aquarium", blurb: "Two goldfish who are very busy.", price: 90, kind: "furniture", color: "#7fc4e0" },
   { id: "furniture:telescope", name: "Telescope", blurb: "Brass, on a tripod, for looking at stars and neighbours.", price: 70, kind: "furniture", color: "#c9a24a" },
   { id: "furniture:stainedglass", name: "Stained glass window", blurb: "Red, blue and gold, for the back wall.", price: 60, kind: "furniture", color: "#c0392b" },
+  { id: "furniture:breadoven", name: "Bread oven", blurb: "A little brick oven, always warm. Your house will smell wonderful.", price: 100, kind: "furniture", color: "#b3643f", at: "bakery" },
+  { id: "furniture:cakestand", name: "Cake stand", blurb: "A cake under glass, for no particular occasion.", price: 45, kind: "furniture", color: "#f2a0b8", at: "bakery" },
+  { id: "furniture:breadbasket", name: "Bread basket", blurb: "Two fresh loaves in a wicker basket.", price: 25, kind: "furniture", color: "#c98a3c", at: "bakery" },
+  { id: "furniture:pans", name: "Copper pans", blurb: "Hung on the wall, as if you cook.", price: 35, kind: "furniture", color: "#c8743c", at: "bakery" },
 ];
+
+/** What each counter sells: the store's, and the bakery's for your own house. */
+export const STORE_GOODS = COIN_GOODS.filter((g) => !g.at);
+export const BAKERY_GOODS = COIN_GOODS.filter((g) => g.at === "bakery");
 
 /** The store's shelves, in the order they're shown. */
 export const SECTIONS: { kind: Good["kind"]; label: string }[] = [

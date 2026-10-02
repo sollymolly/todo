@@ -26,7 +26,11 @@ import {
   SAY_MAX,
   tierFor,
   type HouseLook,
+  cleanRhythm,
+  readSpot,
   type Resident,
+  type Rhythm,
+  type Spot,
   type Tier,
 } from "@/lib/village";
 
@@ -309,17 +313,20 @@ export async function myOpenQuests(): Promise<{ id: string; title: string }[]> {
   `) as { id: string; title: string }[];
 }
 
-export async function startSession(input: { focus: boolean; todoId: string | null; spot?: "hall" | "library" }): Promise<Result> {
+/** A new table. `rhythm`: its shared focus clock (RHYTHMS), or null for none. */
+export async function startSession(input: { rhythm: Rhythm | null; todoId: string | null; spot?: Spot }): Promise<Result> {
   const me = await requireUserId();
   if (await rateLimited("session", me)) return { ok: false, error: TOO_MANY };
   await leaveTable(me);
   const todo = await ownOpenQuest(me, input.todoId);
+  const focus = !!input.rhythm;
+  const { work, rest } = cleanRhythm(input.rhythm);
   // One statement, so the table never exists without anyone at it.
   await sql`
     with s as (
-      insert into work_sessions (host_id, focus, focus_from, village, spot)
-      values (${me}::uuid, ${!!input.focus}, case when ${!!input.focus} then now() end, ${await myVillage(me)},
-              ${input.spot === "library" ? "library" : "hall"})
+      insert into work_sessions (host_id, focus, focus_from, focus_work, focus_rest, village, spot)
+      values (${me}::uuid, ${focus}, case when ${focus} then now() end, ${work}, ${rest}, ${await myVillage(me)},
+              ${readSpot(input.spot)})
       returning id
     )
     insert into session_members (session_id, user_id, todo_id)
@@ -370,11 +377,18 @@ export async function setSessionQuest(todoId: string | null): Promise<void> {
   `;
 }
 
-/** Focus rounds on or off for the whole table; turning on starts a fresh round. */
-export async function setFocusRounds(on: boolean): Promise<void> {
+/**
+ * The whole table's focus clock: a rhythm (RHYTHMS), or null for none.
+ * Turning it on or changing it starts a fresh round.
+ */
+export async function setFocusRhythm(rhythm: Rhythm | null): Promise<void> {
   const me = await requireUserId();
+  const on = !!rhythm;
+  const { work, rest } = cleanRhythm(rhythm);
   await sql`
-    update work_sessions s set focus = ${!!on}, focus_from = case when ${!!on} then now() end
+    update work_sessions s
+       set focus = ${on}, focus_from = case when ${on} then now() end,
+           focus_work = ${work}, focus_rest = ${rest}
      where s.ended_at is null
        and s.id = (select session_id from session_members where user_id = ${me}::uuid and left_at is null)
   `;

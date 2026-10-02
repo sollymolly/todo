@@ -546,7 +546,8 @@ create index if not exists nudges_pair_idx on nudges(from_id, to_id, created_at 
 -- Work sessions: a table at the town hall. Membership is kept as intervals, so
 -- time worked is their sum. A member silent for two minutes is taken off as of
 -- their last check-in; a session ends when its last member leaves. With focus
--- on, everyone shares one 25/5 clock counted from `focus_from`.
+-- on, everyone shares one clock counted from `focus_from`: focus_work minutes
+-- of work, then focus_rest of break (25/5, 50/10 or 90/15; village.ts RHYTHMS).
 -- ---------------------------------------------------------------------------
 create table if not exists work_sessions (
   id          uuid primary key default gen_random_uuid(),
@@ -562,7 +563,11 @@ alter table work_sessions add column if not exists village integer not null defa
 -- Where the table is: out by the town hall, or at a desk in the library.
 alter table work_sessions add column if not exists spot text not null default 'hall';
 alter table work_sessions drop constraint if exists work_sessions_spot_check;
-alter table work_sessions add constraint work_sessions_spot_check check (spot in ('hall', 'library'));
+alter table work_sessions add constraint work_sessions_spot_check check (spot in ('hall', 'library', 'bakery'));
+alter table work_sessions add column if not exists focus_work integer not null default 25
+  check (focus_work between 5 and 180);
+alter table work_sessions add column if not exists focus_rest integer not null default 5
+  check (focus_rest between 1 and 60);
 
 create table if not exists session_members (
   id              uuid primary key default gen_random_uuid(),
@@ -573,7 +578,8 @@ create table if not exists session_members (
   joined_at       timestamptz not null default now(),
   last_seen       timestamptz not null default now(),
   left_at         timestamptz,
-  /* Whole 25-minute stretches of this stay already paid for. */
+  /* Whole 25-minute stretches of this stay already paid for (whatever the
+     table's focus rhythm: pay goes by time at the table). */
   rounds_paid     integer not null default 0
 );
 create index if not exists session_members_session_idx on session_members(session_id) where left_at is null;
@@ -1763,8 +1769,10 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- award_focus_xp — pays for whole 25-minute stretches a member has sat
--- through since last paid: +3, or +4 if anyone was there with them, at most
--- 12 a day in their own timezone. Returns the XP just added.
+-- through since last paid: +3, and +1 for everyone else at the table for any
+-- of that stretch, up to +3 (6 with three or more for company). At most four
+-- stretches a day are paid, in their own timezone, so working alone tops out
+-- at 12 and company is worth more. Returns the XP just added.
 -- ---------------------------------------------------------------------------
 create or replace function award_focus_xp(p_member uuid)
 returns integer
@@ -1777,7 +1785,8 @@ declare
   v_today    integer;
   v_total    integer := 0;
   v_amount   integer;
-  v_together boolean;
+  v_with     integer;
+  v_from     timestamptz;
   v_before   integer;
 begin
   select * into m from session_members where id = p_member for update;
@@ -1790,27 +1799,26 @@ begin
     into v_zone from profiles p where p.id = m.user_id;
   v_zone := coalesce(v_zone, 'UTC');
 
-  select coalesce(sum(delta), 0) into v_today from xp_events
+  -- Stretches already paid today: one xp_events row each.
+  select count(*)::integer into v_today from xp_events
    where user_id = m.user_id and reason like 'focus%'
      and (created_at at time zone v_zone)::date = (now() at time zone v_zone)::date;
 
-  -- Was anyone else at the table during this stay?
-  select exists (
-    select 1 from session_members o
-     where o.session_id = m.session_id and o.user_id <> m.user_id
-       and o.joined_at < coalesce(m.left_at, m.last_seen)
-       and coalesce(o.left_at, o.last_seen) > m.joined_at
-  ) into v_together;
-
   for i in (m.rounds_paid + 1)..v_rounds loop
-    v_amount := least(case when v_together then 4 else 3 end, greatest(0, 12 - v_today));
-    exit when v_amount <= 0;
+    exit when v_today >= 4;
+    -- Who else was at the table for any of this stretch.
+    v_from := m.joined_at + (i - 1) * interval '25 minutes';
+    select count(distinct o.user_id)::integer into v_with from session_members o
+     where o.session_id = m.session_id and o.user_id <> m.user_id
+       and o.joined_at < v_from + interval '25 minutes'
+       and coalesce(o.left_at, o.last_seen) > v_from;
+    v_amount := 3 + least(3, v_with);
     select xp into v_before from profiles where id = m.user_id for update;
     update profiles set xp = v_before + v_amount where id = m.user_id;
     insert into xp_events (user_id, todo_id, delta, reason)
     values (m.user_id, null, v_amount,
-            case when v_together then 'focus round, together' else 'focus round' end);
-    v_today := v_today + v_amount;
+            case when v_with = 0 then 'focus round' else 'focus round, with ' || v_with end);
+    v_today := v_today + 1;
     v_total := v_total + v_amount;
   end loop;
 

@@ -14,7 +14,9 @@ import {
   type Pos,
   type Pulse,
   type Resident,
+  cleanRhythm,
   type SessionView,
+  type Spot,
 } from "@/lib/village";
 import { plotAt, PLOTS_PER_VILLAGE, villageOf } from "@/components/village/world";
 
@@ -277,7 +279,7 @@ export async function leaveTable(me: string): Promise<number> {
 async function visibleSessions(me: string, known: Set<string>): Promise<SessionView[]> {
   const ids = [...known];
   const sessions = (await sql`
-    select s.id, s.host_id, s.village, s.spot, s.focus, s.focus_from, s.started_at
+    select s.id, s.host_id, s.village, s.spot, s.focus, s.focus_from, s.focus_work, s.focus_rest, s.started_at
       from work_sessions s
      where s.ended_at is null
        and exists (
@@ -286,7 +288,17 @@ async function visibleSessions(me: string, known: Set<string>): Promise<SessionV
        )
      order by s.started_at
      limit 20
-  `) as { id: string; host_id: string; village: number; spot: "hall" | "library"; focus: boolean; focus_from: unknown; started_at: unknown }[];
+  `) as {
+    id: string;
+    host_id: string;
+    village: number;
+    spot: Spot;
+    focus: boolean;
+    focus_from: unknown;
+    focus_work: number;
+    focus_rest: number;
+    started_at: unknown;
+  }[];
   if (!sessions.length) return [];
 
   const members = (await sql`
@@ -316,6 +328,7 @@ async function visibleSessions(me: string, known: Set<string>): Promise<SessionV
     spot: s.spot,
     focus: s.focus,
     focusFrom: s.focus_from ? ms(s.focus_from) : null,
+    rhythm: cleanRhythm({ work: s.focus_work, rest: s.focus_rest }),
     startedAt: ms(s.started_at),
     members: members
       .filter((m) => m.session_id === s.id)

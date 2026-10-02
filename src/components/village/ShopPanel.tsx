@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Panel } from "@/components/village/panels";
 import { setShop, useShop } from "@/components/village/shop-state";
 import { buyGood } from "@/lib/village-actions";
 import Furniture from "@/components/village/Furniture";
-import { COIN_GOODS, MONEY_GOODS, SECTIONS, XP_PER_COIN } from "@/lib/shop";
+import { COIN_GOODS, MONEY_GOODS, SECTIONS, STORE_GOODS, XP_PER_COIN, type Good } from "@/lib/shop";
+import type { ShopState } from "@/lib/village-actions";
 import type { FurnitureKind } from "@/lib/furniture";
 
 /* --------------------------------------------------------------------------
@@ -13,7 +14,8 @@ import type { FurnitureKind } from "@/lib/furniture";
    and the counter for real money — shut until payments are set up.
    -------------------------------------------------------------------------- */
 
-export function ShopPanel({ onClose }: { onClose: () => void }) {
+/** `focus`: a good to show first and pick out — one looked at on its stand in the store. */
+export function ShopPanel({ focus, onClose }: { focus?: string; onClose: () => void }) {
   const shop = useShop();
   const [tab, setTab] = useState<"coins" | "money">("coins");
   const [busy, setBusy] = useState<string | null>(null);
@@ -59,32 +61,9 @@ export function ShopPanel({ onClose }: { onClose: () => void }) {
             <section key={s.kind} className="mt-3 first:mt-0">
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-mud-400">{s.label}</p>
               <ul className="space-y-1.5">
-                {COIN_GOODS.filter((g) => g.kind === s.kind).map((g) => {
-                  const have = g.kind !== "freeze" && !!shop?.owned.includes(g.id);
-                  const short = !!shop && shop.coins < g.price;
-                  return (
-                    <li key={g.id} className="flex items-center gap-3 rounded-lg px-2.5 py-2 ring-1 ring-mud-200">
-                      {g.kind === "furniture" ? (
-                        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-mud-100 p-0.5 ring-1 ring-mud-300" aria-hidden>
-                          <Furniture kind={g.id.slice("furniture:".length) as FurnitureKind} />
-                        </span>
-                      ) : (
-                        <span className="size-8 shrink-0 rounded-md ring-1 ring-mud-300" style={{ background: g.color }} aria-hidden />
-                      )}
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-mud-900">{g.name}</span>
-                        <span className="block text-xs text-mud-500">{g.blurb}</span>
-                      </span>
-                      <button
-                        disabled={!shop || have || short || busy === g.id}
-                        onClick={() => void buy(g.id)}
-                        className="shrink-0 rounded-lg bg-grass-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-grass-500 disabled:bg-mud-300"
-                      >
-                        {have ? "Yours" : busy === g.id ? "…" : `${g.price} coins`}
-                      </button>
-                    </li>
-                  );
-                })}
+                {STORE_GOODS.filter((g) => g.kind === s.kind).map((g) => (
+                  <GoodRow key={g.id} good={g} shop={shop} busy={busy === g.id} focused={g.id === focus} onBuy={() => void buy(g.id)} />
+                ))}
               </ul>
             </section>
           ))}
@@ -95,5 +74,50 @@ export function ShopPanel({ onClose }: { onClose: () => void }) {
 
       {note && <p className="mt-3 text-xs text-mud-700">{note}</p>}
     </Panel>
+  );
+}
+
+/** One thing for sale for coins: what it looks like, what it is, and its price — or "Yours". */
+export function GoodRow({
+  good: g,
+  shop,
+  busy,
+  focused = false,
+  onBuy,
+}: {
+  good: Good;
+  shop: ShopState | null;
+  busy: boolean;
+  /** Picked out and scrolled to. */
+  focused?: boolean;
+  onBuy: () => void;
+}) {
+  const have = g.kind !== "freeze" && !!shop?.owned.includes(g.id);
+  const short = !!shop && shop.coins < g.price;
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ block: "center" });
+  }, [focused]);
+  return (
+    <li ref={ref} className={`flex items-center gap-3 rounded-lg px-2.5 py-2 ring-1 ${focused ? "bg-amber-50 ring-2 ring-amber-400" : "ring-mud-200"}`}>
+      {g.kind === "furniture" ? (
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-mud-100 p-0.5 ring-1 ring-mud-300" aria-hidden>
+          <Furniture kind={g.id.slice("furniture:".length) as FurnitureKind} />
+        </span>
+      ) : (
+        <span className="size-8 shrink-0 rounded-md ring-1 ring-mud-300" style={{ background: g.color }} aria-hidden />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-mud-900">{g.name}</span>
+        <span className="block text-xs text-mud-500">{g.blurb}</span>
+      </span>
+      <button
+        disabled={!shop || have || short || busy}
+        onClick={onBuy}
+        className="shrink-0 rounded-lg bg-grass-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-grass-500 disabled:bg-mud-300"
+      >
+        {have ? "Yours" : busy ? "…" : `${g.price} coins`}
+      </button>
+    </li>
   );
 }

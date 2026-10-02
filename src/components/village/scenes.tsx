@@ -1,7 +1,8 @@
 "use client";
 
 import Furniture, { LIFT } from "@/components/village/Furniture";
-import { FLOORS, FURNITURE, WALLS } from "@/lib/furniture";
+import { FLOORS, FURNITURE, WALLS, type FurnitureKind } from "@/lib/furniture";
+import { STORE_GOODS } from "@/lib/shop";
 import { TreatShape } from "@/components/village/Treat";
 import { T } from "@/components/village/world";
 import type { ArenaScene, IndoorScene, RoomScene } from "@/components/village/rooms";
@@ -233,49 +234,86 @@ export function LibraryView({ scene, scale: S }: { scene: IndoorScene; scale: nu
 }
 
 /** The store: shelves of goods down both sides, a counter at the back with a bell and the till. */
+/**
+ * The store: shelves of paint tins and tiles in the colours it sells, the
+ * counter at the back, and its furniture set out on stands (scene.displays).
+ */
 export function StoreView({ scene, scale: S }: { scene: IndoorScene; scale: number }) {
   const W = scene.w * T;
   const H = scene.h * T;
   const c = scene.counter!;
-  const goods = ["#d9432b", "#f2c14e", "#5f9e3a", "#4a7ab8", "#b86be0", "#f28a3c", "#7cc4f0"];
+  // What's on the shelves is what's for sale: roofs, wallpaper and floors.
+  const goods = STORE_GOODS.filter((g) => g.kind === "roof" || g.kind === "wall" || g.kind === "floor").map((g) => g.color);
   return (
-    <svg aria-hidden className="pointer-events-none absolute left-0 top-0" style={{ width: W * S, height: H * S }} viewBox={`0 0 ${W} ${H}`} shapeRendering="crispEdges">
-      <rect width={W} height={H} fill="#2c2018" />
-      <rect x={T} y={2 * T} width={W - 2 * T} height={H - 3 * T} fill="#c9a77a" />
-      {Array.from({ length: (scene.w - 2) * (scene.h - 3) }, (_, i) => {
-        const x = 1 + (i % (scene.w - 2));
-        const y = 2 + Math.floor(i / (scene.w - 2));
-        return (x + y) % 2 ? <rect key={i} x={x * T} y={y * T} width={T} height={T} fill="#b8966a" /> : null;
+    <>
+      <svg aria-hidden className="pointer-events-none absolute left-0 top-0" style={{ width: W * S, height: H * S }} viewBox={`0 0 ${W} ${H}`} shapeRendering="crispEdges">
+        <rect width={W} height={H} fill="#2c2018" />
+        <rect x={T} y={2 * T} width={W - 2 * T} height={H - 3 * T} fill="#c9a77a" />
+        {Array.from({ length: (scene.w - 2) * (scene.h - 3) }, (_, i) => {
+          const x = 1 + (i % (scene.w - 2));
+          const y = 2 + Math.floor(i / (scene.w - 2));
+          return (x + y) % 2 ? <rect key={i} x={x * T} y={y * T} width={T} height={T} fill="#b8966a" /> : null;
+        })}
+        <rect x={T} y={0} width={W - 2 * T} height={2 * T} fill="#efe3c8" />
+        {[T + 8, W - T - 72].map((x, k) => (
+          <g key={x}>
+            <rect x={x} y={10} width="64" height="40" fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
+            {/* Two rows of four tins each, the second shelf carrying on where the first stopped */}
+            {[...goods, ...goods].slice(k * 8, k * 8 + 8).map((g, i) => (
+              <rect key={i} x={x + 5 + (i % 4) * 15} y={14 + Math.floor(i / 4) * 18} width="10" height="12" rx="2" fill={g} />
+            ))}
+          </g>
+        ))}
+        {/* Side shelves */}
+        {[T, W - 2 * T].map((x) => (
+          <g key={x}>
+            <rect x={x + 2} y={2 * T} width={T - 4} height={(scene.h - 4) * T} fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
+            {Array.from({ length: (scene.h - 4) * 2 }, (_, i) => (
+              <rect key={i} x={x + 8} y={2 * T + 6 + i * 16} width={T - 16} height="9" rx="2" fill={goods[(i + x) % goods.length]} />
+            ))}
+          </g>
+        ))}
+        {/* The counter */}
+        <rect x={c.x * T} y={c.y * T + 2} width={c.w * T} height={T - 2} fill="#a8703f" stroke="#3b2a1c" strokeWidth="2" />
+        <rect x={c.x * T} y={c.y * T + 2} width={c.w * T} height="6" fill="#c08a52" />
+        <circle cx={c.x * T + 20} cy={c.y * T + 6} r="5" fill="#e2c26a" stroke="#8a6a2a" strokeWidth="1.5" />
+        <rect x={(c.x + c.w) * T - 34} y={c.y * T - 8} width="24" height="16" fill="#5a6470" stroke="#3b2a1c" strokeWidth="1.5" />
+        {/* Low stands under the furniture for sale, with a price tag */}
+        {scene.displays
+          .filter((d) => !d.wall)
+          .map((d) => (
+            <g key={d.good}>
+              <rect x={d.x * T + 1} y={d.y * T + 18} width={d.w * T - 2} height={14} fill="#6b4a2b" stroke="#3b2a1c" strokeWidth="2" />
+              <rect x={d.x * T + 1} y={d.y * T + 18} width={d.w * T - 2} height={4} fill="#8f5a3a" />
+              <rect x={d.x * T + d.w * T - 14} y={d.y * T + 22} width={10} height={7} fill="#f4ecd6" stroke="#3b2a1c" strokeWidth="1" />
+            </g>
+          ))}
+        <rect x={scene.door.x * T + 2} y={scene.door.y * T} width={T - 4} height={T} fill="#6b4226" />
+      </svg>
+      {scene.displays.map((d) => {
+        const kind = d.good.slice("furniture:".length) as FurnitureKind;
+        const spec = FURNITURE[kind];
+        if (!spec) return null;
+        const lift = LIFT[kind];
+        // On a stand, it sits a little up off the floor.
+        const top = d.wall ? 0.4 * T : d.y * T - lift - 6;
+        const h = d.wall ? 36 : spec.h * T + lift;
+        return (
+          <div
+            key={d.good}
+            aria-hidden
+            className="pointer-events-none absolute"
+            style={{ left: d.x * T * S, top: top * S, width: d.w * T * S, height: h * S, zIndex: d.wall ? 1 : (d.y + 1) * T }}
+          >
+            <Furniture kind={kind} />
+          </div>
+        );
       })}
-      <rect x={T} y={0} width={W - 2 * T} height={2 * T} fill="#efe3c8" />
-      {[T + 8, W - T - 72].map((x) => (
-        <g key={x}>
-          <rect x={x} y={10} width="64" height="40" fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
-          {goods.map((g, i) => (
-            <rect key={i} x={x + 5 + (i % 4) * 15} y={14 + Math.floor(i / 4) * 18} width="10" height="12" rx="2" fill={g} />
-          ))}
-        </g>
-      ))}
-      {/* Side shelves */}
-      {[T, W - 2 * T].map((x) => (
-        <g key={x}>
-          <rect x={x + 2} y={2 * T} width={T - 4} height={(scene.h - 4) * T} fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
-          {Array.from({ length: (scene.h - 4) * 2 }, (_, i) => (
-            <rect key={i} x={x + 8} y={2 * T + 6 + i * 16} width={T - 16} height="9" rx="2" fill={goods[(i + x) % goods.length]} />
-          ))}
-        </g>
-      ))}
-      {/* The counter */}
-      <rect x={c.x * T} y={c.y * T + 2} width={c.w * T} height={T - 2} fill="#a8703f" stroke="#3b2a1c" strokeWidth="2" />
-      <rect x={c.x * T} y={c.y * T + 2} width={c.w * T} height="6" fill="#c08a52" />
-      <circle cx={c.x * T + 20} cy={c.y * T + 6} r="5" fill="#e2c26a" stroke="#8a6a2a" strokeWidth="1.5" />
-      <rect x={(c.x + c.w) * T - 34} y={c.y * T - 8} width="24" height="16" fill="#5a6470" stroke="#3b2a1c" strokeWidth="1.5" />
-      <rect x={scene.door.x * T + 2} y={scene.door.y * T} width={T - 4} height={T} fill="#6b4226" />
-    </svg>
+    </>
   );
 }
 
-/** The bakery: a brick oven in the back wall, loaves on the shelves, a glass case of treats, a café table. */
+/** The bakery: a brick oven in the back wall, loaves on the shelves, a glass case of treats, café tables to work at. */
 export function BakeryView({ scene, scale: S }: { scene: IndoorScene; scale: number }) {
   const W = scene.w * T;
   const H = scene.h * T;
@@ -321,10 +359,10 @@ export function BakeryView({ scene, scale: S }: { scene: IndoorScene; scale: num
       <path d={`M${oven.x + 40} ${2 * T - 6} Q${oven.x + 48} ${T + 8} ${oven.x + 56} ${2 * T - 14} Q${oven.x + 64} ${T + 2} ${oven.x + 72} ${2 * T - 14} Q${oven.x + 80} ${T + 10} ${oven.x + 88} ${2 * T - 6} Z`} fill="#f2963c" className="fire-flicker" />
       <path d={`M${oven.x + 50} ${2 * T - 6} Q${oven.x + 58} ${T + 24} ${oven.x + 64} ${2 * T - 12} Q${oven.x + 70} ${T + 24} ${oven.x + 78} ${2 * T - 6} Z`} fill="#ffd66b" className="fire-flicker" />
       {/* Flour sacks */}
-      {[2, 3].map((y) => (
+      {[6, 7].map((y) => (
         <g key={y}>
-          <path d={`M${(scene.w - 2) * T + 4} ${(y + 1) * T - 2} L${(scene.w - 2) * T + 6} ${y * T + 6} Q${(scene.w - 1.5) * T} ${y * T - 2} ${(scene.w - 1) * T - 6} ${y * T + 6} L${(scene.w - 1) * T - 4} ${(y + 1) * T - 2} Z`} fill="#efe8da" stroke="#3b2a1c" strokeWidth="2" />
-          <rect x={(scene.w - 2) * T + 10} y={y * T + 14} width="12" height="6" fill="#c9a24a" />
+          <path d={`M${T + 4} ${(y + 1) * T - 2} L${T + 6} ${y * T + 6} Q${1.5 * T} ${y * T - 2} ${2 * T - 6} ${y * T + 6} L${2 * T - 4} ${(y + 1) * T - 2} Z`} fill="#efe8da" stroke="#3b2a1c" strokeWidth="2" />
+          <rect x={T + 10} y={y * T + 14} width="12" height="6" fill="#c9a24a" />
         </g>
       ))}
       {/* The glass case of treats, the till at its end */}
@@ -336,14 +374,23 @@ export function BakeryView({ scene, scale: S }: { scene: IndoorScene; scale: num
       <rect x={c.x * T + 4} y={c.y * T - 6} width={c.w * T - 40} height="3" fill="#ffffff" opacity="0.6" />
       <rect x={(c.x + c.w) * T - 30} y={c.y * T - 12} width="24" height="16" fill="#5a6470" stroke="#3b2a1c" strokeWidth="1.5" />
       <rect x={c.x * T} y={c.y * T + 14} width={c.w * T} height="6" fill="#c08a52" />
-      {/* A café table and two stools */}
-      {[8, 10].map((x) => (
-        <ellipse key={x} cx={x * T + 16} cy={5 * T + 20} rx="9" ry="6" fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
+      {/* Café tables to work at: a stool at every seat, a checked cloth, a
+          cup and something to eat */}
+      {scene.desks.map((d, i) => (
+        <g key={i}>
+          {d.seats.map((st, j) => (
+            <ellipse key={j} cx={st.x * T + 16} cy={st.y * T + 20} rx="9" ry="6" fill="#8f5a3a" stroke="#3b2a1c" strokeWidth="2" />
+          ))}
+          <rect x={d.x * T + 28} y={d.y * T + 14} width="8" height="16" fill="#5a3e28" />
+          <rect x={d.x * T + 2} y={d.y * T - 2} width={d.w * T - 4} height="20" rx="6" fill="#f4ecd6" stroke="#3b2a1c" strokeWidth="2" />
+          {Array.from({ length: d.w * 4 - 1 }, (_, k) => (
+            <rect key={k} x={d.x * T + 6 + k * 8} y={d.y * T + 2} width="4" height="12" fill="#d9776a" opacity="0.45" />
+          ))}
+          <TreatShape id={i ? "bun" : "croissant"} x={d.x * T + 8} y={d.y * T - 6} size={18} />
+          <rect x={d.x * T + 40} y={d.y * T} width="9" height="10" fill="#fbf7ee" stroke="#3b2a1c" strokeWidth="1.5" />
+          <rect x={d.x * T + 41} y={d.y * T + 1} width="7" height="3" fill="#6b4226" />
+        </g>
       ))}
-      <rect x={9 * T + 14} y={5 * T + 10} width="4" height="18" fill="#5a3e28" />
-      <ellipse cx={9 * T + 16} cy={5 * T + 10} rx="14" ry="8" fill="#efe3c8" stroke="#3b2a1c" strokeWidth="2" />
-      <TreatShape id="croissant" x={9 * T + 6} y={5 * T - 2} size={16} />
-      <rect x={9 * T + 20} y={5 * T + 2} width="6" height="7" fill="#f4ecd6" stroke="#3b2a1c" strokeWidth="1" />
       <rect x={scene.door.x * T + 2} y={scene.door.y * T} width={T - 4} height={T} fill="#6b4226" />
       <rect x={scene.door.x * T - 6} y={(scene.door.y - 1) * T + 14} width={T + 12} height={16} rx="3" fill="#8f5a3a" />
     </svg>
