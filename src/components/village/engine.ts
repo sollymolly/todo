@@ -1,4 +1,5 @@
 import { findPath, nearestOpen, T, tileAt, walkable, type Facing, type Grid } from "@/components/village/world";
+import { FACING_OF, headingToward, LEGACY_HEADING } from "@/lib/heading";
 
 /* --------------------------------------------------------------------------
    Everyone who walks: you, and friends going where they are.
@@ -25,6 +26,13 @@ export type Agent = {
   stride: number;
   moving: boolean;
   speed: number;
+  /**
+   * Which way they face to 22.5° (heading.ts), for the 16-direction sheets.
+   * `dir` stays the four-way facing everything else uses; the heading only
+   * counts while it still agrees with it (see headingOf), so code that sets
+   * `dir` by hand — a seat, a door — needs no change.
+   */
+  heading: number;
   el: HTMLElement | null;
   /** Sitting at a table, facing it. */
   seat: { x: number; y: number; face: Facing } | null;
@@ -37,7 +45,7 @@ export type Agent = {
    * world px, and which way they face. Followed in a straight line — they
    * already walked the route themselves — so every screen ends up agreeing.
    */
-  goal: { x: number; y: number; dir: Facing } | null;
+  goal: { x: number; y: number; dir: Facing; heading: number | null } | null;
   /** Guarding, in a duel: held in the guard pose (paint). */
   guard: boolean;
   /** When they last swung (performance.now()), for the swing animation; 0 never. */
@@ -82,6 +90,7 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     stride: 0,
     moving: false,
     speed,
+    heading: LEGACY_HEADING[2],
     el: null,
     seat: null,
     stand: null,
@@ -116,24 +125,45 @@ export const PLAYER_SPEED = RUN_SPEED;
 /** Further behind than this and they're simply put there. */
 const SNAP_PX = T * 4;
 
+/** The 22.5° heading to show: theirs, unless `dir` has been turned by hand since. */
+export function headingOf(a: Agent): number {
+  return FACING_OF[a.heading] === a.dir ? a.heading : LEGACY_HEADING[a.dir];
+}
+
 /** Where someone stands, in the tiles the check-in and the live connection carry. */
-export function tilesOf(a: Agent): { x: number; y: number; facing: Facing } {
-  return { x: (a.x - T / 2) / T, y: (a.y - T / 2 - 8) / T, facing: a.dir };
+export function tilesOf(a: Agent): { x: number; y: number; facing: Facing; heading: number } {
+  return { x: (a.x - T / 2) / T, y: (a.y - T / 2 - 8) / T, facing: a.dir, heading: headingOf(a) };
 }
 
 /**
  * Follow someone to where they reported being, in tiles (tilesOf, on their
- * screen). `snap` places them at once.
+ * screen). `snap` places them at once. `heading`: how finely they face, if
+ * their screen said (older ones only know the four ways).
  */
-export function follow(a: Agent, x: number, y: number, dir: Facing, snap = false) {
-  a.goal = { x: x * T + T / 2, y: y * T + T / 2 + 8, dir };
+export function follow(a: Agent, x: number, y: number, dir: Facing, snap = false, heading: number | null = null) {
+  a.goal = { x: x * T + T / 2, y: y * T + T / 2 + 8, dir, heading };
   a.path = [];
   a.onArrive = undefined;
   if (snap) {
     a.x = a.goal.x;
     a.y = a.goal.y;
-    a.dir = dir;
+    face(a, dir, heading);
   }
+}
+
+/** Faces them a way, as finely as is known. */
+function face(a: Agent, dir: Facing, heading: number | null) {
+  a.dir = dir;
+  a.heading = heading != null && FACING_OF[heading] === dir ? heading : LEGACY_HEADING[dir];
+}
+
+/**
+ * Turns to look along (dx, dy), at any angle. The four-way facing is picked
+ * exactly as it always was; the heading is the same look to 22.5°.
+ */
+export function turn(a: Agent, dx: number, dy: number) {
+  a.dir = faceToward(dx, dy);
+  a.heading = headingToward(dx, dy);
 }
 
 /** Whether feet can stand at (x, y): a few px either side, so shoulders don't clip corners. */
@@ -218,7 +248,7 @@ export function step(world: Grid, a: Agent, dt: number) {
         a.stride += move;
       }
     }
-    a.dir = g.dir;
+    face(a, g.dir, g.heading);
     return;
   }
   if (a.seat) {
@@ -243,7 +273,7 @@ export function step(world: Grid, a: Agent, dt: number) {
   const dist = Math.hypot(dx, dy);
   const move = a.speed * dt;
   a.moving = true;
-  a.dir = faceToward(dx, dy);
+  turn(a, dx, dy);
   if (dist <= move) {
     a.x = target.x;
     a.y = target.y;
@@ -286,7 +316,7 @@ export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: n
     a.y = ny;
     moved = true;
   }
-  a.dir = faceToward(vx, vy);
+  turn(a, vx, vy);
   a.moving = moved;
   if (moved) a.stride += move;
 }
@@ -319,7 +349,10 @@ export function paint(a: Agent, scale: number, now: number) {
     show(sprite, pose < 0);
     if (pose < 0) {
       const frame = a.moving ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
-      sprite.style.backgroundPosition = `${-frame * FRAME * scale}px ${-a.dir * FRAME * scale}px`;
+      // A sheet of 16 rows (Walker's data-rows) shows the heading itself; a
+      // plain one, the nearest of its four ways.
+      const row = Number(sprite.dataset.rows) === 16 ? headingOf(a) : a.dir;
+      sprite.style.backgroundPosition = `${-frame * FRAME * scale}px ${-row * FRAME * scale}px`;
     }
   }
   if (duel && cols) {

@@ -153,12 +153,27 @@ That's enough to see a complete knight turn and walk in 16 directions in the gam
 
 ---
 
-## 8. Wiring it in (for developers)
+## 8. Getting it into the game
 
-The game side of this is small and goes in once the pilot art arrives:
+**The game side is built.** Nothing needs changing in the code when art arrives:
 
-- **Manifest:** `scripts/fetch-lpc.py` gains a `lpc16` source, and each layer records whether it has 16 rows. `src/lib/sprite.ts` composes 16-row sheets (`rows` from the manifest instead of a fixed 4).
-- **Fallback:** a layer without 16-direction art is drawn from its 4-direction sheet, using the nearest of up, right, down and left for each of the 16 rows. Partial delivery then works: an un-redrawn helmet just snaps between four ways.
-- **Facing:** `Facing` (`src/lib/duel.ts`) becomes 0–15, worked out from the angle of movement (`engine.ts`, `faceToward`) instead of the dominant axis. The village already moves at any angle, so this is just which row is shown.
-- **Network and saved positions:** facing is sent as 0–3 today and clamped to that range in `src/lib/live-hub.ts` and `src/app/api/village/pulse/route.ts`. Widen both to 0–15, and map old 0–3 values (up, left, down, right) to rows 0, 12, 8 and 4, so older pages and stored positions still face the right way.
-- **Portraits:** the Armoury portrait shows the standing frame facing down (`DOWN_ROW` in `sprite.ts`), which moves from row 2 to row 8.
+1. Put each finished sheet at its `deliver_as` path under `public/sprites/lpc16/`.
+2. Run `python scripts/link-lpc16.py`. It checks each sheet is a PNG of exactly 576×1024 (9 columns, 16 rows of 64px), records the good ones in the sprite manifest, and says which it rejected and why. `--check` reports without changing anything. Run it again after `scripts/fetch-lpc.py`, which rewrites the manifest.
+3. Reload the village. A knight wearing any linked layer now turns in 16 directions.
+
+How it behaves while only some of the art exists:
+
+- **Layer by layer:** a linked layer is drawn in 16 directions, and every layer without art is drawn from its four-way sheet, each of the 16 rows showing the nearest of up, left, down and right. So a knight is only as smooth as the least-drawn thing it wears. Deliver a whole outfit before expecting a smooth turn.
+- **Nothing linked, nothing changes:** with no art delivered, the village behaves exactly as before.
+- **Other people:** your screen sends how finely you face (`h`, 0 to 15) beside the old four-way facing, and shows other people's when they send one. Older pages and stored positions only know four ways and still work.
+- **Not covered yet:**
+  - **Duel animations** (`slash` and `thrust`) are still four-way. They're drawn in the arena, where you always face your opponent. If you want those in 16 directions, the sheets below still apply, but the arena needs the same treatment as the walk sheets.
+  - **The Armoury portrait and avatars** keep using the four-way art (they only ever show the knight facing down).
+
+---
+
+## 9. Starting points
+
+- [**LPC diagonal walk cycle and run cycle**](https://opengameart.org/content/lpc-runcycle-and-diagonal-walkcycle) by Wolthera van Hövell tot Westerflier, built on the original LPC walk cycles by Stephen Challener (Redshrike). It draws the **male and female base bodies** walking diagonally, with layered source files (Krita and OpenRaster) with the arms and head on separate layers. It's released under CC-BY-SA 3.0, GPL 3.0 and OGA-BY 3.0, so it can be used under the same terms as the rest of the art (section 6). The author notes the diagonal *run* cycle came out weaker than the walk, and only the walk cycle is needed here. This is a head start for the body and head sheets only: every garment, hair style, cape, shield and weapon would still need diagonals drawn to match it. Check how its frame layout and proportions compare with the existing 64px sheets before relying on it.
+- The wider [5/8-directional sprite collection](https://opengameart.org/content/58-directional-sprite-sets) on OpenGameArt is a mixed bag of unrelated styles and licences, and nothing there is made for LPC's layers. It's not a source for this.
+- I found no existing 8- or 16-direction extension of the full LPC layer set, so most of the work will be drawn from scratch.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cleanHeading } from "@/lib/heading";
 
 /* --------------------------------------------------------------------------
    The village page's live connection (src/app/api/village/live). Keeps one
@@ -15,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
    -------------------------------------------------------------------------- */
 
 /** j: how many times they've jumped; a new number is a new jump. */
-export type LivePos = { id: string; x: number; y: number; f: number; g: boolean; j: number };
+export type LivePos = { id: string; x: number; y: number; f: number; g: boolean; j: number; h: number | null };
 export type LiveBlow =
   | { t: "hit"; duel: string; by: string; target: string; a: number; b: number }
   | { t: "block"; by: string; target: string };
@@ -36,7 +37,7 @@ export function useVillageLive(
   }
 ): {
   connected: boolean;
-  sendPos: (x: number, y: number, f: number, g: boolean, j: number) => void;
+  sendPos: (x: number, y: number, f: number, g: boolean, j: number, h: number) => void;
   sendHit: () => void;
 } {
   const [connected, setConnected] = useState(false);
@@ -86,7 +87,7 @@ export function useVillageLive(
         onRef.current.poke();
       };
       s.onmessage = (e) => {
-        let m: { t?: string; id?: unknown; x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown };
+        let m: { t?: string; id?: unknown; x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown; h?: unknown };
         try {
           m = JSON.parse(String(e.data));
         } catch {
@@ -94,7 +95,7 @@ export function useVillageLive(
         }
         if (m.t === "poke") onRef.current.poke();
         else if (m.t === "pos" && typeof m.id === "string")
-          onRef.current.pos({ id: m.id, x: Number(m.x), y: Number(m.y), f: Number(m.f), g: m.g === 1, j: Number(m.j) || 0 });
+          onRef.current.pos({ id: m.id, x: Number(m.x), y: Number(m.y), f: Number(m.f), g: m.g === 1, j: Number(m.j) || 0, h: cleanHeading(m.h) });
         else if (m.t === "hit" || m.t === "block") onRef.current.blow(m as LiveBlow);
         else if (m.t === "swing" && typeof (m as { by?: unknown }).by === "string") onRef.current.swing((m as { by: string }).by);
       };
@@ -132,9 +133,9 @@ export function useVillageLive(
     };
   }, []);
 
-  const sendPos = useCallback((x: number, y: number, f: number, g: boolean, j: number) => {
+  const sendPos = useCallback((x: number, y: number, f: number, g: boolean, j: number, h: number) => {
     const s = sock.current;
-    if (s?.readyState === WebSocket.OPEN) s.send(JSON.stringify({ t: "pos", x, y, f, g: g ? 1 : 0, j }));
+    if (s?.readyState === WebSocket.OPEN) s.send(JSON.stringify({ t: "pos", x, y, f, g: g ? 1 : 0, j, h }));
   }, []);
 
   const sendHit = useCallback(() => {

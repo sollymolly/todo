@@ -16,11 +16,11 @@ import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, St
 import TrainRide from "@/components/village/TrainRide";
 import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
-import { follow, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, walkTo, type Agent } from "@/components/village/engine";
+import { follow, headingOf, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, turn, walkTo, type Agent } from "@/components/village/engine";
 import { ATLAS, buildWorld, inRect, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
-import { composeAttack, composeSheet, type AttackSheet } from "@/lib/sprite";
+import { composeAttack, composeHeadings, composeSheet, type AttackSheet } from "@/lib/sprite";
 import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
-import { facingToward, HIT_COOLDOWN_MS } from "@/lib/duel";
+import { HIT_COOLDOWN_MS } from "@/lib/duel";
 import { useVillageLive } from "@/lib/live-client";
 import { challenge, loadInterior, loadResidents, markNudgesSeen, moveHouse, saveInterior } from "@/lib/village-actions";
 import { cleanInterior, FURNITURE, type FurnitureKind, type Interior } from "@/lib/furniture";
@@ -174,6 +174,8 @@ export default function Village({ data }: { data: VillageData }) {
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [toasts, setToasts] = useState<{ id: string; text: string; nudge?: boolean }[]>([]);
   const [sheets, setSheets] = useState<Record<string, string>>({});
+  /** The same, in 16 directions, for whoever wears anything drawn that way (sprite.ts composeHeadings). */
+  const [fineSheets, setFineSheets] = useState<Record<string, string>>({});
   const [scene, setScene] = useState<Scene>({ kind: "out" });
   // In the village I start by my own front door ("home" is the app outside it).
   const [place, setPlace] = useState<Place>({ kind: "house", hostId: data.me.id });
@@ -192,6 +194,12 @@ export default function Village({ data }: { data: VillageData }) {
   const holdRef = useRef<{ id: number; x: number; y: number; sx: number; sy: number; at: number; steering: boolean } | null>(null);
   /** How many times I've jumped: sent with my position, so a new number is a jump on other screens. */
   const jumps = useRef(0);
+  /**
+   * Space was pressed and no jump has started for it yet: one pressed in the
+   * air waits and goes the moment I land, instead of being lost. (Space held
+   * is "jump" in `keys`, and goes again on every landing.)
+   */
+  const jumpWanted = useRef(false);
 
   const toast = useCallback((text: string) => {
     const id = Math.random().toString(36).slice(2);
@@ -284,6 +292,9 @@ export default function Village({ data }: { data: VillageData }) {
       void composeSheet(v.appearance, v.equipped).then((url) => {
         if (live && url) setSheets((s) => (s[v.id] ? s : { ...s, [v.id]: url }));
       });
+      void composeHeadings(v.appearance, v.equipped).then((url) => {
+        if (live && url) setFineSheets((s) => (s[v.id] ? s : { ...s, [v.id]: url }));
+      });
     }
     return () => {
       live = false;
@@ -325,7 +336,7 @@ export default function Village({ data }: { data: VillageData }) {
    * room, and when it came — kept even before there's an agent to move, so
    * one made later starts where they really are.
    */
-  const lastLive = useRef(new Map<string, { x: number; y: number; f: Agent["dir"]; g: boolean; j: number; at: number }>());
+  const lastLive = useRef(new Map<string, { x: number; y: number; f: Agent["dir"]; g: boolean; j: number; h: number | null; at: number }>());
   /** Check in right now; set up by the check-in loop further down. */
   const beatNow = useRef<() => void>(() => {});
   const player = useRef<Agent | null>(null);
@@ -375,7 +386,7 @@ export default function Village({ data }: { data: VillageData }) {
       if (at) {
         if (!a) {
           a = make(id, 0, 0);
-          follow(a, at.x, at.y, at.facing, true);
+          follow(a, at.x, at.y, at.facing, true, fresh?.h);
         } else if (!fresh) follow(a, at.x, at.y, at.facing);
         a.seat = null;
         a.stand = null;
@@ -453,7 +464,7 @@ export default function Village({ data }: { data: VillageData }) {
         a.el = walkerEls.current.get(`room:${p.villager.id}`) ?? null;
         map.set(p.villager.id, a);
         if (fresh) {
-          follow(a, fresh.x, fresh.y, fresh.f, true);
+          follow(a, fresh.x, fresh.y, fresh.f, true, fresh.h);
           a.guard = fresh.g;
         } else if (known) follow(a, p.x, p.y, p.facing, true);
         continue;
@@ -578,12 +589,12 @@ export default function Village({ data }: { data: VillageData }) {
     joined: () => {
       resendPos.current = true;
     },
-    pos: ({ id, x, y, f, g, j }) => {
+    pos: ({ id, x, y, f, g, j, h }) => {
       const sc = sceneRef.current;
       const dir = (f % 4) as Agent["dir"];
       const prev = lastLive.current.get(id);
       const now = Date.now();
-      lastLive.current.set(id, { x, y, f: dir, g, j, at: now });
+      lastLive.current.set(id, { x, y, f: dir, g, j, h, at: now });
       const a = (sc.kind === "out" ? agents.current : roomAgents.current).get(id);
       // Someone new: the check-in brings what they look like, and they're
       // placed from lastLive when it does. Asked once; the regular
@@ -592,7 +603,7 @@ export default function Village({ data }: { data: VillageData }) {
         if (!prev || now - prev.at > LIVE_FRESH_MS) pokeBeat();
         return;
       }
-      follow(a, x, y, dir);
+      follow(a, x, y, dir, false, h);
       a.guard = g;
       a.seat = null;
       a.stand = null;
@@ -650,7 +661,7 @@ export default function Village({ data }: { data: VillageData }) {
     // A swing goes all the way round; turn to face them for it.
     const p = player.current!;
     const them = opponentRef.current ? roomAgents.current.get(opponentRef.current) : null;
-    if (them) p.dir = facingToward(them.x - p.x, them.y - p.y);
+    if (them) turn(p, them.x - p.x, them.y - p.y);
     startSwing(me.id);
     if (!liveRef.current) return toast("Reconnecting to the arena — hold on a second.");
     live.sendHit();
@@ -720,6 +731,11 @@ export default function Village({ data }: { data: VillageData }) {
       const countdown = !!fight && serverNow(skewRef.current) < fight.startsAt;
       const k = keys.current;
       p.guard = !!fight && !countdown && k.has("guard");
+      // Jumping: held Space goes again on every landing, and a tap in the air waits for it.
+      if ((k.has("jump") || jumpWanted.current) && !countdown && !p.guard && jumpNow(p, t)) {
+        jumps.current++;
+        jumpWanted.current = false;
+      }
       // F: half as fast again. A guard still halves it.
       const pace = (k.has("sprint") ? 1.5 : 1) * (p.guard ? 0.5 : 1);
       let vx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0);
@@ -746,7 +762,7 @@ export default function Village({ data }: { data: VillageData }) {
       if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
       // In a fight, always facing them, so I can back off still on guard.
       const them = fight && !countdown && opponentRef.current ? roomAgents.current.get(opponentRef.current) : null;
-      if (them && Math.hypot(them.x - p.x, them.y - p.y) > 2) p.dir = facingToward(them.x - p.x, them.y - p.y);
+      if (them && Math.hypot(them.x - p.x, them.y - p.y) > 2) turn(p, them.x - p.x, them.y - p.y);
       paint(p, S, t);
 
       // In a shared room, tell the others exactly where I am whenever I've
@@ -756,7 +772,7 @@ export default function Village({ data }: { data: VillageData }) {
       // Raising or lowering a guard goes at once: a swing is judged by it.
       // Standing still, the same again every POS_HEARTBEAT_MS.
       if (liveRef.current && shownHere.current) {
-        const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.guard},${jumps.current}`;
+        const key = `${Math.round(p.x)},${Math.round(p.y)},${headingOf(p)},${p.guard},${jumps.current}`;
         const changed = key !== sentKey || resendPos.current;
         const wait = p.guard !== sentGuard ? 0 : changed ? 140 : POS_HEARTBEAT_MS;
         if (t - sentAt >= wait) {
@@ -765,7 +781,7 @@ export default function Village({ data }: { data: VillageData }) {
           sentGuard = p.guard;
           sentAt = t;
           const at = tilesOf(p);
-          sendPosRef.current(at.x, at.y, at.facing, p.guard, jumps.current);
+          sendPosRef.current(at.x, at.y, at.facing, p.guard, jumps.current, at.heading);
         }
       }
       const others = sc.kind === "out" ? agents.current : roomAgents.current;
@@ -1068,19 +1084,29 @@ export default function Village({ data }: { data: VillageData }) {
       const t = e.target as HTMLElement | null;
       return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
     };
+    /** Let go of everything: nothing is held, nothing is waiting. */
+    const release = () => {
+      keys.current.clear();
+      jumpWanted.current = false;
+      holdRef.current = null;
+    };
     const down = (e: KeyboardEvent) => {
       if (typing(e)) return;
-      // A shortcut (⌘A, Ctrl+S…) isn't a step — and on a Mac the letter's
-      // release never arrives while ⌘ is down, which left me walking.
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // A shortcut (⌘A, Ctrl+S, Alt+Tab…) isn't a step — and the release of
+      // a key under a modifier often never arrives (on a Mac, any letter
+      // under ⌘), which left me walking on. Start clean.
+      if (e.metaKey || e.ctrlKey || e.altKey) return release();
       const dir = map[e.code];
       if (dir) {
         e.preventDefault();
         keys.current.add(dir);
       } else if (e.code === "Space") {
         // A jump, not a press of whatever button last had focus, nor a scroll.
+        // Held, it jumps on and on (the loop); a fresh press while still in
+        // the air is remembered until the landing.
         e.preventDefault();
-        if (!e.repeat && jumpNow(player.current, performance.now())) jumps.current++;
+        keys.current.add("jump");
+        if (!e.repeat) jumpWanted.current = true;
       } else if (e.code === "KeyF") {
         // Run while held.
         keys.current.add("sprint");
@@ -1100,23 +1126,26 @@ export default function Village({ data }: { data: VillageData }) {
     const up = (e: KeyboardEvent) => {
       const dir = map[e.code];
       if (dir) keys.current.delete(dir);
-      else if (e.code === "Space" && !typing(e)) e.preventDefault();
-      else if (e.code === "KeyF") keys.current.delete("sprint");
+      else if (e.code === "Space") {
+        keys.current.delete("jump");
+        if (!typing(e)) e.preventDefault();
+      } else if (e.code === "KeyF") keys.current.delete("sprint");
       else if (e.code === "KeyG") keys.current.delete("guard");
       // Any key let go under ⌘ never said so (above): start clean.
       else if (e.key === "Meta") keys.current.clear();
     };
-    const blur = () => keys.current.clear();
-    const hidden = () => document.visibilityState === "hidden" && keys.current.clear();
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
+    const hidden = () => document.visibilityState === "hidden" && release();
+    // Capture phase, so nothing on the page that handles a key itself can
+    // swallow a key-release and leave the knight walking on without me.
+    window.addEventListener("keydown", down, true);
+    window.addEventListener("keyup", up, true);
     document.addEventListener("visibilitychange", hidden);
-    window.addEventListener("blur", blur);
+    window.addEventListener("blur", release);
     return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
+      window.removeEventListener("keydown", down, true);
+      window.removeEventListener("keyup", up, true);
       document.removeEventListener("visibilitychange", hidden);
-      window.removeEventListener("blur", blur);
+      window.removeEventListener("blur", release);
     };
   }, [openPrompt]);
 
@@ -1335,10 +1364,14 @@ export default function Village({ data }: { data: VillageData }) {
         onPointerDown={onGround}
         onPointerUp={onGroundUp}
         onPointerCancel={onGroundUp}
+        onLostPointerCapture={onGroundUp}
         onPointerMove={(e) => {
-          // A held press follows the pointer; dragged a little, it steers at once.
+          // A held press follows the pointer; dragged a little, it steers at
+          // once. One whose release never reached us (the mouse let go off the
+          // window) is over: no button is down any more.
           const hold = holdRef.current;
-          if (hold && hold.id === e.pointerId) {
+          if (hold && hold.id === e.pointerId && e.pointerType === "mouse" && e.buttons === 0) onGroundUp(e);
+          else if (hold && hold.id === e.pointerId) {
             hold.x = e.clientX;
             hold.y = e.clientY;
             if (Math.hypot(e.clientX - hold.sx, e.clientY - hold.sy) > 12) hold.steering = true;
@@ -1409,6 +1442,7 @@ export default function Village({ data }: { data: VillageData }) {
                 <Walker
                   key={v.id}
                   sheet={sheets[v.id]}
+                  fine={fineSheets[v.id]}
                   scale={S}
                   label={v.name}
                   stranger={!known}
@@ -1427,6 +1461,7 @@ export default function Village({ data }: { data: VillageData }) {
                 <Walker
                   key={p.villager.id}
                   sheet={sheets[p.villager.id]}
+                  fine={fineSheets[p.villager.id]}
                   scale={S}
                   label={p.villager.name}
                   stranger={!p.known}
@@ -1447,6 +1482,7 @@ export default function Village({ data }: { data: VillageData }) {
               <Walker
                 key={d.villager.id}
                 sheet={sheets[d.villager.id]}
+                fine={fineSheets[d.villager.id]}
                 scale={S}
                 label={d.villager.name}
                 stranger={!d.known}
@@ -1456,6 +1492,7 @@ export default function Village({ data }: { data: VillageData }) {
             ))}
           <Walker
             sheet={sheets[me.id]}
+            fine={fineSheets[me.id]}
             scale={S}
             label={null}
             bubble={space ? bubbles[me.id] : undefined}
@@ -2097,6 +2134,7 @@ function DuelistCard({ n, busy, onChallenge, onClose }: { n: Stats; busy: boolea
 
 function Walker({
   sheet,
+  fine,
   scale,
   label,
   stranger = false,
@@ -2108,6 +2146,8 @@ function Walker({
   onTap,
 }: {
   sheet: string | undefined;
+  /** The same knight in 16 directions, when there is one: shown instead. */
+  fine?: string;
   scale: number;
   label: string | null;
   stranger?: boolean;
@@ -2137,11 +2177,13 @@ function Walker({
       <div
         className={hit && hit.dmg > 0 ? "walker-hit" : undefined}
         key={hit?.key}
+        // paint (engine.ts) reads the row count to pick the row to show.
+        data-rows={fine ? 16 : 4}
         style={{
           width: 64 * scale,
           height: 64 * scale,
-          backgroundImage: sheet ? `url(${sheet})` : undefined,
-          backgroundSize: `${576 * scale}px ${256 * scale}px`,
+          backgroundImage: fine || sheet ? `url(${fine ?? sheet})` : undefined,
+          backgroundSize: `${576 * scale}px ${(fine ? 1024 : 256) * scale}px`,
           backgroundPosition: `0 ${-128 * scale}px`,
           imageRendering: "pixelated",
           cursor: onTap ? "pointer" : undefined,

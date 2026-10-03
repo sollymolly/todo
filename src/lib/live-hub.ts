@@ -4,6 +4,7 @@ import { CHANNEL, poke, publishLive, type LiveMessage } from "@/lib/live";
 import { HIT_COOLDOWN_MS, HIT_GRACE_MS, type Facing, type Stance } from "@/lib/duel";
 import { landHit } from "@/lib/village-rooms";
 import { readSpace } from "@/lib/village";
+import { cleanHeading } from "@/lib/heading";
 
 /** A village's arena: where stances are kept and swings judged. */
 const isArena = (space: string | null) => readSpace(space ?? "")?.kind === "arena";
@@ -17,8 +18,9 @@ const isOutside = (space: string) => readSpace(space)?.kind === "village";
 
    From the browser:
      { t: "join", space }      I'm in this space now (null: nowhere shared)
-     { t: "pos", x, y, f, g, j }  where I'm standing, in tiles; g = guarding,
-                                 j = jumps so far (a new number is a jump)
+     { t: "pos", x, y, f, g, j, h }  where I'm standing, in tiles; g = guarding,
+                                 j = jumps so far (a new number is a jump),
+                                 h = which way I face to 22.5° (heading.ts)
      { t: "hit" }              a swing, in a duel
 
    Positions reach everyone in the same space: a house, the arena, or
@@ -133,7 +135,7 @@ function join(c: Conn, space: string) {
   if (!isOutside(space)) void poke(space);
 }
 
-function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown }) {
+function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown; h?: unknown }) {
   if (!c.space) return;
   const x = Number(m.x);
   const y = Number(m.y);
@@ -151,6 +153,8 @@ function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown;
     // the jump must survive being folded into it.
     j: Number.isInteger(j) && j >= 0 && j < 1e9 ? j : 0,
   };
+  const h = cleanHeading(m.h);
+  if (h != null) msg.h = h;
   // Straight into this instance's picture of the arena too: a swing right
   // after a step is judged from the step.
   if (isArena(c.space)) stances.set(c.me, { x: msg.x, y: msg.y, f: msg.f as Facing, g: msg.g === 1 });
@@ -222,7 +226,7 @@ export function attach(ws: WebSocket, me: string, known: Set<string>) {
     if (m.t === "join") {
       if (typeof m.space === "string" && m.space.length <= 60) join(c, m.space);
       else leave(c);
-    } else if (m.t === "pos") onPos(c, m as { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown });
+    } else if (m.t === "pos") onPos(c, m as { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown; h?: unknown });
     else if (m.t === "hit") void onHit(c);
   });
 

@@ -10,6 +10,7 @@ import {
   type DyeKind,
 } from "@/lib/game";
 import type { Appearance, BodyType, DyeSlot, Equipped } from "@/lib/types";
+import { FACING_OF, HEADINGS } from "@/lib/heading";
 
 /* --------------------------------------------------------------------------
    How a knight is dressed: which LPC sheets are layered, in what order, and
@@ -30,6 +31,12 @@ export const VIEW_H = FRAME - CROP_TOP;
 
 export type Layer = {
   src: string;
+  /**
+   * The same walk sheet drawn in 16 directions (docs/knight-art/SPEC.md),
+   * once there is art for it: written in by scripts/link-lpc16.py. Without
+   * it the layer is drawn from `src` in its four.
+   */
+  hi?: string;
   z: number;
   /** Frame size when it isn't 64: long weapons' swings (128 or 192). */
   frame?: number;
@@ -365,6 +372,65 @@ export function composeSheet(appearance: Appearance, equipped: Equipped): Promis
       return out.toDataURL("image/png");
     })();
     sheets.set(key, p);
+  }
+  return p;
+}
+
+const headingSheets = new Map<string, Promise<string | null>>();
+
+/** A 16-direction walk sheet as it is, if it's the size it should be. */
+async function loadHi(src: string): Promise<HTMLImageElement | null> {
+  const img = await loadRaw(src).catch(() => null);
+  return img && img.naturalWidth === FRAME * 9 && img.naturalHeight === FRAME * HEADINGS ? img : null;
+}
+
+/**
+ * This knight's walk sheet in 16 directions: 576×1024, one row per heading
+ * (heading.ts), for the village's walkers. Layers with 16-direction art
+ * (`hi`) are drawn from it; any without (art arrives in batches) from their
+ * four-way sheet, each row showing the nearest of its four ways. So a knight
+ * is only as fine as the least-drawn thing it wears — and no better
+ * or worse than now where none is drawn. Null if nothing it wears has any,
+ * which is all of them today: callers use composeSheet's, as before.
+ */
+export function composeHeadings(appearance: Appearance, equipped: Equipped): Promise<string | null> {
+  const key = spriteKey(appearance, equipped);
+  let p = headingSheets.get(key);
+  if (!p) {
+    p = (async () => {
+      const jobs = spriteJobs(appearance, equipped);
+      if (!jobs.some((j) => j.layer.hi)) return null;
+      const layers = await Promise.all(
+        jobs.map(async (j) => {
+          const fine = j.layer.hi ? await loadHi(j.layer.hi) : null;
+          return fine ? { img: fine as CanvasImageSource, fine: true } : { img: await load(j.layer.src).catch(() => null), fine: false };
+        })
+      );
+      const W = FRAME * 9;
+      const H = FRAME * HEADINGS;
+      const out = document.createElement("canvas");
+      out.width = W;
+      out.height = H;
+      const octx = out.getContext("2d");
+      const buf = document.createElement("canvas");
+      buf.width = W;
+      buf.height = H;
+      const bctx = buf.getContext("2d", { willReadFrequently: true });
+      if (!octx || !bctx) return null;
+      octx.imageSmoothingEnabled = false;
+      bctx.imageSmoothingEnabled = false;
+      layers.forEach(({ img, fine }, i) => {
+        if (!img) return;
+        bctx.clearRect(0, 0, W, H);
+        if (fine) bctx.drawImage(img, 0, 0);
+        else for (let h = 0; h < HEADINGS; h++) bctx.drawImage(img, 0, FACING_OF[h] * FRAME, W, FRAME, 0, h * FRAME, W, FRAME);
+        const r = jobs[i].recolor;
+        if (r && r.from.length && r.to.length) recolorPixels(bctx, W, H, r);
+        octx.drawImage(buf, 0, 0);
+      });
+      return out.toDataURL("image/png");
+    })();
+    headingSheets.set(key, p);
   }
   return p;
 }
