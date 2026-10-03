@@ -63,6 +63,7 @@ export const UPDATES: Update[] = [
       "The bakery: walk in to send a companion a treat with a note, which waits on their door, or buy a bread oven, cake stand and more for your own house. It has café tables to hold a work session at, too.",
       "More at the general store: new roofs, wallpapers, floors and furniture — a piano, an aquarium, a telescope and a stained glass window, set out in the store so you can walk up and look before you buy.",
       "Hedges now run round the village's shops in one clipped line, and you can walk on the grass right up to a tent.",
+      "A tidier village: a simpler, even town hall and arena, a plaza as wide as the road, a bigger sign in the middle of every empty lot, and the bakery's door on its wall. A village now holds four rows of six houses, so the next one opens sooner. The whole app is set in Georgia.",
       "Getting about the village: hold F to run, press Space to jump, or hold it to keep jumping (everyone nearby sees it), and press and hold on the ground to steer your knight in any direction. A tap now walks the straight way there instead of zig-zagging, and your knight faces where it's going rather than following the mouse.",
       "Many more category colours to choose from — 24 in all.",
       "The privacy policy has been updated to cover the village, work sessions, houses and duels, and you'll be asked to agree to it once.",

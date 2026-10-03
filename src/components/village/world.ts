@@ -28,7 +28,7 @@ export const T = 32;
 
 const MARGIN = 4; // forest around the edge
 const PLOT_W = 8;
-const SIDE_PLOTS = 5; // plots each side of the centre column
+const SIDE_PLOTS = 3; // plots each side of the centre column: six houses a row
 const CENTRE_W = 14;
 const BAND_H = 9;
 
@@ -236,13 +236,15 @@ export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | 
   streets.push({ x: centreX + 3, y: RAIL_TOP, w: 1, h: 4 }, { x: centreX + 10, y: RAIL_TOP, w: 1, h: 4 });
 
   // The hall and its plaza, in the middle of band 0. The hall reaches up into
-  // the forest margin: it's the biggest thing in the village.
+  // the forest margin: it's the biggest thing in the village. The plaza is
+  // as wide as the road it runs into, and the hall's door two tiles wide
+  // across the middle of both.
   const hallBody = { x: centreX + 3, y: bandTop(0) - 2, w: 8, h: 7 };
   block(hallBody);
   const hall = {
     body: hallBody,
     door: { x: centreX + 7, y: bandTop(0) + 5 },
-    plaza: { x: centreX, y: bandTop(0) + 5, w: CENTRE_W, h: 4 },
+    plaza: { x: centreX + 5, y: bandTop(0) + 5, w: 4, h: 4 },
   };
 
   // Work tables either side of the hall door.
@@ -309,8 +311,10 @@ export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | 
       block({ x: x + 1, y: top + 6, w: 2, h: 1 });
       block({ x: x + 5, y: top + 6, w: 2, h: 1 });
     }
-    // The signpost — the owner's name, or "Empty lot" — on the grass to the left.
-    block({ x, y: top + 6, w: 1, h: 1 });
+    // The signpost: the owner's name on the grass to the left, or "Empty
+    // lot" in the middle of the soil.
+    if (owner) block({ x, y: top + 6, w: 1, h: 1 });
+    else block({ x: x + 3, y: top + 4, w: 2, h: 1 });
     plots.push(plot);
   }
 

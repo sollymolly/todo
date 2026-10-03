@@ -12,7 +12,7 @@ import { ArenaGate, ArenaView, BakeryView, LibraryView, RoomView, StoreView } fr
 import { ShopPanel } from "@/components/village/ShopPanel";
 import { BakeryPanel } from "@/components/village/BakeryPanel";
 import { goodById } from "@/lib/shop";
-import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, Well } from "@/components/village/Landmarks";
+import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, TownHall, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
 import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
@@ -200,6 +200,12 @@ export default function Village({ data }: { data: VillageData }) {
    * is "jump" in `keys`, and goes again on every landing.)
    */
   const jumpWanted = useRef(false);
+  /**
+   * Which way the last direction key I pressed runs, left-right ("x") or
+   * up-down ("y"). On a diagonal the knight faces that one: press Up, then
+   * add Left, and it turns to face left as it moves up-left.
+   */
+  const lastAxis = useRef<"x" | "y">("y");
 
   const toast = useCallback((text: string) => {
     const id = Math.random().toString(36).slice(2);
@@ -757,7 +763,7 @@ export default function Village({ data }: { data: VillageData }) {
           } else if (!p.path.length) p.moving = false;
         }
       }
-      if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, dt * pace);
+      if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, dt * pace, lastAxis.current);
       else step(g, p, dt * pace);
       if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
       // In a fight, always facing them, so I can back off still on guard.
@@ -1100,6 +1106,7 @@ export default function Village({ data }: { data: VillageData }) {
       if (dir) {
         e.preventDefault();
         keys.current.add(dir);
+        lastAxis.current = dir === "left" || dir === "right" ? "x" : "y";
       } else if (e.code === "Space") {
         // A jump, not a press of whatever button last had focus, nor a scroll.
         // Held, it jumps on and on (the loop); a fresh press while still in
@@ -2034,19 +2041,24 @@ function Outdoors({
           )
         )}
 
-      {/* Empty lots: a signpost where a house's name would be */}
+      {/* Empty lots: a signpost in the middle of the soil (the lot is x + 1 to x + 7, y + 1 to y + 7) */}
       {world.plots.map((p) =>
         p.owner ? null : (
           <div
             key={`sign-${p.n}`}
             aria-hidden
             className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
-            style={{ left: (p.x + 0.5) * T * S, top: (p.y + 7) * T * S - 4 * S, zIndex: (p.y + 7) * T }}
+            style={{ left: (p.x + 4) * T * S, top: (p.y + 4.6) * T * S, zIndex: (p.y + 5) * T }}
           >
-            <div className="rounded-[3px] border-2 border-[#5a3e28] bg-[#d8bb8a] px-1.5 py-0.5 text-center leading-tight shadow-[0_2px_0_#5a3e28]">
-              <p className="whitespace-nowrap font-display text-[10px] font-bold text-[#5a3e28]">Empty lot</p>
+            <div
+              className="rounded-[4px] border-[3px] border-[#5a3e28] bg-[#d8bb8a] text-center leading-tight shadow-[0_3px_0_#5a3e28]"
+              style={{ padding: `${4 * S}px ${12 * S}px` }}
+            >
+              <p className="whitespace-nowrap font-display font-bold text-[#5a3e28]" style={{ fontSize: 18 * S }}>
+                Empty lot
+              </p>
             </div>
-            <div className="bg-[#6b4a2b]" style={{ width: 3 * S, height: 12 * S }} />
+            <div className="bg-[#6b4a2b]" style={{ width: 5 * S, height: 30 * S }} />
           </div>
         )
       )}
@@ -2240,36 +2252,5 @@ function Walker({
         </span>
       )}
     </div>
-  );
-}
-
-/** The biggest building in the village: stone, a slate roof, a bell, a banner. */
-function TownHall({ busy }: { busy: boolean }) {
-  return (
-    <svg viewBox="0 0 256 224" className="h-full w-full" shapeRendering="crispEdges" aria-hidden>
-      <rect x="20" y="206" width="216" height="12" fill="#000" opacity="0.12" />
-      <rect x="120" y="4" width="16" height="30" fill="#6e6258" stroke="#3b2a1c" strokeWidth="3" />
-      <rect x="123" y="14" width="10" height="10" fill={busy ? "#ffc94d" : "#3b2a1c"} />
-      <rect x="20" y="96" width="216" height="116" fill="#b4ada2" stroke="#3b2a1c" strokeWidth="3" />
-      {Array.from({ length: 7 }, (_, r) => (
-        <rect key={r} x="20" y={110 + r * 14} width="216" height="2" fill="#948d83" />
-      ))}
-      <path d="M8 100 L128 30 L248 100 Z" fill="#4e5864" stroke="#3b2a1c" strokeWidth="3" />
-      <path d="M128 30 L248 100 L128 100 Z" fill="#3e4751" />
-      <rect x="92" y="104" width="72" height="16" fill="#e8dcc0" stroke="#3b2a1c" strokeWidth="2" />
-      <text x="128" y="116" textAnchor="middle" fontSize="10" fontWeight="700" fill="#3b2a1c" fontFamily="Georgia, serif">
-        TOWN HALL
-      </text>
-      {[40, 72, 176, 208].map((x) => (
-        <g key={x}>
-          <rect x={x - 12} y="130" width="24" height="34" fill={busy ? "#ffd66b" : "#4a5a6e"} stroke="#5a3e28" strokeWidth="3" />
-          <rect x={x - 1} y="130" width="2" height="34" fill="#5a3e28" />
-        </g>
-      ))}
-      <path d="M120 212 V168 A20 20 0 0 1 160 168 V212 Z" fill="#6b4226" stroke="#3b2a1c" strokeWidth="3" />
-      <rect x="139" y="170" width="2" height="42" fill="#3b2a1c" />
-      <rect x="100" y="140" width="6" height="40" fill="#3b2a1c" />
-      <path d="M106 140 L124 146 L106 154 Z" fill="#437a28" />
-    </svg>
   );
 }

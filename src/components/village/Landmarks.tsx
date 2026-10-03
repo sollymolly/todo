@@ -113,7 +113,8 @@ export function Bakery() {
         <rect x="120" y="-18" width="12" height="12" fill="#e6e2dc" />
         <rect x="116" y="-34" width="14" height="14" fill="#efece7" />
       </g>
-      <rect x="12" y="52" width="136" height="70" fill="#b3643f" stroke={OUTLINE} strokeWidth="3" />
+      {/* The wall runs to the same line as the store's, so the door stands on it */}
+      <rect x="12" y="52" width="136" height="72" fill="#b3643f" stroke={OUTLINE} strokeWidth="3" />
       {Array.from({ length: 8 }, (_, r) => (
         <rect key={r} x="12" y={60 + r * 8} width="136" height="2" fill="#8c4a2e" />
       ))}
@@ -135,6 +136,38 @@ export function Bakery() {
         </g>
       ))}
       <Door />
+    </svg>
+  );
+}
+
+/**
+ * The biggest building in the village, kept plain: a stone hall, a slate
+ * roof, a lamp on top that lights when someone is working, a sign, a double
+ * door and a window each side. Everything mirrors about x = 128, which is
+ * the middle of the road and the plaza in front.
+ */
+export function TownHall({ busy }: { busy: boolean }) {
+  const glass = busy ? "#ffd66b" : "#4a5a6e";
+  return (
+    <svg viewBox="0 0 256 224" className="h-full w-full" shapeRendering="crispEdges" aria-hidden>
+      <rect x="24" y="206" width="208" height="12" fill="#000" opacity="0.12" />
+      {/* The lamp on the ridge */}
+      <rect x="116" y="8" width="24" height="34" fill="#6e6258" stroke="#3b2a1c" strokeWidth="3" />
+      <rect x="122" y="16" width="12" height="12" fill={busy ? "#ffc94d" : "#3b2a1c"} />
+      {/* The hall and its roof */}
+      <rect x="24" y="96" width="208" height="116" fill="#b4ada2" stroke="#3b2a1c" strokeWidth="3" />
+      <path d="M10 100 L128 36 L246 100 Z" fill="#4e5864" stroke="#3b2a1c" strokeWidth="3" />
+      <rect x="88" y="108" width="80" height="18" fill="#e8dcc0" stroke="#3b2a1c" strokeWidth="2" />
+      <text x="128" y="121" textAnchor="middle" fontSize="11" fontWeight="700" fill="#3b2a1c" fontFamily="Georgia, serif">
+        TOWN HALL
+      </text>
+      {/* A window each side */}
+      {[56, 200].map((cx) => (
+        <rect key={cx} x={cx - 14} y="140" width="28" height="36" fill={glass} stroke="#5a3e28" strokeWidth="3" />
+      ))}
+      {/* The double door, two tiles wide, in the middle */}
+      <path d="M96 212 V172 A32 32 0 0 1 160 172 V212 Z" fill="#6b4226" stroke="#3b2a1c" strokeWidth="3" />
+      <rect x="127" y="150" width="2" height="62" fill="#3b2a1c" />
     </svg>
   );
 }

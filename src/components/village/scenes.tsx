@@ -158,22 +158,23 @@ export function ArenaGate() {
   return (
     <svg viewBox="0 0 160 128" className="h-full w-full" shapeRendering="crispEdges" aria-hidden>
       <rect x="6" y="118" width="148" height="8" fill="#000" opacity="0.12" />
+      {/* Everything mirrors about x = 80: one wall, five battlements, a gate and a sign in the middle, a flag at each end */}
       <rect x="10" y="40" width="140" height="82" fill="#aaa49a" stroke="#3b2a1c" strokeWidth="3" />
-      {[10, 38, 66, 94, 122].map((x) => (
+      {[10, 40, 70, 100, 130].map((x) => (
         <rect key={x} x={x} y="26" width="20" height="16" fill="#aaa49a" stroke="#3b2a1c" strokeWidth="3" />
       ))}
       {Array.from({ length: 5 }, (_, r) => (
         <rect key={r} x="10" y={52 + r * 14} width="140" height="2" fill="#857f76" />
       ))}
       <path d="M62 122 V86 A18 18 0 0 1 98 86 V122 Z" fill="#2c2018" stroke="#3b2a1c" strokeWidth="3" />
-      <rect x="44" y="48" width="72" height="18" fill="#e8dcc0" stroke="#3b2a1c" strokeWidth="2" />
-      <text x="80" y="61" textAnchor="middle" fontSize="11" fontWeight="700" fill="#3b2a1c" fontFamily="Georgia, serif">
+      <rect x="44" y="45" width="72" height="18" fill="#e8dcc0" stroke="#3b2a1c" strokeWidth="2" />
+      <text x="80" y="58" textAnchor="middle" fontSize="11" fontWeight="700" fill="#3b2a1c" fontFamily="Georgia, serif">
         ARENA
       </text>
-      <rect x="18" y="4" width="3" height="26" fill="#3b2a1c" />
-      <path d="M21 5 L40 10 L21 16 Z" fill="#b5523b" />
-      <rect x="138" y="4" width="3" height="26" fill="#3b2a1c" />
-      <path d="M141 5 L122 10 L141 16 Z" fill="#b5523b" />
+      <rect x="24" y="4" width="3" height="24" fill="#3b2a1c" />
+      <path d="M27 5 L44 10 L27 16 Z" fill="#b5523b" />
+      <rect x="133" y="4" width="3" height="24" fill="#3b2a1c" />
+      <path d="M133 5 L116 10 L133 16 Z" fill="#b5523b" />
     </svg>
   );
 }

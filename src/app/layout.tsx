@@ -1,18 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Cinzel, Nunito } from "next/font/google";
 import PwaShell from "@/components/PwaShell";
 import "./globals.css";
-
-const cinzel = Cinzel({
-  variable: "--font-cinzel",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
-
-const nunito = Nunito({
-  variable: "--font-nunito",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "HabitKnight",
@@ -36,7 +24,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${cinzel.variable} ${nunito.variable}`}>
+    <html lang="en">
       <body className="antialiased">
         <PwaShell>{children}</PwaShell>
       </body>

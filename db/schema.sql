@@ -475,7 +475,8 @@ create table if not exists village_presence (
   seen_at  timestamptz not null default now()
 );
 alter table village_presence add column if not exists device text;
--- Which village they're in: there's a new one for every 40 houses (plot / 40),
+-- Which village they're in: there's a new one for every 24 houses (plot / 24:
+-- four rows of six),
 -- each with its own town hall and arena, joined by trains.
 alter table village_presence add column if not exists village integer not null default 0;
 -- Inside a village's library, store or bakery, too (each its own room, like the arena).

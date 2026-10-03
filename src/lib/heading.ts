@@ -18,11 +18,11 @@ export const HEADINGS = 16;
 export const LEGACY_HEADING: readonly number[] = [0, 12, 8, 4];
 
 /**
- * The old facing nearest each heading. Where a heading sits exactly between
- * two (the diagonals) it takes up or down, which is what the four-way
- * sprites always did.
+ * The old facing nearest each heading. A diagonal sits exactly between two;
+ * it takes left or right, because a knight moving up-left should visibly
+ * turn left, not carry on looking like it's walking up.
  */
-export const FACING_OF: readonly Facing[] = [0, 0, 0, 3, 3, 3, 2, 2, 2, 2, 2, 1, 1, 1, 0, 0];
+export const FACING_OF: readonly Facing[] = [0, 0, 3, 3, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 0];
 
 /** The heading for looking along (dx, dy) on screen, y down. */
 export function headingToward(dx: number, dy: number): number {

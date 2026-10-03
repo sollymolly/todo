@@ -19,3 +19,7 @@
 - The mouse no longer turns the knight: it faces the way it moves, and its opponent in a duel.
 - Checked in the running app: tent footprint, bakery tables and goods, store displays, focus rhythm picker.
 - Village jumping: holding Space jumps on every landing, a tap in the air is remembered until you land, and the key-handling that could leave the knight walking on after a key was let go is made sturdier.
+- Village movement: on a diagonal the knight faces the last key you pressed (Up then Left turns it left), instead of looking like it was still walking up.
+- Village look: a simpler, symmetric town hall and arena gate, the plaza as wide as the road, a big empty-lot sign in the middle of the lot, the bakery door flush on its wall.
+- Villages are four rows of six houses (24 a village, was 40).
+- Font: Georgia everywhere (to see how it looks).

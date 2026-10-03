@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: var(--font-cinzel), Georgia, serif;
-  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  /* Georgia throughout, headings and body alike. */
+  --font-display: Georgia, "Times New Roman", Times, serif;
+  --font-sans: Georgia, "Times New Roman", Times, serif;
 
   /* Mud — ivory through to warm ink. Body text is mud-900.
      Quiet on purpose: the page is a tool first, so the neutrals stay out of

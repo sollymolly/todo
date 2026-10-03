@@ -37,9 +37,9 @@ export const REACH = 1.5;
 /** 0 up, 1 left, 2 down, 3 right — the same order as the sprite rows. */
 export type Facing = 0 | 1 | 2 | 3;
 
-/** Which way to face to look at something (dx, dy) away. */
+/** Which way to face to look at something (dx, dy) away; exactly diagonal, sideways. */
 export function facingToward(dx: number, dy: number): Facing {
-  return Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 3) : dy < 0 ? 0 : 2;
+  return Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 3) : dy < 0 ? 0 : 2;
 }
 
 /** Where a fighter stands (tiles), which way they face, and whether they guard. */

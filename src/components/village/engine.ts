@@ -1,5 +1,5 @@
 import { findPath, nearestOpen, T, tileAt, walkable, type Facing, type Grid } from "@/components/village/world";
-import { FACING_OF, headingToward, LEGACY_HEADING } from "@/lib/heading";
+import { headingToward, LEGACY_HEADING } from "@/lib/heading";
 
 /* --------------------------------------------------------------------------
    Everyone who walks: you, and friends going where they are.
@@ -29,10 +29,12 @@ export type Agent = {
   /**
    * Which way they face to 22.5° (heading.ts), for the 16-direction sheets.
    * `dir` stays the four-way facing everything else uses; the heading only
-   * counts while it still agrees with it (see headingOf), so code that sets
-   * `dir` by hand — a seat, a door — needs no change.
+   * counts while `dir` is still what it was when the heading was set
+   * (`headingDir`, see headingOf), so code that sets `dir` by hand — a
+   * seat, a door — needs no change.
    */
   heading: number;
+  headingDir: Facing;
   el: HTMLElement | null;
   /** Sitting at a table, facing it. */
   seat: { x: number; y: number; face: Facing } | null;
@@ -91,6 +93,7 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     moving: false,
     speed,
     heading: LEGACY_HEADING[2],
+    headingDir: 2,
     el: null,
     seat: null,
     stand: null,
@@ -127,7 +130,7 @@ const SNAP_PX = T * 4;
 
 /** The 22.5° heading to show: theirs, unless `dir` has been turned by hand since. */
 export function headingOf(a: Agent): number {
-  return FACING_OF[a.heading] === a.dir ? a.heading : LEGACY_HEADING[a.dir];
+  return a.headingDir === a.dir ? a.heading : LEGACY_HEADING[a.dir];
 }
 
 /** Where someone stands, in the tiles the check-in and the live connection carry. */
@@ -154,16 +157,20 @@ export function follow(a: Agent, x: number, y: number, dir: Facing, snap = false
 /** Faces them a way, as finely as is known. */
 function face(a: Agent, dir: Facing, heading: number | null) {
   a.dir = dir;
-  a.heading = heading != null && FACING_OF[heading] === dir ? heading : LEGACY_HEADING[dir];
+  a.heading = heading ?? LEGACY_HEADING[dir];
+  a.headingDir = dir;
 }
 
 /**
- * Turns to look along (dx, dy), at any angle. The four-way facing is picked
- * exactly as it always was; the heading is the same look to 22.5°.
+ * Turns to look along (dx, dy), at any angle. The four-way facing is the
+ * nearer axis; on an exact diagonal it's `tie`'s — "x" (left or right) unless
+ * told otherwise, so walking up-left shows a knight walking left. The
+ * heading is the same look to 22.5°.
  */
-export function turn(a: Agent, dx: number, dy: number) {
-  a.dir = faceToward(dx, dy);
+export function turn(a: Agent, dx: number, dy: number, tie: "x" | "y" = "x") {
+  a.dir = faceToward(dx, dy, tie);
   a.heading = headingToward(dx, dy);
+  a.headingDir = a.dir;
 }
 
 /** Whether feet can stand at (x, y): a few px either side, so shoulders don't clip corners. */
@@ -216,8 +223,11 @@ export function walkTo(world: Grid, a: Agent, tx: number, ty: number, onArrive?:
   return true;
 }
 
-function faceToward(dx: number, dy: number): Facing {
-  return Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 3) : dy < 0 ? 0 : 2;
+function faceToward(dx: number, dy: number, tie: "x" | "y" = "x"): Facing {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  const sideways = ax > ay || (ax === ay && tie === "x");
+  return sideways ? (dx < 0 ? 1 : 3) : dy < 0 ? 0 : 2;
 }
 
 /**
@@ -296,7 +306,7 @@ export function step(world: Grid, a: Agent, dt: number) {
  * Moves the player directly, sliding along walls: in any direction (vx, vy)
  * — the keys' eight, or towards a held pointer all the way round.
  */
-export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: number) {
+export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: number, tie: "x" | "y" = "x") {
   const len = Math.hypot(vx, vy);
   if (!len) {
     if (!a.path.length) a.moving = false;
@@ -316,7 +326,7 @@ export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: n
     a.y = ny;
     moved = true;
   }
-  turn(a, vx, vy);
+  turn(a, vx, vy, tie);
   a.moving = moved;
   if (moved) a.stride += move;
 }
