@@ -42,6 +42,8 @@ export type Agent = {
   guard: boolean;
   /** When they last swung (performance.now()), for the swing animation; 0 never. */
   swingAt: number;
+  /** When they last jumped (performance.now()), for the hop; 0 never. */
+  jumpAt: number;
 };
 
 /** How long a swing takes to play, start to finish. */
@@ -49,6 +51,22 @@ export const SWING_MS = 360;
 /** Starts a swing (paint plays it) — once, however many times it's reported. */
 export function swingNow(a: Agent | null | undefined, now: number) {
   if (a && now - a.swingAt > SWING_MS) a.swingAt = now;
+}
+
+/** A jump: how long it lasts, and how high it goes at the top, in px at 1×. */
+export const JUMP_MS = 420;
+const JUMP_PX = 18;
+/** Starts a jump (paint plays it); false if one's still going. Purely a look: it clears nothing. */
+export function jumpNow(a: Agent | null | undefined, now: number): boolean {
+  if (!a || now - a.jumpAt < JUMP_MS) return false;
+  a.jumpAt = now;
+  return true;
+}
+
+/** How far off the ground a jump has them at `now`: a hop up and back down. */
+function jumpLift(a: Agent, now: number): number {
+  const k = (now - a.jumpAt) / JUMP_MS;
+  return k > 0 && k < 1 ? 4 * JUMP_PX * k * (1 - k) : 0;
 }
 
 /** The frame of the duel animation a guard holds: weapon drawn across the body. */
@@ -70,6 +88,7 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     goal: null,
     guard: false,
     swingAt: 0,
+    jumpAt: 0,
   };
 }
 
@@ -117,13 +136,51 @@ export function follow(a: Agent, x: number, y: number, dir: Facing, snap = false
   }
 }
 
+/** Whether feet can stand at (x, y): a few px either side, so shoulders don't clip corners. */
+function clearAt(world: Grid, x: number, y: number): boolean {
+  return [-8, 8].every((ox) => {
+    const t = tileAt(x + ox, y - 4);
+    return walkable(world, t.x, t.y);
+  });
+}
+
+/** Whether a walker could go straight from one point to another without touching anything. */
+function inSight(world: Grid, from: { x: number; y: number }, to: { x: number; y: number }): boolean {
+  const n = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 4);
+  for (let i = 1; i <= n; i++) if (!clearAt(world, from.x + ((to.x - from.x) * i) / n, from.y + ((to.y - from.y) * i) / n)) return false;
+  return true;
+}
+
+/**
+ * A tile-by-tile route pulled straight: from each point, on to the furthest
+ * one along it that can be walked to in a line. So a walk across open ground
+ * goes the direct way, at whatever angle, and only turns at corners.
+ */
+function straighten(world: Grid, start: { x: number; y: number }, path: { x: number; y: number }[]) {
+  const out: { x: number; y: number }[] = [];
+  let at = start;
+  let i = 0;
+  while (i < path.length) {
+    let j = path.length - 1;
+    while (j > i && !inSight(world, at, path[j])) j--;
+    out.push(path[j]);
+    at = path[j];
+    i = j + 1;
+  }
+  return out;
+}
+
 /** Walk to a tile along the streets; true if there's a way there. */
 export function walkTo(world: Grid, a: Agent, tx: number, ty: number, onArrive?: () => void): boolean {
   const from = nearestOpen(world, Math.floor(a.x / T), Math.floor((a.y - 8) / T));
   const to = nearestOpen(world, tx, ty);
   const path = findPath(world, from, to);
   if (!path.length && (from.x !== to.x || from.y !== to.y)) return false;
-  a.path = path.map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 + 8 }));
+  a.path = straighten(
+    world,
+    a,
+    path.map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 + 8 }))
+  );
   a.onArrive = onArrive;
   if (!a.path.length) onArrive?.();
   return true;
@@ -205,7 +262,10 @@ export function step(world: Grid, a: Agent, dt: number) {
   }
 }
 
-/** Moves the player directly (keys), sliding along walls. */
+/**
+ * Moves the player directly, sliding along walls: in any direction (vx, vy)
+ * — the keys' eight, or towards a held pointer all the way round.
+ */
 export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: number) {
   const len = Math.hypot(vx, vy);
   if (!len) {
@@ -217,18 +277,12 @@ export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: n
   const move = a.speed * dt;
   const nx = a.x + (vx / len) * move;
   const ny = a.y + (vy / len) * move;
-  // Test the feet: a few px either side, so shoulders don't clip corners.
-  const clear = (x: number, y: number) =>
-    [-8, 8].every((ox) => {
-      const t = tileAt(x + ox, y - 4);
-      return walkable(world, t.x, t.y);
-    });
   let moved = false;
-  if (clear(nx, a.y)) {
+  if (clearAt(world, nx, a.y)) {
     a.x = nx;
     moved = true;
   }
-  if (clear(a.x, ny)) {
+  if (clearAt(world, a.x, ny)) {
     a.y = ny;
     moved = true;
   }
@@ -256,6 +310,11 @@ export function paint(a: Agent, scale: number, now: number) {
   const cols = Number(duel?.dataset.cols || 0);
   const swing = now - a.swingAt;
   const pose = !cols ? -1 : swing >= 0 && swing < SWING_MS ? Math.floor((swing / SWING_MS) * cols) : a.guard ? GUARD_FRAME : -1;
+  // A jump lifts the knight, not where they stand: their shadow, name and
+  // place in the crowd stay on the ground.
+  const lift = `translateY(${-Math.round(jumpLift(a, now) * scale)}px)`;
+  if (sprite && sprite.style.transform !== lift) sprite.style.transform = lift;
+  if (duel && duel.style.transform !== lift) duel.style.transform = lift;
   if (sprite) {
     show(sprite, pose < 0);
     if (pose < 0) {

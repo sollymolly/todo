@@ -2,6 +2,8 @@
 
 - Check the new pieces in the running app once db/schema.sql has been run: the tent footprint, the bakery's café tables and goods, the store's displays, and the focus rhythm picker.
 
+- Knights in 16 directions: find an artist (or asset pack) for the art described in docs/knight-art/SPEC.md, starting with the pilot set. Decide first whether the Pointy Stick gets a slash animation (cuts the work by a third). When the pilot art lands, wire it in per section 8 of the spec.
+
 ## Done
 
 - Make a working bakery.

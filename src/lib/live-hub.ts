@@ -17,7 +17,8 @@ const isOutside = (space: string) => readSpace(space)?.kind === "village";
 
    From the browser:
      { t: "join", space }      I'm in this space now (null: nowhere shared)
-     { t: "pos", x, y, f, g }  where I'm standing, in tiles; g = guarding
+     { t: "pos", x, y, f, g, j }  where I'm standing, in tiles; g = guarding,
+                                 j = jumps so far (a new number is a jump)
      { t: "hit" }              a swing, in a duel
 
    Positions reach everyone in the same space: a house, the arena, or
@@ -132,11 +133,12 @@ function join(c: Conn, space: string) {
   if (!isOutside(space)) void poke(space);
 }
 
-function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown }) {
+function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown }) {
   if (!c.space) return;
   const x = Number(m.x);
   const y = Number(m.y);
   const f = Number(m.f);
+  const j = Number(m.j);
   if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 200 || Math.abs(y) > 200) return;
   const msg: PosMessage = {
     t: "pos",
@@ -145,6 +147,9 @@ function onPos(c: Conn, m: { x?: unknown; y?: unknown; f?: unknown; g?: unknown 
     y: Math.round(y * 100) / 100,
     f: Number.isInteger(f) && f >= 0 && f <= 3 ? f : 2,
     g: m.g === 1 ? 1 : 0,
+    // A count, not a flag: only the newest position goes on (pumpPos), and
+    // the jump must survive being folded into it.
+    j: Number.isInteger(j) && j >= 0 && j < 1e9 ? j : 0,
   };
   // Straight into this instance's picture of the arena too: a swing right
   // after a step is judged from the step.
@@ -217,7 +222,7 @@ export function attach(ws: WebSocket, me: string, known: Set<string>) {
     if (m.t === "join") {
       if (typeof m.space === "string" && m.space.length <= 60) join(c, m.space);
       else leave(c);
-    } else if (m.t === "pos") onPos(c, m as { x?: unknown; y?: unknown; f?: unknown; g?: unknown });
+    } else if (m.t === "pos") onPos(c, m as { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown });
     else if (m.t === "hit") void onHit(c);
   });
 

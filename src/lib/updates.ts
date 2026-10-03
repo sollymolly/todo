@@ -63,6 +63,7 @@ export const UPDATES: Update[] = [
       "The bakery: walk in to send a companion a treat with a note, which waits on their door, or buy a bread oven, cake stand and more for your own house. It has café tables to hold a work session at, too.",
       "More at the general store: new roofs, wallpapers, floors and furniture — a piano, an aquarium, a telescope and a stained glass window, set out in the store so you can walk up and look before you buy.",
       "Hedges now run round the village's shops in one clipped line, and you can walk on the grass right up to a tent.",
+      "Getting about the village: hold F to run, press Space to jump (everyone nearby sees it), and press and hold on the ground to steer your knight in any direction. A tap now walks the straight way there instead of zig-zagging, and your knight faces where it's going rather than following the mouse.",
       "Many more category colours to choose from — 24 in all.",
       "The privacy policy has been updated to cover the village, work sessions, houses and duels, and you'll be asked to agree to it once.",
       "Install HabitKnight on your phone or computer: open the menu and choose Install app. On an iPhone or iPad, tap Share in Safari, then Add to Home Screen. It opens in its own window with its own icon, and on Android, Windows and Mac, long-pressing or right-clicking the icon gives you shortcuts straight to a new quest or to Habits.",

@@ -16,7 +16,7 @@ import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, St
 import TrainRide from "@/components/village/TrainRide";
 import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
-import { follow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, walkTo, type Agent } from "@/components/village/engine";
+import { follow, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, walkTo, type Agent } from "@/components/village/engine";
 import { ATLAS, buildWorld, inRect, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
 import { composeAttack, composeSheet, type AttackSheet } from "@/lib/sprite";
 import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
@@ -57,9 +57,10 @@ import type { VillageData } from "@/lib/village-server";
      a house   one room for everyone in it (companions only)
      the arena likewise, and where duels happen
 
-   Walk with the arrow keys or WASD, or tap where to go. Tap a house to go
-   in; the door of a room, or the arena's gate, takes you back out. People
-   in the same room, the arena, or at the town hall can talk.
+   Walk with the arrow keys or WASD (hold F to run, Space to jump), tap where
+   to go, or press and hold to steer that way, all the way round. Tap a
+   house to go in; the door of a room, or the arena's gate, takes you back
+   out. People in the same room, the arena, or at the town hall can talk.
    -------------------------------------------------------------------------- */
 
 type Open =
@@ -127,6 +128,9 @@ const TREE_TINT: Record<Theme, string | undefined> = {
 };
 
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
+/** How long a press on the ground is held before it steers instead of being a tap. */
+const HOLD_MS = 220;
+
 const promptKey = (p: Prompt) =>
   !p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind === "indoor" ? `indoor:${p.what}` : p.kind === "display" ? `display:${p.good}` : p.kind;
 
@@ -178,10 +182,16 @@ export default function Village({ data }: { data: VillageData }) {
   const [hits, setHits] = useState<Record<string, { dmg: number; blocked?: boolean; key: number }>>({});
   /** Duel animation sheets (sprite.ts, composeAttack), made for whoever's in the arena. */
   const [attacks, setAttacks] = useState<Record<string, AttackSheet>>({});
-  /** Movement keys held, and "guard" while G is. */
+  /** Movement keys held, "guard" while G is, and "sprint" while F is. */
   const keys = useRef(new Set<string>());
-  /** Where the mouse is over the village, on screen: I face it (the loop). */
-  const aimRef = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * A press on the ground that's being held: where it is on screen, when it
+   * started, and whether it's steering yet — it does once it's held a moment
+   * or dragged, and then I walk towards it, at any angle, until it lets go.
+   */
+  const holdRef = useRef<{ id: number; x: number; y: number; sx: number; sy: number; at: number; steering: boolean } | null>(null);
+  /** How many times I've jumped: sent with my position, so a new number is a jump on other screens. */
+  const jumps = useRef(0);
 
   const toast = useCallback((text: string) => {
     const id = Math.random().toString(36).slice(2);
@@ -315,7 +325,7 @@ export default function Village({ data }: { data: VillageData }) {
    * room, and when it came — kept even before there's an agent to move, so
    * one made later starts where they really are.
    */
-  const lastLive = useRef(new Map<string, { x: number; y: number; f: Agent["dir"]; g: boolean; at: number }>());
+  const lastLive = useRef(new Map<string, { x: number; y: number; f: Agent["dir"]; g: boolean; j: number; at: number }>());
   /** Check in right now; set up by the check-in loop further down. */
   const beatNow = useRef<() => void>(() => {});
   const player = useRef<Agent | null>(null);
@@ -568,12 +578,12 @@ export default function Village({ data }: { data: VillageData }) {
     joined: () => {
       resendPos.current = true;
     },
-    pos: ({ id, x, y, f, g }) => {
+    pos: ({ id, x, y, f, g, j }) => {
       const sc = sceneRef.current;
       const dir = (f % 4) as Agent["dir"];
       const prev = lastLive.current.get(id);
       const now = Date.now();
-      lastLive.current.set(id, { x, y, f: dir, g, at: now });
+      lastLive.current.set(id, { x, y, f: dir, g, j, at: now });
       const a = (sc.kind === "out" ? agents.current : roomAgents.current).get(id);
       // Someone new: the check-in brings what they look like, and they're
       // placed from lastLive when it does. Asked once; the regular
@@ -586,6 +596,8 @@ export default function Village({ data }: { data: VillageData }) {
       a.guard = g;
       a.seat = null;
       a.stand = null;
+      // Their count went up: they jumped. (The first one heard is just where it's at.)
+      if (prev && j !== prev.j) jumpNow(a, performance.now());
     },
     swing: (by) => startSwing(by),
     blow: (b) => {
@@ -635,11 +647,10 @@ export default function Village({ data }: { data: VillageData }) {
     if (!f || now < f.startsAt || now > f.endsAt || keys.current.has("guard")) return;
     if (performance.now() - lastSwing.current < HIT_COOLDOWN_MS) return;
     lastSwing.current = performance.now();
-    // A swing goes all the way round. With a mouse I'm already facing where
-    // I aim (the loop); without one, turn to face them for it.
+    // A swing goes all the way round; turn to face them for it.
     const p = player.current!;
     const them = opponentRef.current ? roomAgents.current.get(opponentRef.current) : null;
-    if (them && !aimRef.current) p.dir = facingToward(them.x - p.x, them.y - p.y);
+    if (them) p.dir = facingToward(them.x - p.x, them.y - p.y);
     startSwing(me.id);
     if (!liveRef.current) return toast("Reconnecting to the arena — hold on a second.");
     live.sendHit();
@@ -709,26 +720,33 @@ export default function Village({ data }: { data: VillageData }) {
       const countdown = !!fight && serverNow(skewRef.current) < fight.startsAt;
       const k = keys.current;
       p.guard = !!fight && !countdown && k.has("guard");
-      const vx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0);
-      const vy = (k.has("down") ? 1 : 0) - (k.has("up") ? 1 : 0);
-      if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, p.guard ? dt / 2 : dt);
-      else step(g, p, dt);
-      if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
-      // Facing the pointer, all the way round (the sprite shows the nearest of
-      // its four ways): whenever I'm not walking somewhere — and in a fight,
-      // always, so I can back off still facing them.
-      const aim = aimRef.current;
-      if (aim && (fight ? !countdown : !p.moving)) {
+      // F: half as fast again. A guard still halves it.
+      const pace = (k.has("sprint") ? 1.5 : 1) * (p.guard ? 0.5 : 1);
+      let vx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0);
+      let vy = (k.has("down") ? 1 : 0) - (k.has("up") ? 1 : 0);
+      // A press held on the ground: towards it, at whatever angle.
+      const hold = holdRef.current;
+      if (hold && !vx && !vy) {
+        if (!hold.steering && t - hold.at > HOLD_MS) hold.steering = true;
         const vp = viewport.current;
         const l = layer.current;
-        if (vp && l) {
+        if (hold.steering && vp && l) {
           const r = vp.getBoundingClientRect();
-          const wx = (aim.x - r.left + Number(l.dataset.cx ?? 0)) / S;
-          const wy = (aim.y - r.top + Number(l.dataset.cy ?? 0)) / S;
-          // From the middle of the knight, not their feet.
-          if (Math.hypot(wx - p.x, wy - (p.y - 24)) > 6) p.dir = facingToward(wx - p.x, wy - (p.y - 24));
+          const dx = (hold.x - r.left + Number(l.dataset.cx ?? 0)) / S - p.x;
+          const dy = (hold.y - r.top + Number(l.dataset.cy ?? 0)) / S - (p.y - 16);
+          // Close enough: stand still rather than turn on the spot.
+          if (Math.hypot(dx, dy) > 10) {
+            vx = dx;
+            vy = dy;
+          } else if (!p.path.length) p.moving = false;
         }
       }
+      if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, dt * pace);
+      else step(g, p, dt * pace);
+      if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
+      // In a fight, always facing them, so I can back off still on guard.
+      const them = fight && !countdown && opponentRef.current ? roomAgents.current.get(opponentRef.current) : null;
+      if (them && Math.hypot(them.x - p.x, them.y - p.y) > 2) p.dir = facingToward(them.x - p.x, them.y - p.y);
       paint(p, S, t);
 
       // In a shared room, tell the others exactly where I am whenever I've
@@ -738,7 +756,7 @@ export default function Village({ data }: { data: VillageData }) {
       // Raising or lowering a guard goes at once: a swing is judged by it.
       // Standing still, the same again every POS_HEARTBEAT_MS.
       if (liveRef.current && shownHere.current) {
-        const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.guard}`;
+        const key = `${Math.round(p.x)},${Math.round(p.y)},${p.dir},${p.guard},${jumps.current}`;
         const changed = key !== sentKey || resendPos.current;
         const wait = p.guard !== sentGuard ? 0 : changed ? 140 : POS_HEARTBEAT_MS;
         if (t - sentAt >= wait) {
@@ -747,7 +765,7 @@ export default function Village({ data }: { data: VillageData }) {
           sentGuard = p.guard;
           sentAt = t;
           const at = tilesOf(p);
-          sendPosRef.current(at.x, at.y, at.facing, p.guard);
+          sendPosRef.current(at.x, at.y, at.facing, p.guard, jumps.current);
         }
       }
       const others = sc.kind === "out" ? agents.current : roomAgents.current;
@@ -1059,6 +1077,13 @@ export default function Village({ data }: { data: VillageData }) {
       if (dir) {
         e.preventDefault();
         keys.current.add(dir);
+      } else if (e.code === "Space") {
+        // A jump, not a press of whatever button last had focus, nor a scroll.
+        e.preventDefault();
+        if (!e.repeat && jumpNow(player.current, performance.now())) jumps.current++;
+      } else if (e.code === "KeyF") {
+        // Run while held.
+        keys.current.add("sprint");
       } else if (e.code === "KeyG") {
         // Guard while held (duels).
         keys.current.add("guard");
@@ -1075,6 +1100,8 @@ export default function Village({ data }: { data: VillageData }) {
     const up = (e: KeyboardEvent) => {
       const dir = map[e.code];
       if (dir) keys.current.delete(dir);
+      else if (e.code === "Space" && !typing(e)) e.preventDefault();
+      else if (e.code === "KeyF") keys.current.delete("sprint");
       else if (e.code === "KeyG") keys.current.delete("guard");
       // Any key let go under ⌘ never said so (above): start clean.
       else if (e.key === "Meta") keys.current.clear();
@@ -1118,7 +1145,23 @@ export default function Village({ data }: { data: VillageData }) {
     // the ring like the keys do (the loop keeps you inside it).
     const fight = fightRef.current;
     if (fight && serverNow(skewRef.current) < fight.startsAt) return;
+    // A tap walks there, the straight way where it can; held, it steers (the loop).
     walkTo(gridRef.current, player.current!, tile.x, tile.y);
+    holdRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, at: e.timeStamp, steering: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  /** A held press let go: stop where I am, unless it was only a tap (then the walk goes on). */
+  function onGroundUp(e: React.PointerEvent) {
+    const hold = holdRef.current;
+    if (!hold || hold.id !== e.pointerId) return;
+    holdRef.current = null;
+    if (hold.steering) {
+      const p = player.current!;
+      p.path = [];
+      p.onArrive = undefined;
+      p.moving = false;
+    }
   }
 
   function place_(kind: FurnitureKind, tile: { x: number; y: number }) {
@@ -1290,10 +1333,16 @@ export default function Village({ data }: { data: VillageData }) {
         ref={viewport}
         className={`absolute inset-0 touch-none ${scene.kind === "out" ? "bg-[#5f8f34]" : ""}`}
         onPointerDown={onGround}
+        onPointerUp={onGroundUp}
+        onPointerCancel={onGroundUp}
         onPointerMove={(e) => {
-          // A mouse (or pen) over the village is where I'm looking; a finger
-          // only says where to walk.
-          if (e.pointerType !== "touch") aimRef.current = { x: e.clientX, y: e.clientY };
+          // A held press follows the pointer; dragged a little, it steers at once.
+          const hold = holdRef.current;
+          if (hold && hold.id === e.pointerId) {
+            hold.x = e.clientX;
+            hold.y = e.clientY;
+            if (Math.hypot(e.clientX - hold.sx, e.clientY - hold.sy) > 12) hold.steering = true;
+          }
           if (!deco?.pick) return;
           const t = tileAtPoint(e.clientX, e.clientY);
           if (t && (t.x !== ghost?.x || t.y !== ghost?.y)) setGhost(t);
@@ -1525,7 +1574,7 @@ export default function Village({ data }: { data: VillageData }) {
 
       {scene.kind === "out" && (
         <p className="pointer-events-none absolute bottom-3 right-4 z-[70000] hidden text-[11px] font-semibold text-white/80 drop-shadow lg:block">
-          Arrow keys or WASD to walk · click to go somewhere · E to go in
+          WASD or arrows to walk · hold F to run · Space to jump · click to go, or hold to steer · E to go in
         </p>
       )}
 

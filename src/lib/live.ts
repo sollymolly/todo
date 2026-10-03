@@ -22,8 +22,8 @@ import { Redis } from "@upstash/redis";
    -------------------------------------------------------------------------- */
 
 export type LiveMessage =
-  /* g: guarding (duels) */
-  | { t: "pos"; id: string; x: number; y: number; f: number; g: 0 | 1 }
+  /* g: guarding (duels). j: how many times they've jumped — a new number is a new jump. */
+  | { t: "pos"; id: string; x: number; y: number; f: number; g: 0 | 1; j?: number }
   | { t: "poke" }
   /* A duel hit that landed: the fighters' health after it. */
   | { t: "hit"; duel: string; by: string; target: string; a: number; b: number }

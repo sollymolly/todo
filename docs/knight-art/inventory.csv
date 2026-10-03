@@ -1,0 +1,229 @@
+deliver_as,replaces,slot,items,bodies,anim,z,frame_px,columns,rows,sheet_px,palette_family,base_ramp
+/sprites/lpc16/body/bodies/female/slash.png,/sprites/lpc/body/bodies/female/slash.png,base,body,female,slash,10,64,6,16,384x1024,body,light
+/sprites/lpc16/body/bodies/female/thrust.png,/sprites/lpc/body/bodies/female/thrust.png,base,body,female,thrust,10,64,8,16,512x1024,body,light
+/sprites/lpc16/body/bodies/female/walk.png,/sprites/lpc/body/bodies/female/walk.png,base,body,female,walk,10,64,9,16,576x1024,body,light
+/sprites/lpc16/body/bodies/male/slash.png,/sprites/lpc/body/bodies/male/slash.png,base,body,male,slash,10,64,6,16,384x1024,body,light
+/sprites/lpc16/body/bodies/male/thrust.png,/sprites/lpc/body/bodies/male/thrust.png,base,body,male,thrust,10,64,8,16,512x1024,body,light
+/sprites/lpc16/body/bodies/male/walk.png,/sprites/lpc/body/bodies/male/walk.png,base,body,male,walk,10,64,9,16,576x1024,body,light
+/sprites/lpc16/head/heads/human/female/slash.png,/sprites/lpc/head/heads/human/female/slash.png,base,head,female,slash,100,64,6,16,384x1024,body,light
+/sprites/lpc16/head/heads/human/female/thrust.png,/sprites/lpc/head/heads/human/female/thrust.png,base,head,female,thrust,100,64,8,16,512x1024,body,light
+/sprites/lpc16/head/heads/human/female/walk.png,/sprites/lpc/head/heads/human/female/walk.png,base,head,female,walk,100,64,9,16,576x1024,body,light
+/sprites/lpc16/head/heads/human/male/slash.png,/sprites/lpc/head/heads/human/male/slash.png,base,head,male,slash,100,64,6,16,384x1024,body,light
+/sprites/lpc16/head/heads/human/male/thrust.png,/sprites/lpc/head/heads/human/male/thrust.png,base,head,male,thrust,100,64,8,16,512x1024,body,light
+/sprites/lpc16/head/heads/human/male/walk.png,/sprites/lpc/head/heads/human/male/walk.png,base,head,male,walk,100,64,9,16,576x1024,body,light
+/sprites/lpc16/cape/solid/bg/slash.png,/sprites/lpc/cape/solid/bg/slash.png,cape,heraldic starcloak traveler,female male,slash,5,64,6,16,384x1024,cloth,white
+/sprites/lpc16/cape/solid/bg/thrust.png,/sprites/lpc/cape/solid/bg/thrust.png,cape,heraldic starcloak traveler,female male,thrust,5,64,8,16,512x1024,cloth,white
+/sprites/lpc16/cape/solid/bg/walk.png,/sprites/lpc/cape/solid/bg/walk.png,cape,heraldic starcloak traveler,female male,walk,5,64,9,16,576x1024,cloth,white
+/sprites/lpc16/cape/solid/fg/slash.png,/sprites/lpc/cape/solid/fg/slash.png,cape,heraldic starcloak traveler,female male,slash,85,64,6,16,384x1024,cloth,white
+/sprites/lpc16/cape/solid/fg/thrust.png,/sprites/lpc/cape/solid/fg/thrust.png,cape,heraldic starcloak traveler,female male,thrust,85,64,8,16,512x1024,cloth,white
+/sprites/lpc16/cape/solid/fg/walk.png,/sprites/lpc/cape/solid/fg/walk.png,cape,heraldic starcloak traveler,female male,walk,85,64,9,16,576x1024,cloth,white
+/sprites/lpc16/cape/tattered/bg/slash.png,/sprites/lpc/cape/tattered/bg/slash.png,cape,tattered,female male,slash,5,64,6,16,384x1024,cloth,white
+/sprites/lpc16/cape/tattered/bg/thrust.png,/sprites/lpc/cape/tattered/bg/thrust.png,cape,tattered,female male,thrust,5,64,8,16,512x1024,cloth,white
+/sprites/lpc16/cape/tattered/bg/walk.png,/sprites/lpc/cape/tattered/bg/walk.png,cape,tattered,female male,walk,5,64,9,16,576x1024,cloth,white
+/sprites/lpc16/cape/tattered/fg/slash.png,/sprites/lpc/cape/tattered/fg/slash.png,cape,tattered,female male,slash,85,64,6,16,384x1024,cloth,white
+/sprites/lpc16/cape/tattered/fg/thrust.png,/sprites/lpc/cape/tattered/fg/thrust.png,cape,tattered,female male,thrust,85,64,8,16,512x1024,cloth,white
+/sprites/lpc16/cape/tattered/fg/walk.png,/sprites/lpc/cape/tattered/fg/walk.png,cape,tattered,female male,walk,85,64,9,16,576x1024,cloth,white
+/sprites/lpc16/cape/trim/slash.png,/sprites/lpc/cape/trim/slash.png,cape,mantle,female male,slash,90,64,6,16,384x1024,cloth,brown
+/sprites/lpc16/cape/trim/thrust.png,/sprites/lpc/cape/trim/thrust.png,cape,mantle,female male,thrust,90,64,8,16,512x1024,cloth,brown
+/sprites/lpc16/cape/trim/walk.png,/sprites/lpc/cape/trim/walk.png,cape,mantle,female male,walk,90,64,9,16,576x1024,cloth,brown
+/sprites/lpc16/eyes/human/adult/default/slash/blue.png,/sprites/lpc/eyes/human/adult/default/slash/blue.png,eyes,blue,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/brown.png,/sprites/lpc/eyes/human/adult/default/slash/brown.png,eyes,brown,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/gray.png,/sprites/lpc/eyes/human/adult/default/slash/gray.png,eyes,gray,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/green.png,/sprites/lpc/eyes/human/adult/default/slash/green.png,eyes,green,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/orange.png,/sprites/lpc/eyes/human/adult/default/slash/orange.png,eyes,orange,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/purple.png,/sprites/lpc/eyes/human/adult/default/slash/purple.png,eyes,purple,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/red.png,/sprites/lpc/eyes/human/adult/default/slash/red.png,eyes,red,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/slash/yellow.png,/sprites/lpc/eyes/human/adult/default/slash/yellow.png,eyes,yellow,female male,slash,101,64,6,16,384x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/blue.png,/sprites/lpc/eyes/human/adult/default/thrust/blue.png,eyes,blue,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/brown.png,/sprites/lpc/eyes/human/adult/default/thrust/brown.png,eyes,brown,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/gray.png,/sprites/lpc/eyes/human/adult/default/thrust/gray.png,eyes,gray,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/green.png,/sprites/lpc/eyes/human/adult/default/thrust/green.png,eyes,green,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/orange.png,/sprites/lpc/eyes/human/adult/default/thrust/orange.png,eyes,orange,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/purple.png,/sprites/lpc/eyes/human/adult/default/thrust/purple.png,eyes,purple,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/red.png,/sprites/lpc/eyes/human/adult/default/thrust/red.png,eyes,red,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/thrust/yellow.png,/sprites/lpc/eyes/human/adult/default/thrust/yellow.png,eyes,yellow,female male,thrust,101,64,8,16,512x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/blue.png,/sprites/lpc/eyes/human/adult/default/walk/blue.png,eyes,blue,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/brown.png,/sprites/lpc/eyes/human/adult/default/walk/brown.png,eyes,brown,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/gray.png,/sprites/lpc/eyes/human/adult/default/walk/gray.png,eyes,gray,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/green.png,/sprites/lpc/eyes/human/adult/default/walk/green.png,eyes,green,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/orange.png,/sprites/lpc/eyes/human/adult/default/walk/orange.png,eyes,orange,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/purple.png,/sprites/lpc/eyes/human/adult/default/walk/purple.png,eyes,purple,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/red.png,/sprites/lpc/eyes/human/adult/default/walk/red.png,eyes,red,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/eyes/human/adult/default/walk/yellow.png,/sprites/lpc/eyes/human/adult/default/walk/yellow.png,eyes,yellow,female male,walk,101,64,9,16,576x1024,,
+/sprites/lpc16/feet/armour/plate/male/slash.png,/sprites/lpc/feet/armour/plate/male/slash.png,feet,armour,male,slash,15,64,6,16,384x1024,metal,steel
+/sprites/lpc16/feet/armour/plate/male/thrust.png,/sprites/lpc/feet/armour/plate/male/thrust.png,feet,armour,male,thrust,15,64,8,16,512x1024,metal,steel
+/sprites/lpc16/feet/armour/plate/male/walk.png,/sprites/lpc/feet/armour/plate/male/walk.png,feet,armour,male,walk,15,64,9,16,576x1024,metal,steel
+/sprites/lpc16/feet/armour/plate/thin/slash.png,/sprites/lpc/feet/armour/plate/thin/slash.png,feet,armour,female,slash,15,64,6,16,384x1024,metal,steel
+/sprites/lpc16/feet/armour/plate/thin/thrust.png,/sprites/lpc/feet/armour/plate/thin/thrust.png,feet,armour,female,thrust,15,64,8,16,512x1024,metal,steel
+/sprites/lpc16/feet/armour/plate/thin/walk.png,/sprites/lpc/feet/armour/plate/thin/walk.png,feet,armour,female,walk,15,64,9,16,576x1024,metal,steel
+/sprites/lpc16/feet/boots/basic/male/slash.png,/sprites/lpc/feet/boots/basic/male/slash.png,feet,boots,male,slash,25,64,6,16,384x1024,cloth,white
+/sprites/lpc16/feet/boots/basic/male/thrust.png,/sprites/lpc/feet/boots/basic/male/thrust.png,feet,boots,male,thrust,25,64,8,16,512x1024,cloth,white
+/sprites/lpc16/feet/boots/basic/male/walk.png,/sprites/lpc/feet/boots/basic/male/walk.png,feet,boots,male,walk,25,64,9,16,576x1024,cloth,white
+/sprites/lpc16/feet/boots/basic/thin/slash.png,/sprites/lpc/feet/boots/basic/thin/slash.png,feet,boots,female,slash,25,64,6,16,384x1024,cloth,white
+/sprites/lpc16/feet/boots/basic/thin/thrust.png,/sprites/lpc/feet/boots/basic/thin/thrust.png,feet,boots,female,thrust,25,64,8,16,512x1024,cloth,white
+/sprites/lpc16/feet/boots/basic/thin/walk.png,/sprites/lpc/feet/boots/basic/thin/walk.png,feet,boots,female,walk,25,64,9,16,576x1024,cloth,white
+/sprites/lpc16/hair/braid/adult/bg/slash.png,/sprites/lpc/hair/braid/adult/bg/slash.png,hair,braided,female male,slash,9,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/braid/adult/bg/thrust.png,/sprites/lpc/hair/braid/adult/bg/thrust.png,hair,braided,female male,thrust,9,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/braid/adult/bg/walk.png,/sprites/lpc/hair/braid/adult/bg/walk.png,hair,braided,female male,walk,9,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/braid/adult/fg/slash.png,/sprites/lpc/hair/braid/adult/fg/slash.png,hair,braided,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/braid/adult/fg/thrust.png,/sprites/lpc/hair/braid/adult/fg/thrust.png,hair,braided,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/braid/adult/fg/walk.png,/sprites/lpc/hair/braid/adult/fg/walk.png,hair,braided,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/buzzcut/adult/slash.png,/sprites/lpc/hair/buzzcut/adult/slash.png,hair,buzz,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/buzzcut/adult/thrust.png,/sprites/lpc/hair/buzzcut/adult/thrust.png,hair,buzz,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/buzzcut/adult/walk.png,/sprites/lpc/hair/buzzcut/adult/walk.png,hair,buzz,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/curly_short/adult/slash.png,/sprites/lpc/hair/curly_short/adult/slash.png,hair,curly,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/curly_short/adult/thrust.png,/sprites/lpc/hair/curly_short/adult/thrust.png,hair,curly,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/curly_short/adult/walk.png,/sprites/lpc/hair/curly_short/adult/walk.png,hair,curly,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/extensions/ponytails/topknot_long/adult/bg/slash.png,/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/slash.png,hair,topknot,female male,slash,9,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/extensions/ponytails/topknot_long/adult/bg/thrust.png,/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/thrust.png,hair,topknot,female male,thrust,9,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/extensions/ponytails/topknot_long/adult/bg/walk.png,/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/bg/walk.png,hair,topknot,female male,walk,9,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/extensions/ponytails/topknot_long/adult/fg/slash.png,/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/slash.png,hair,topknot,female male,slash,145,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/extensions/ponytails/topknot_long/adult/fg/thrust.png,/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/thrust.png,hair,topknot,female male,thrust,145,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/extensions/ponytails/topknot_long/adult/fg/walk.png,/sprites/lpc/hair/extensions/ponytails/topknot_long/adult/fg/walk.png,hair,topknot,female male,walk,145,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/long/adult/slash.png,/sprites/lpc/hair/long/adult/slash.png,hair,long,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/long/adult/thrust.png,/sprites/lpc/hair/long/adult/thrust.png,hair,long,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/long/adult/walk.png,/sprites/lpc/hair/long/adult/walk.png,hair,long,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/messy1/adult/slash.png,/sprites/lpc/hair/messy1/adult/slash.png,hair,tousled,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/messy1/adult/thrust.png,/sprites/lpc/hair/messy1/adult/thrust.png,hair,tousled,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/messy1/adult/walk.png,/sprites/lpc/hair/messy1/adult/walk.png,hair,tousled,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/parted_side_bangs/adult/slash.png,/sprites/lpc/hair/parted_side_bangs/adult/slash.png,hair,topknot,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/parted_side_bangs/adult/thrust.png,/sprites/lpc/hair/parted_side_bangs/adult/thrust.png,hair,topknot,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/parted_side_bangs/adult/walk.png,/sprites/lpc/hair/parted_side_bangs/adult/walk.png,hair,topknot,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hair/ponytail/adult/bg/slash.png,/sprites/lpc/hair/ponytail/adult/bg/slash.png,hair,ponytail,female male,slash,9,64,6,16,384x1024,,
+/sprites/lpc16/hair/ponytail/adult/bg/thrust.png,/sprites/lpc/hair/ponytail/adult/bg/thrust.png,hair,ponytail,female male,thrust,9,64,8,16,512x1024,,
+/sprites/lpc16/hair/ponytail/adult/bg/walk.png,/sprites/lpc/hair/ponytail/adult/bg/walk.png,hair,ponytail,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/hair/ponytail/adult/fg/slash.png,/sprites/lpc/hair/ponytail/adult/fg/slash.png,hair,ponytail,female male,slash,120,64,6,16,384x1024,hair,orange
+/sprites/lpc16/hair/ponytail/adult/fg/thrust.png,/sprites/lpc/hair/ponytail/adult/fg/thrust.png,hair,ponytail,female male,thrust,120,64,8,16,512x1024,hair,orange
+/sprites/lpc16/hair/ponytail/adult/fg/walk.png,/sprites/lpc/hair/ponytail/adult/fg/walk.png,hair,ponytail,female male,walk,120,64,9,16,576x1024,hair,orange
+/sprites/lpc16/hat/cloth/bandana/adult/slash.png,/sprites/lpc/hat/cloth/bandana/adult/slash.png,head,bandana,female male,slash,120,64,6,16,384x1024,cloth,white
+/sprites/lpc16/hat/cloth/bandana/adult/thrust.png,/sprites/lpc/hat/cloth/bandana/adult/thrust.png,head,bandana,female male,thrust,120,64,8,16,512x1024,cloth,white
+/sprites/lpc16/hat/cloth/bandana/adult/walk.png,/sprites/lpc/hat/cloth/bandana/adult/walk.png,head,bandana,female male,walk,120,64,9,16,576x1024,cloth,white
+/sprites/lpc16/hat/cloth/leather_cap/adult/slash/gray.png,/sprites/lpc/hat/cloth/leather_cap/adult/slash/gray.png,head,cap,female male,slash,130,64,6,16,384x1024,cloth,gray
+/sprites/lpc16/hat/cloth/leather_cap/adult/thrust/gray.png,/sprites/lpc/hat/cloth/leather_cap/adult/thrust/gray.png,head,cap,female male,thrust,130,64,8,16,512x1024,cloth,gray
+/sprites/lpc16/hat/cloth/leather_cap/adult/walk/gray.png,/sprites/lpc/hat/cloth/leather_cap/adult/walk/gray.png,head,cap,female male,walk,130,64,9,16,576x1024,cloth,gray
+/sprites/lpc16/hat/formal/crown/adult/slash/steel.png,/sprites/lpc/hat/formal/crown/adult/slash/steel.png,head,crown,female male,slash,130,64,6,16,384x1024,metal,steel
+/sprites/lpc16/hat/formal/crown/adult/thrust/steel.png,/sprites/lpc/hat/formal/crown/adult/thrust/steel.png,head,crown,female male,thrust,130,64,8,16,512x1024,metal,steel
+/sprites/lpc16/hat/formal/crown/adult/walk/steel.png,/sprites/lpc/hat/formal/crown/adult/walk/steel.png,head,crown,female male,walk,130,64,9,16,576x1024,metal,steel
+/sprites/lpc16/hat/helmet/bascinet/adult/slash.png,/sprites/lpc/hat/helmet/bascinet/adult/slash.png,head,helm,female male,slash,130,64,6,16,384x1024,metal,steel
+/sprites/lpc16/hat/helmet/bascinet/adult/thrust.png,/sprites/lpc/hat/helmet/bascinet/adult/thrust.png,head,helm,female male,thrust,130,64,8,16,512x1024,metal,steel
+/sprites/lpc16/hat/helmet/bascinet/adult/walk.png,/sprites/lpc/hat/helmet/bascinet/adult/walk.png,head,helm,female male,walk,130,64,9,16,576x1024,metal,steel
+/sprites/lpc16/hat/helmet/greathelm/female/slash.png,/sprites/lpc/hat/helmet/greathelm/female/slash.png,head,greathelm,female,slash,130,64,6,16,384x1024,metal,steel
+/sprites/lpc16/hat/helmet/greathelm/female/thrust.png,/sprites/lpc/hat/helmet/greathelm/female/thrust.png,head,greathelm,female,thrust,130,64,8,16,512x1024,metal,steel
+/sprites/lpc16/hat/helmet/greathelm/female/walk.png,/sprites/lpc/hat/helmet/greathelm/female/walk.png,head,greathelm,female,walk,130,64,9,16,576x1024,metal,steel
+/sprites/lpc16/hat/helmet/greathelm/male/slash.png,/sprites/lpc/hat/helmet/greathelm/male/slash.png,head,greathelm,male,slash,130,64,6,16,384x1024,metal,steel
+/sprites/lpc16/hat/helmet/greathelm/male/thrust.png,/sprites/lpc/hat/helmet/greathelm/male/thrust.png,head,greathelm,male,thrust,130,64,8,16,512x1024,metal,steel
+/sprites/lpc16/hat/helmet/greathelm/male/walk.png,/sprites/lpc/hat/helmet/greathelm/male/walk.png,head,greathelm,male,walk,130,64,9,16,576x1024,metal,steel
+/sprites/lpc16/hat/helmet/horned/adult/slash.png,/sprites/lpc/hat/helmet/horned/adult/slash.png,head,dragoncrown,female male,slash,130,64,6,16,384x1024,metal,steel
+/sprites/lpc16/hat/helmet/horned/adult/thrust.png,/sprites/lpc/hat/helmet/horned/adult/thrust.png,head,dragoncrown,female male,thrust,130,64,8,16,512x1024,metal,steel
+/sprites/lpc16/hat/helmet/horned/adult/walk.png,/sprites/lpc/hat/helmet/horned/adult/walk.png,head,dragoncrown,female male,walk,130,64,9,16,576x1024,metal,steel
+/sprites/lpc16/legs/armour/plate/male/slash.png,/sprites/lpc/legs/armour/plate/male/slash.png,legs,armour,male,slash,20,64,6,16,384x1024,metal,steel
+/sprites/lpc16/legs/armour/plate/male/thrust.png,/sprites/lpc/legs/armour/plate/male/thrust.png,legs,armour,male,thrust,20,64,8,16,512x1024,metal,steel
+/sprites/lpc16/legs/armour/plate/male/walk.png,/sprites/lpc/legs/armour/plate/male/walk.png,legs,armour,male,walk,20,64,9,16,576x1024,metal,steel
+/sprites/lpc16/legs/armour/plate/thin/slash.png,/sprites/lpc/legs/armour/plate/thin/slash.png,legs,armour,female,slash,20,64,6,16,384x1024,metal,steel
+/sprites/lpc16/legs/armour/plate/thin/thrust.png,/sprites/lpc/legs/armour/plate/thin/thrust.png,legs,armour,female,thrust,20,64,8,16,512x1024,metal,steel
+/sprites/lpc16/legs/armour/plate/thin/walk.png,/sprites/lpc/legs/armour/plate/thin/walk.png,legs,armour,female,walk,20,64,9,16,576x1024,metal,steel
+/sprites/lpc16/legs/pants/male/slash.png,/sprites/lpc/legs/pants/male/slash.png,legs,cloth,male,slash,20,64,6,16,384x1024,cloth,white
+/sprites/lpc16/legs/pants/male/thrust.png,/sprites/lpc/legs/pants/male/thrust.png,legs,cloth,male,thrust,20,64,8,16,512x1024,cloth,white
+/sprites/lpc16/legs/pants/male/walk.png,/sprites/lpc/legs/pants/male/walk.png,legs,cloth,male,walk,20,64,9,16,576x1024,cloth,white
+/sprites/lpc16/legs/pants/thin/slash.png,/sprites/lpc/legs/pants/thin/slash.png,legs,cloth,female,slash,20,64,6,16,384x1024,cloth,white
+/sprites/lpc16/legs/pants/thin/thrust.png,/sprites/lpc/legs/pants/thin/thrust.png,legs,cloth,female,thrust,20,64,8,16,512x1024,cloth,white
+/sprites/lpc16/legs/pants/thin/walk.png,/sprites/lpc/legs/pants/thin/walk.png,legs,cloth,female,walk,20,64,9,16,576x1024,cloth,white
+/sprites/lpc16/shield/crusader/bg/slash/crusader.png,/sprites/lpc/shield/crusader/bg/slash/crusader.png,offhand,aegis,female male,slash,2,64,6,16,384x1024,,
+/sprites/lpc16/shield/crusader/bg/thrust/crusader.png,/sprites/lpc/shield/crusader/bg/thrust/crusader.png,offhand,aegis,female male,thrust,2,64,8,16,512x1024,,
+/sprites/lpc16/shield/crusader/bg/walk/crusader.png,/sprites/lpc/shield/crusader/bg/walk/crusader.png,offhand,aegis,female male,walk,2,64,9,16,576x1024,,
+/sprites/lpc16/shield/crusader/fg/female/slash/crusader.png,/sprites/lpc/shield/crusader/fg/female/slash/crusader.png,offhand,aegis,female,slash,110,64,6,16,384x1024,,
+/sprites/lpc16/shield/crusader/fg/female/thrust/crusader.png,/sprites/lpc/shield/crusader/fg/female/thrust/crusader.png,offhand,aegis,female,thrust,110,64,8,16,512x1024,,
+/sprites/lpc16/shield/crusader/fg/female/walk/crusader.png,/sprites/lpc/shield/crusader/fg/female/walk/crusader.png,offhand,aegis,female,walk,110,64,9,16,576x1024,,
+/sprites/lpc16/shield/crusader/fg/male/slash/crusader.png,/sprites/lpc/shield/crusader/fg/male/slash/crusader.png,offhand,aegis,male,slash,110,64,6,16,384x1024,,
+/sprites/lpc16/shield/crusader/fg/male/thrust/crusader.png,/sprites/lpc/shield/crusader/fg/male/thrust/crusader.png,offhand,aegis,male,thrust,110,64,8,16,512x1024,,
+/sprites/lpc16/shield/crusader/fg/male/walk/crusader.png,/sprites/lpc/shield/crusader/fg/male/walk/crusader.png,offhand,aegis,male,walk,110,64,9,16,576x1024,,
+/sprites/lpc16/shield/heater/original/wood/fg/slash.png,/sprites/lpc/shield/heater/original/wood/fg/slash.png,offhand,tower,female male,slash,110,64,6,16,384x1024,,
+/sprites/lpc16/shield/heater/original/wood/fg/thrust.png,/sprites/lpc/shield/heater/original/wood/fg/thrust.png,offhand,tower,female male,thrust,110,64,8,16,512x1024,,
+/sprites/lpc16/shield/heater/original/wood/fg/walk.png,/sprites/lpc/shield/heater/original/wood/fg/walk.png,offhand,tower,female male,walk,110,64,9,16,576x1024,,
+/sprites/lpc16/shield/heater/revised/wood/bg/walk.png,/sprites/lpc/shield/heater/revised/wood/bg/walk.png,offhand,kite,female male,walk,2,64,9,16,576x1024,,
+/sprites/lpc16/shield/heater/revised/wood/fg/slash.png,/sprites/lpc/shield/heater/revised/wood/fg/slash.png,offhand,kite,female male,slash,110,64,6,16,384x1024,,
+/sprites/lpc16/shield/heater/revised/wood/fg/thrust.png,/sprites/lpc/shield/heater/revised/wood/fg/thrust.png,offhand,kite,female male,thrust,110,64,8,16,512x1024,,
+/sprites/lpc16/shield/heater/revised/wood/fg/walk.png,/sprites/lpc/shield/heater/revised/wood/fg/walk.png,offhand,kite,female male,walk,110,64,9,16,576x1024,,
+/sprites/lpc16/shield/round/slash/brown.png,/sprites/lpc/shield/round/slash/brown.png,offhand,buckler,female male,slash,110,64,6,16,384x1024,,
+/sprites/lpc16/shield/round/thrust/brown.png,/sprites/lpc/shield/round/thrust/brown.png,offhand,buckler,female male,thrust,110,64,8,16,512x1024,,
+/sprites/lpc16/shield/round/walk/brown.png,/sprites/lpc/shield/round/walk/brown.png,offhand,buckler,female male,walk,110,64,9,16,576x1024,,
+/sprites/lpc16/shield/spartan/bg/slash/spartan.png,/sprites/lpc/shield/spartan/bg/slash/spartan.png,offhand,lantern,female male,slash,2,64,6,16,384x1024,,
+/sprites/lpc16/shield/spartan/bg/thrust/spartan.png,/sprites/lpc/shield/spartan/bg/thrust/spartan.png,offhand,lantern,female male,thrust,2,64,8,16,512x1024,,
+/sprites/lpc16/shield/spartan/bg/walk/spartan.png,/sprites/lpc/shield/spartan/bg/walk/spartan.png,offhand,lantern,female male,walk,2,64,9,16,576x1024,,
+/sprites/lpc16/shield/spartan/fg/slash/spartan.png,/sprites/lpc/shield/spartan/fg/slash/spartan.png,offhand,lantern,female male,slash,110,64,6,16,384x1024,,
+/sprites/lpc16/shield/spartan/fg/thrust/spartan.png,/sprites/lpc/shield/spartan/fg/thrust/spartan.png,offhand,lantern,female male,thrust,110,64,8,16,512x1024,,
+/sprites/lpc16/shield/spartan/fg/walk/spartan.png,/sprites/lpc/shield/spartan/fg/walk/spartan.png,offhand,lantern,female male,walk,110,64,9,16,576x1024,,
+/sprites/lpc16/torso/armour/leather/female/slash.png,/sprites/lpc/torso/armour/leather/female/slash.png,torso,jerkin,female,slash,60,64,6,16,384x1024,cloth,leather
+/sprites/lpc16/torso/armour/leather/female/thrust.png,/sprites/lpc/torso/armour/leather/female/thrust.png,torso,jerkin,female,thrust,60,64,8,16,512x1024,cloth,leather
+/sprites/lpc16/torso/armour/leather/female/walk.png,/sprites/lpc/torso/armour/leather/female/walk.png,torso,jerkin,female,walk,60,64,9,16,576x1024,cloth,leather
+/sprites/lpc16/torso/armour/leather/male/slash.png,/sprites/lpc/torso/armour/leather/male/slash.png,torso,jerkin,male,slash,60,64,6,16,384x1024,cloth,leather
+/sprites/lpc16/torso/armour/leather/male/thrust.png,/sprites/lpc/torso/armour/leather/male/thrust.png,torso,jerkin,male,thrust,60,64,8,16,512x1024,cloth,leather
+/sprites/lpc16/torso/armour/leather/male/walk.png,/sprites/lpc/torso/armour/leather/male/walk.png,torso,jerkin,male,walk,60,64,9,16,576x1024,cloth,leather
+/sprites/lpc16/torso/armour/legion/female/slash.png,/sprites/lpc/torso/armour/legion/female/slash.png,torso,scale,female,slash,60,64,6,16,384x1024,metal,steel
+/sprites/lpc16/torso/armour/legion/female/thrust.png,/sprites/lpc/torso/armour/legion/female/thrust.png,torso,scale,female,thrust,60,64,8,16,512x1024,metal,steel
+/sprites/lpc16/torso/armour/legion/female/walk.png,/sprites/lpc/torso/armour/legion/female/walk.png,torso,scale,female,walk,60,64,9,16,576x1024,metal,steel
+/sprites/lpc16/torso/armour/legion/male/slash.png,/sprites/lpc/torso/armour/legion/male/slash.png,torso,scale,male,slash,60,64,6,16,384x1024,metal,steel
+/sprites/lpc16/torso/armour/legion/male/thrust.png,/sprites/lpc/torso/armour/legion/male/thrust.png,torso,scale,male,thrust,60,64,8,16,512x1024,metal,steel
+/sprites/lpc16/torso/armour/legion/male/walk.png,/sprites/lpc/torso/armour/legion/male/walk.png,torso,scale,male,walk,60,64,9,16,576x1024,metal,steel
+/sprites/lpc16/torso/armour/plate/female/slash.png,/sprites/lpc/torso/armour/plate/female/slash.png,torso,dragonscale gilded plate,female,slash,60,64,6,16,384x1024,metal,steel
+/sprites/lpc16/torso/armour/plate/female/thrust.png,/sprites/lpc/torso/armour/plate/female/thrust.png,torso,dragonscale gilded plate,female,thrust,60,64,8,16,512x1024,metal,steel
+/sprites/lpc16/torso/armour/plate/female/walk.png,/sprites/lpc/torso/armour/plate/female/walk.png,torso,dragonscale gilded plate,female,walk,60,64,9,16,576x1024,metal,steel
+/sprites/lpc16/torso/armour/plate/male/slash.png,/sprites/lpc/torso/armour/plate/male/slash.png,torso,dragonscale gilded plate,male,slash,60,64,6,16,384x1024,metal,steel
+/sprites/lpc16/torso/armour/plate/male/thrust.png,/sprites/lpc/torso/armour/plate/male/thrust.png,torso,dragonscale gilded plate,male,thrust,60,64,8,16,512x1024,metal,steel
+/sprites/lpc16/torso/armour/plate/male/walk.png,/sprites/lpc/torso/armour/plate/male/walk.png,torso,dragonscale gilded plate,male,walk,60,64,9,16,576x1024,metal,steel
+/sprites/lpc16/torso/chainmail/female/slash.png,/sprites/lpc/torso/chainmail/female/slash.png,torso,chain,female,slash,50,64,6,16,384x1024,metal,steel
+/sprites/lpc16/torso/chainmail/female/thrust.png,/sprites/lpc/torso/chainmail/female/thrust.png,torso,chain,female,thrust,50,64,8,16,512x1024,metal,steel
+/sprites/lpc16/torso/chainmail/female/walk.png,/sprites/lpc/torso/chainmail/female/walk.png,torso,chain,female,walk,50,64,9,16,576x1024,metal,steel
+/sprites/lpc16/torso/chainmail/male/slash.png,/sprites/lpc/torso/chainmail/male/slash.png,torso,chain,male,slash,50,64,6,16,384x1024,metal,steel
+/sprites/lpc16/torso/chainmail/male/thrust.png,/sprites/lpc/torso/chainmail/male/thrust.png,torso,chain,male,thrust,50,64,8,16,512x1024,metal,steel
+/sprites/lpc16/torso/chainmail/male/walk.png,/sprites/lpc/torso/chainmail/male/walk.png,torso,chain,male,walk,50,64,9,16,576x1024,metal,steel
+/sprites/lpc16/torso/clothes/longsleeve/longsleeve/female/slash.png,/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/slash.png,torso,tunic,female,slash,35,64,6,16,384x1024,cloth,white
+/sprites/lpc16/torso/clothes/longsleeve/longsleeve/female/thrust.png,/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/thrust.png,torso,tunic,female,thrust,35,64,8,16,512x1024,cloth,white
+/sprites/lpc16/torso/clothes/longsleeve/longsleeve/female/walk.png,/sprites/lpc/torso/clothes/longsleeve/longsleeve/female/walk.png,torso,tunic,female,walk,35,64,9,16,576x1024,cloth,white
+/sprites/lpc16/torso/clothes/longsleeve/longsleeve/male/slash.png,/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/slash.png,torso,tunic,male,slash,35,64,6,16,384x1024,cloth,white
+/sprites/lpc16/torso/clothes/longsleeve/longsleeve/male/thrust.png,/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/thrust.png,torso,tunic,male,thrust,35,64,8,16,512x1024,cloth,white
+/sprites/lpc16/torso/clothes/longsleeve/longsleeve/male/walk.png,/sprites/lpc/torso/clothes/longsleeve/longsleeve/male/walk.png,torso,tunic,male,walk,35,64,9,16,576x1024,cloth,white
+/sprites/lpc16/torso/clothes/sleeveless/sleeveless/female/slash/brown.png,/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/slash/brown.png,torso,rags,female,slash,35,64,6,16,384x1024,cloth,brown
+/sprites/lpc16/torso/clothes/sleeveless/sleeveless/female/thrust/brown.png,/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/thrust/brown.png,torso,rags,female,thrust,35,64,8,16,512x1024,cloth,brown
+/sprites/lpc16/torso/clothes/sleeveless/sleeveless/female/walk/brown.png,/sprites/lpc/torso/clothes/sleeveless/sleeveless/female/walk/brown.png,torso,rags,female,walk,35,64,9,16,576x1024,cloth,brown
+/sprites/lpc16/torso/clothes/sleeveless/sleeveless/male/slash/brown.png,/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/slash/brown.png,torso,rags,male,slash,35,64,6,16,384x1024,cloth,brown
+/sprites/lpc16/torso/clothes/sleeveless/sleeveless/male/thrust/brown.png,/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/thrust/brown.png,torso,rags,male,thrust,35,64,8,16,512x1024,cloth,brown
+/sprites/lpc16/torso/clothes/sleeveless/sleeveless/male/walk/brown.png,/sprites/lpc/torso/clothes/sleeveless/sleeveless/male/walk/brown.png,torso,rags,male,walk,35,64,9,16,576x1024,cloth,brown
+/sprites/lpc16/weapon/blunt/mace/attack_slash/behind/mace.png,/sprites/lpc/weapon/blunt/mace/attack_slash/behind/mace.png,weapon,hammer,female male,slash,9,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/blunt/mace/attack_slash/mace.png,/sprites/lpc/weapon/blunt/mace/attack_slash/mace.png,weapon,hammer,female male,slash,150,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/blunt/mace/thrust/mace.png,/sprites/lpc/weapon/blunt/mace/thrust/mace.png,weapon,hammer,female male,thrust,140,64,8,16,512x1024,,
+/sprites/lpc16/weapon/blunt/mace/universal_behind/walk/mace.png,/sprites/lpc/weapon/blunt/mace/universal_behind/walk/mace.png,weapon,hammer,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/weapon/blunt/mace/walk/mace.png,/sprites/lpc/weapon/blunt/mace/walk/mace.png,weapon,hammer,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/blunt/waraxe/attack_slash/behind/waraxe.png,/sprites/lpc/weapon/blunt/waraxe/attack_slash/behind/waraxe.png,weapon,axe,female male,slash,8,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/blunt/waraxe/attack_slash/waraxe.png,/sprites/lpc/weapon/blunt/waraxe/attack_slash/waraxe.png,weapon,axe,female male,slash,150,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/blunt/waraxe/walk/waraxe.png,/sprites/lpc/weapon/blunt/waraxe/walk/waraxe.png,weapon,axe,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/polearm/cane/female/thrust/cane.png,/sprites/lpc/weapon/polearm/cane/female/thrust/cane.png,weapon,stick,female,thrust,140,64,8,16,512x1024,,
+/sprites/lpc16/weapon/polearm/cane/female/walk/cane.png,/sprites/lpc/weapon/polearm/cane/female/walk/cane.png,weapon,stick,female,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/polearm/cane/male/thrust/cane.png,/sprites/lpc/weapon/polearm/cane/male/thrust/cane.png,weapon,stick,male,thrust,140,64,8,16,512x1024,,
+/sprites/lpc16/weapon/polearm/cane/male/walk/cane.png,/sprites/lpc/weapon/polearm/cane/male/walk/cane.png,weapon,stick,male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/arming/attack_slash/bg/brass.png,/sprites/lpc/weapon/sword/arming/attack_slash/bg/brass.png,weapon,shortsword,female male,slash,8,128,6,16,768x2048,,
+/sprites/lpc16/weapon/sword/arming/attack_slash/fg/brass.png,/sprites/lpc/weapon/sword/arming/attack_slash/fg/brass.png,weapon,shortsword,female male,slash,150,128,6,16,768x2048,,
+/sprites/lpc16/weapon/sword/arming/universal/bg/walk/brass.png,/sprites/lpc/weapon/sword/arming/universal/bg/walk/brass.png,weapon,shortsword,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/arming/universal/fg/walk/brass.png,/sprites/lpc/weapon/sword/arming/universal/fg/walk/brass.png,weapon,shortsword,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/dagger/behind/slash/dagger.png,/sprites/lpc/weapon/sword/dagger/behind/slash/dagger.png,weapon,dagger,female male,slash,9,64,6,16,384x1024,,
+/sprites/lpc16/weapon/sword/dagger/slash/dagger.png,/sprites/lpc/weapon/sword/dagger/slash/dagger.png,weapon,dagger,female male,slash,140,64,6,16,384x1024,,
+/sprites/lpc16/weapon/sword/dagger/thrust/dagger.png,/sprites/lpc/weapon/sword/dagger/thrust/dagger.png,weapon,dagger,female male,thrust,140,64,8,16,512x1024,,
+/sprites/lpc16/weapon/sword/dagger/walk/dagger.png,/sprites/lpc/weapon/sword/dagger/walk/dagger.png,weapon,dagger,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/glowsword/attack_slash/behind/blue.png,/sprites/lpc/weapon/sword/glowsword/attack_slash/behind/blue.png,weapon,flamebrand,female male,slash,8,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/sword/glowsword/attack_slash/blue.png,/sprites/lpc/weapon/sword/glowsword/attack_slash/blue.png,weapon,flamebrand,female male,slash,150,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/sword/glowsword/universal_behind/walk/blue.png,/sprites/lpc/weapon/sword/glowsword/universal_behind/walk/blue.png,weapon,flamebrand,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/glowsword/walk/blue.png,/sprites/lpc/weapon/sword/glowsword/walk/blue.png,weapon,flamebrand,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/katana/slash/behind/katana.png,/sprites/lpc/weapon/sword/katana/slash/behind/katana.png,weapon,runeblade,female male,slash,9,128,6,16,768x2048,,
+/sprites/lpc16/weapon/sword/katana/slash/katana.png,/sprites/lpc/weapon/sword/katana/slash/katana.png,weapon,runeblade,female male,slash,140,128,6,16,768x2048,,
+/sprites/lpc16/weapon/sword/katana/walk/behind/katana.png,/sprites/lpc/weapon/sword/katana/walk/behind/katana.png,weapon,runeblade,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/katana/walk/katana.png,/sprites/lpc/weapon/sword/katana/walk/katana.png,weapon,runeblade,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/longsword/attack_slash/behind/longsword.png,/sprites/lpc/weapon/sword/longsword/attack_slash/behind/longsword.png,weapon,longsword,female male,slash,-1,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/sword/longsword/attack_slash/longsword.png,/sprites/lpc/weapon/sword/longsword/attack_slash/longsword.png,weapon,longsword,female male,slash,150,192,6,16,1152x3072,,
+/sprites/lpc16/weapon/sword/longsword/attack_thrust/behind/longsword.png,/sprites/lpc/weapon/sword/longsword/attack_thrust/behind/longsword.png,weapon,longsword,female male,thrust,-1,192,8,16,1536x3072,,
+/sprites/lpc16/weapon/sword/longsword/attack_thrust/longsword.png,/sprites/lpc/weapon/sword/longsword/attack_thrust/longsword.png,weapon,longsword,female male,thrust,150,192,8,16,1536x3072,,
+/sprites/lpc16/weapon/sword/longsword/universal_behind/walk/longsword.png,/sprites/lpc/weapon/sword/longsword/universal_behind/walk/longsword.png,weapon,longsword,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/longsword/walk/longsword.png,/sprites/lpc/weapon/sword/longsword/walk/longsword.png,weapon,longsword,female male,walk,140,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/scimitar/slash/behind/scimitar.png,/sprites/lpc/weapon/sword/scimitar/slash/behind/scimitar.png,weapon,dragonfang,female male,slash,9,128,6,16,768x2048,,
+/sprites/lpc16/weapon/sword/scimitar/slash/scimitar.png,/sprites/lpc/weapon/sword/scimitar/slash/scimitar.png,weapon,dragonfang,female male,slash,140,128,6,16,768x2048,,
+/sprites/lpc16/weapon/sword/scimitar/walk/behind/scimitar.png,/sprites/lpc/weapon/sword/scimitar/walk/behind/scimitar.png,weapon,dragonfang,female male,walk,9,64,9,16,576x1024,,
+/sprites/lpc16/weapon/sword/scimitar/walk/scimitar.png,/sprites/lpc/weapon/sword/scimitar/walk/scimitar.png,weapon,dragonfang,female male,walk,140,64,9,16,576x1024,,
