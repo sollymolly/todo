@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ATLAS, GROUND, T, inRect, type Rect, type Theme, type World } from "@/components/village/world";
+import { ATLAS, GROUND, T, inRect, lotFence, type Rect, type Theme, type World } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The ground, painted once onto one canvas at 1× and scaled up with crisp
@@ -67,31 +67,18 @@ function railway(r: Rect): { x: number; y: number; w: number; h: number; fill: s
 }
 
 /**
- * An empty lot, as rectangles to fill: dark tilled soil in furrows, staked
- * and roped round — land waiting for a house, nothing like the packed dirt
- * of a road. In px, at 1×.
+ * An empty lot, as rectangles to fill: dark tilled soil in furrows — land
+ * waiting for a house, nothing like the packed dirt of a road. `r` is the
+ * soil in px, at 1×: the lot inside its fence (world.ts, lotFence), which
+ * stands on the middle of the lot's edge tiles.
  */
 function lotSoil(r: Rect): { x: number; y: number; w: number; h: number; fill: string }[] {
-  const x0 = r.x * T + 4;
-  const y0 = r.y * T + 4;
-  const w = r.w * T - 8;
-  const h = r.h * T - 8;
+  const { x: x0, y: y0, w, h } = r;
   const out = [{ x: x0, y: y0, w, h, fill: "#6e4b30" }];
   for (let y = y0 + 6; y < y0 + h - 4; y += 10) {
     out.push({ x: x0 + 6, y, w: w - 12, h: 3, fill: "#5a3c25" });
     out.push({ x: x0 + 6, y: y + 3, w: w - 12, h: 1, fill: "#87603f" });
   }
-  // Rope along the edges, a stake at every corner and every tile between.
-  out.push(
-    { x: x0, y: y0, w, h: 1, fill: "#d6b77e" },
-    { x: x0, y: y0 + h - 1, w, h: 1, fill: "#d6b77e" },
-    { x: x0, y: y0, w: 1, h, fill: "#d6b77e" },
-    { x: x0 + w - 1, y: y0, w: 1, h, fill: "#d6b77e" }
-  );
-  for (let x = x0; x <= x0 + w; x += T)
-    for (const y of [y0, y0 + h]) out.push({ x: Math.min(x, x0 + w - 3) - 1, y: y - 3, w: 4, h: 6, fill: "#5a3e28" });
-  for (let y = y0 + T; y < y0 + h; y += T)
-    for (const x of [x0, x0 + w]) out.push({ x: Math.min(x, x0 + w - 3) - 1, y: y - 3, w: 4, h: 6, fill: "#5a3e28" });
   return out;
 }
 
@@ -112,8 +99,11 @@ export default function Ground({ world, scale }: { world: World; scale: number }
     img.onload = () => {
       if (cancelled) return;
       const doors = new Set(world.plots.filter((p) => p.owner).map((p) => `${p.door.x},${p.door.y}`));
-      // An empty lot is tilled soil where a house would stand (lotSoil).
-      const lots = world.plots.filter((p) => !p.owner).map((p) => ({ x: p.x + 1, y: p.y + 1, w: 6, h: 6 }));
+      // An empty lot is tilled soil inside its fence, from the fence's line
+      // (the middle of the lot's edge tiles) to the path through its gate.
+      const empty = world.plots.filter((p) => !p.owner);
+      const lots = empty.map((p) => ({ x: (p.x + 1.5) * T, y: (p.y + 1.5) * T, w: 5 * T, h: 4.5 * T }));
+      for (const p of empty) for (const g of lotFence(p.x, p.y).gate.tiles) doors.add(`${g.x},${g.y}`);
       const paving = [
         ...stonePaving(world.hall.plaza),
         ...stonePaving(world.station.platform),

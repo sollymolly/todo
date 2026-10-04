@@ -12,12 +12,13 @@ import { ArenaGate, ArenaView, BakeryView, LibraryView, RoomView, StoreView } fr
 import { ShopPanel } from "@/components/village/ShopPanel";
 import { BakeryPanel } from "@/components/village/BakeryPanel";
 import { goodById } from "@/lib/shop";
+import { FencePiece, FOOT, GATE, LotGate, REACH } from "@/components/village/Fence";
 import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, TownHall, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
 import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
 import { follow, headingOf, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, turn, walkTo, type Agent } from "@/components/village/engine";
-import { ATLAS, buildWorld, inRect, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
+import { ATLAS, buildWorld, inRect, lotFence, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
 import { composeAttack, composeHeadings, composeSheet, type AttackSheet } from "@/lib/sprite";
 import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
 import { HIT_COOLDOWN_MS } from "@/lib/duel";
@@ -711,6 +712,14 @@ export default function Village({ data }: { data: VillageData }) {
   const promptRef = useRef<Prompt>(null);
   const enteredAt = useRef(0);
   const leaveRef = useRef<() => void>(() => {});
+  /**
+   * The ways in that open just by walking onto the door tile, by "x,y": a
+   * house of mine or a companion's, the arena, the shops (see the loop).
+   * Rebuilt whenever the village or who's a companion changes.
+   */
+  const walkIn = useRef(new Map<string, () => void>());
+  /** The door tile I've already gone through (or tried) and not yet stepped off, so it fires once per visit. */
+  const doorLatch = useRef<string | null>(null);
   const lockedRef = useRef(false);
   useEffect(() => {
     lockedRef.current = !!fighting;
@@ -810,6 +819,35 @@ export default function Village({ data }: { data: VillageData }) {
         layer.current.dataset.cy = String(cy);
       }
 
+      // Doors open as you walk onto them, every frame: in (outside) and out
+      // (inside). Once per visit to a door: it fires on stepping onto the tile
+      // and is ready again only after stepping off it, so a locked door, or a
+      // duel that holds you in, tells you once instead of every frame.
+      {
+        const fx = Math.floor(p.x / T);
+        const fy = Math.floor((p.y - 8) / T);
+        if (sc.kind === "out") {
+          const key = `${fx},${fy}`;
+          const go = walkIn.current.get(key);
+          if (!go) doorLatch.current = null;
+          else if (doorLatch.current !== key) {
+            // A walk to this door by tap goes in by itself when it arrives, so
+            // it only latches the door here: otherwise this would go in a second
+            // time while a house's interior is still loading.
+            doorLatch.current = key;
+            if (!p.onArrive) go();
+          }
+        } else {
+          const exit = exitOf(sc)!;
+          if (fx === exit.x && fy === exit.y) {
+            if (doorLatch.current !== "exit" && t - enteredAt.current > 800) {
+              doorLatch.current = "exit";
+              leaveRef.current();
+            }
+          } else if (doorLatch.current === "exit") doorLatch.current = null;
+        }
+      }
+
       if (t - lastCheck > 200) {
         lastCheck = t;
         const tx = p.x / T;
@@ -862,7 +900,6 @@ export default function Village({ data }: { data: VillageData }) {
           }
           const d = Math.hypot(tx - (exit.x + 0.5), ty - (exit.y + 0.5));
           if (d < 1.8) best = { kind: "leave" };
-          if (Math.floor(tx) === exit.x && Math.floor(ty) === exit.y && t - enteredAt.current > 800) leaveRef.current();
         }
         if (promptKey(best) !== promptKey(promptRef.current)) {
           promptRef.current = best;
@@ -1053,6 +1090,21 @@ export default function Village({ data }: { data: VillageData }) {
   useEffect(() => {
     leaveRef.current = leave;
   }, [leave]);
+
+  useEffect(() => {
+    const m = new Map<string, () => void>();
+    // Only my own house and a companion's: anyone else's is locked, and
+    // would only say so each time you walked past its door.
+    for (const pl of world.plots)
+      if (pl.owner && (pl.owner === me.id || residentOf.get(pl.owner)?.known)) m.set(`${pl.door.x},${pl.door.y}`, () => void enterHouse(pl.owner!));
+    m.set(`${world.arena.door.x},${world.arena.door.y}`, () => enterArena());
+    for (const l of world.landmarks)
+      if (l.door && (l.kind === "library" || l.kind === "store" || l.kind === "bakery")) {
+        const what = l.kind;
+        m.set(`${l.door.x},${l.door.y}`, () => enterIndoor(what));
+      }
+    walkIn.current = m;
+  }, [world, residentOf, me.id, enterHouse, enterArena, enterIndoor]);
 
   /* ------------------------------------------------------------- input */
 
@@ -2041,27 +2093,36 @@ function Outdoors({
           )
         )}
 
-      {/* Empty lots: a signpost in the middle of the soil (the lot is x + 1 to x + 7, y + 1 to y + 7) */}
-      {world.plots.map((p) =>
-        p.owner ? null : (
-          <div
-            key={`sign-${p.n}`}
-            aria-hidden
-            className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
-            style={{ left: (p.x + 4) * T * S, top: (p.y + 4.6) * T * S, zIndex: (p.y + 5) * T }}
-          >
+      {/* Empty lots: fenced round, with a gate at the front and the sign hung from it */}
+      {world.plots.map((p) => {
+        if (p.owner) return null;
+        const { tiles, gate } = lotFence(p.x, p.y);
+        return (
+          <div key={`lot-${p.n}`} aria-hidden className="pointer-events-none">
+            {tiles.map((t) => (
+              <div
+                key={`${t.x},${t.y}`}
+                className="absolute"
+                style={{ left: t.x * T * S, top: (t.y * T - REACH) * S, width: T * S, height: 64 * S, zIndex: t.y * T + FOOT }}
+              >
+                <FencePiece tile={t} />
+              </div>
+            ))}
             <div
-              className="rounded-[4px] border-[3px] border-[#5a3e28] bg-[#d8bb8a] text-center leading-tight shadow-[0_3px_0_#5a3e28]"
-              style={{ padding: `${4 * S}px ${12 * S}px` }}
+              className="absolute"
+              style={{
+                left: gate.x * T * S,
+                top: (gate.y * T + FOOT + 4 - GATE.h) * S,
+                width: GATE.w * S,
+                height: GATE.h * S,
+                zIndex: gate.y * T + FOOT,
+              }}
             >
-              <p className="whitespace-nowrap font-display font-bold text-[#5a3e28]" style={{ fontSize: 18 * S }}>
-                Empty lot
-              </p>
+              <LotGate />
             </div>
-            <div className="bg-[#6b4a2b]" style={{ width: 5 * S, height: 30 * S }} />
           </div>
-        )
-      )}
+        );
+      })}
 
       {/* Houses, each with a signpost: everyone's, friends or not */}
       {world.plots.map((p) => {

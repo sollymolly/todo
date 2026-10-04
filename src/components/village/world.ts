@@ -50,6 +50,39 @@ export type Plot = {
   body: Rect;
 };
 
+/* ------------------------------------------------------------ empty lots */
+
+/** One tile of an empty lot's fence: a post, and which neighbours its rails join. */
+export type FenceTile = { x: number; y: number; l: boolean; r: boolean; d: boolean; post: boolean };
+
+/**
+ * The fence round an empty lot, which is 6×6 tiles from (x + 1, y + 1) in
+ * its plot at (x, y): the ring of tiles on its edge, all blocked, with a
+ * two-tile gate in the middle of the front, where a house's path to its door
+ * would go. The tiles either side of the gate carry its posts (`post: false`:
+ * LotGate draws them taller). Walking and drawing both read this.
+ */
+export function lotFence(x: number, y: number): { tiles: FenceTile[]; gate: { x: number; y: number; tiles: { x: number; y: number }[] } } {
+  const ring = new Set<string>();
+  const gate = [
+    { x: x + 3, y: y + 6 },
+    { x: x + 4, y: y + 6 },
+  ];
+  for (let i = 0; i < 6; i++)
+    for (let j = 0; j < 6; j++) {
+      const edge = i === 0 || i === 5 || j === 0 || j === 5;
+      if (edge && !gate.some((g) => g.x === x + 1 + i && g.y === y + 1 + j)) ring.add(`${x + 1 + i},${y + 1 + j}`);
+    }
+  const has = (tx: number, ty: number) => ring.has(`${tx},${ty}`);
+  const tiles = [...ring].map((k) => {
+    const [tx, ty] = k.split(",").map(Number);
+    const gatePost = ty === y + 6 && (tx === x + 2 || tx === x + 5);
+    return { x: tx, y: ty, l: has(tx - 1, ty), r: has(tx + 1, ty), d: has(tx, ty + 1), post: !gatePost };
+  });
+  // The gate drawing starts at the left gate post's tile.
+  return { tiles, gate: { x: x + 2, y: y + 6, tiles: gate } };
+}
+
 /**
  * What of a plot can't be walked through, by house size, in tiles from the
  * plot's top-left (House.tsx draws it). A tent is a triangle of canvas with
@@ -237,14 +270,15 @@ export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | 
 
   // The hall and its plaza, in the middle of band 0. The hall reaches up into
   // the forest margin: it's the biggest thing in the village. The plaza is
-  // as wide as the road it runs into, and the hall's door two tiles wide
-  // across the middle of both.
+  // a stone pad in front of the door as wide as the road (4) and as deep as
+  // a street (2), with the dirt street running on just below it; the hall's
+  // door is two tiles wide across the middle of both.
   const hallBody = { x: centreX + 3, y: bandTop(0) - 2, w: 8, h: 7 };
   block(hallBody);
   const hall = {
     body: hallBody,
     door: { x: centreX + 7, y: bandTop(0) + 5 },
-    plaza: { x: centreX + 5, y: bandTop(0) + 5, w: 4, h: 4 },
+    plaza: { x: centreX + 5, y: bandTop(0) + 5, w: 4, h: 2 },
   };
 
   // Work tables either side of the hall door.
@@ -311,10 +345,10 @@ export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | 
       block({ x: x + 1, y: top + 6, w: 2, h: 1 });
       block({ x: x + 5, y: top + 6, w: 2, h: 1 });
     }
-    // The signpost: the owner's name on the grass to the left, or "Empty
-    // lot" in the middle of the soil.
+    // The signpost: the owner's name on the grass to the left. An empty lot
+    // is fenced instead (lotFence), with its sign on the gate.
     if (owner) block({ x, y: top + 6, w: 1, h: 1 });
-    else block({ x: x + 3, y: top + 4, w: 2, h: 1 });
+    else for (const t of lotFence(x, top).tiles) block({ x: t.x, y: t.y, w: 1, h: 1 });
     plots.push(plot);
   }
 

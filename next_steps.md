@@ -4,6 +4,10 @@
 
 ## Done
 
+- Empty lots: fenced round in wood with a two-tile gate at the front (the fence blocks, the gate is a way in to the tilled soil), and the "Empty lot" sign hung from the gate.
+- Doors open as you walk onto them: your house, a companion's, the arena, the library, the store and the bakery, and out again from inside. Once per visit to a door; a tap-walk to a door still goes in by itself. E / Enter still work. (Houses of people who aren't companions stay locked.)
+- Hall plaza: 4×2 tiles of stone in front of the door, with the dirt street running on below it.
+
 - Make a working bakery.
 - Add more things to the store.
 - Better bush borders for buildings.
