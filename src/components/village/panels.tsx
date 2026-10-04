@@ -56,13 +56,26 @@ const BTN =
 const PRIMARY =
   "rounded-lg bg-grass-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-grass-500 disabled:opacity-50";
 
-export function Panel({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) {
+export function Panel({
+  title,
+  sub,
+  onClose,
+  wide = false,
+  children,
+}: {
+  title: string;
+  sub?: string;
+  onClose: () => void;
+  /** Roomier, for writing. */
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div
       role="dialog"
       aria-label={title}
       onPointerDown={(e) => e.stopPropagation()}
-      className="panel absolute inset-x-0 bottom-0 z-[60000] max-h-[75%] overflow-y-auto rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:max-h-[calc(100%-5rem)] sm:w-80 sm:rounded-2xl"
+      className={`panel absolute inset-x-0 bottom-0 z-[60000] max-h-[75%] overflow-y-auto rounded-t-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:max-h-[calc(100%-5rem)] sm:rounded-2xl ${wide ? "sm:w-[28rem]" : "sm:w-80"}`}
     >
       <div className="mb-3 flex items-start gap-2">
         <div className="min-w-0 flex-1">

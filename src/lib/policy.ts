@@ -11,10 +11,10 @@
    — re-consenting people for nothing trains them to click through.
    -------------------------------------------------------------------------- */
 
-export const PRIVACY_VERSION = 5;
+export const PRIVACY_VERSION = 6;
 
 /** Shown alongside the version so "which one did I agree to" has an answer. */
-export const PRIVACY_EFFECTIVE = "27 September 2026";
+export const PRIVACY_EFFECTIVE = "4 October 2026";
 
 /**
  * The handful of points someone must actually see before agreeing. The full
@@ -22,7 +22,7 @@ export const PRIVACY_EFFECTIVE = "27 September 2026";
  * calling it informed consent is the thing this avoids.
  */
 export const PRIVACY_HIGHLIGHTS = [
-  "Your email, quests, notes and deadlines are stored in plain text, and whoever administers the database can read them.",
+  "Your email, quests, notes, deadlines and journal entries are stored in plain text, and whoever administers the database can read them. Your journal is only ever shown to you.",
   "Your direct messages are encrypted, and tied to your account rather than your password, so they survive a forgotten password. The trade-off: whoever runs this app holds the key that can decrypt them.",
   "Companions you accept can see your level, completed-quest count, and your category names with how many quests are open in each. Never the quests themselves.",
   "In the village, companions see whether you're there and where, your house, your streak, and your work-session time. A nudge can point at one of your quests by its category and deadline only. Door notes are plain text, not encrypted.",

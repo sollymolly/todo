@@ -339,3 +339,23 @@ export default function Furniture({ kind, ghost = false }: { kind: FurnitureKind
     </svg>
   );
 }
+
+/**
+ * The notebook that sits on the desk (or table) at home: a closed blue
+ * notebook with a label and a ribbon. 26 × 20 px at 1×; the room places it
+ * (scenes.tsx, RoomView).
+ */
+export const NOTEBOOK = { w: 26, h: 20 };
+
+export function Notebook() {
+  return (
+    <svg viewBox={`0 0 ${NOTEBOOK.w} ${NOTEBOOK.h}`} width={NOTEBOOK.w} height={NOTEBOOK.h} shapeRendering="crispEdges" aria-hidden className="block h-full w-full">
+      <rect x={2} y={16} width={22} height={3} fill="#000" opacity={0.15} />
+      <rect x={2} y={3} width={22} height={13} rx={1} fill="#f4ecd6" stroke={INK} strokeWidth={1.5} />
+      <rect x={1} y={1} width={21} height={13} rx={1} fill="#3f6b8f" stroke={INK} strokeWidth={1.5} />
+      <rect x={2} y={2} width={4} height={11} fill="#2f5270" />
+      <rect x={10} y={4} width={9} height={5} fill="#e9d9a8" stroke={INK} strokeWidth={1} />
+      <rect x={17} y={13} width={2} height={6} fill="#b5523b" />
+    </svg>
+  );
+}

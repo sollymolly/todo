@@ -1,11 +1,11 @@
 "use client";
 
-import Furniture, { LIFT } from "@/components/village/Furniture";
+import Furniture, { LIFT, Notebook, NOTEBOOK } from "@/components/village/Furniture";
 import { FLOORS, FURNITURE, WALLS, type FurnitureKind } from "@/lib/furniture";
 import { STORE_GOODS } from "@/lib/shop";
 import { TreatShape } from "@/components/village/Treat";
 import { T } from "@/components/village/world";
-import type { ArenaScene, IndoorScene, RoomScene } from "@/components/village/rooms";
+import { journalSpot, type ArenaScene, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 
 /* --------------------------------------------------------------------------
    Drawing the shared rooms. Positions are grid tiles × 32 × scale, the same
@@ -13,7 +13,19 @@ import type { ArenaScene, IndoorScene, RoomScene } from "@/components/village/ro
    walks behind a bookshelf and in front of a bed's footboard.
    -------------------------------------------------------------------------- */
 
-export function RoomView({ room, scale: S, onPiece }: { room: RoomScene; scale: number; onPiece?: (index: number) => void }) {
+export function RoomView({
+  room,
+  scale: S,
+  onPiece,
+  onNotebook,
+}: {
+  room: RoomScene;
+  scale: number;
+  onPiece?: (index: number) => void;
+  /** In my own room: tapping the notebook on the desk opens it. */
+  onNotebook?: () => void;
+}) {
+  const notebook = journalSpot(room.interior);
   const wall = WALLS.find((w) => w.id === room.interior.wall) ?? WALLS[0];
   const floor = FLOORS.find((f) => f.id === room.interior.floor) ?? FLOORS[0];
   const W = room.w * T;
@@ -104,6 +116,37 @@ export function RoomView({ room, scale: S, onPiece }: { room: RoomScene; scale: 
           </div>
         );
       })}
+
+      {/* The notebook, on the desk (or the table, if there's no desk) */}
+      {notebook &&
+        (() => {
+          const style = {
+            left: (notebook.x * T + notebook.w * T - 32) * S,
+            top: (notebook.y * T + (notebook.kind === "desk" ? 2 : -8)) * S,
+            width: NOTEBOOK.w * S,
+            height: NOTEBOOK.h * S,
+            zIndex: (notebook.y + 1) * T + 1,
+          };
+          return onNotebook ? (
+            <button
+              type="button"
+              aria-label="Open your journal"
+              title="Your journal"
+              className="absolute cursor-pointer hover:brightness-110"
+              style={style}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onNotebook();
+              }}
+            >
+              <Notebook />
+            </button>
+          ) : (
+            <div aria-hidden className="pointer-events-none absolute" style={style}>
+              <Notebook />
+            </div>
+          );
+        })()}
     </>
   );
 }

@@ -59,6 +59,8 @@ export const LIMITS = {
   buy: { limit: 30, windowSeconds: 600 },
   /** Per account. Treats sent from the bakery. */
   treat: { limit: 20, windowSeconds: 3600 },
+  /** Per account. Journal saves (the page saves as you write, so generous). */
+  journal: { limit: 120, windowSeconds: 600 },
 } as const satisfies Record<string, Limit>;
 
 /**

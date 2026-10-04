@@ -522,6 +522,18 @@ create table if not exists door_notes (
   read_at    timestamptz
 );
 create index if not exists door_notes_owner_idx on door_notes(owner_id, created_at desc);
+-- Journal entries, written in the notebook on the desk at home (the village;
+-- src/lib/journal-actions.ts). Private to their owner and only ever read back
+-- to them, but plain text like quest notes — unlike messages, not encrypted.
+create table if not exists journal_entries (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users(id) on delete cascade,
+  body       text not null check (length(body) between 1 and 10000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists journal_entries_user_idx on journal_entries(user_id, created_at desc);
+
 -- A treat from the village bakery (src/lib/bakery.ts) can come with a note, or
 -- be left on its own: then the note may be empty.
 alter table door_notes add column if not exists treat text check (length(treat) <= 20);

@@ -121,7 +121,8 @@ export function defaultInterior(tier: Tier): Interior {
     items.push({ k: "rug", x: Math.floor(cols / 2) - 1, y: Math.max(1, Math.floor(rows / 2) - 1) });
     items.push({ k: "table", x: cols - 3, y: rows - 2 }, { k: "chair", x: cols - 4, y: rows - 2 });
   } else {
-    items.push({ k: "stool", x: cols - 1, y: rows - 1 });
+    // A tent: a small table by the back wall, with the stool in the corner.
+    items.push({ k: "table", x: cols - 2, y: 1 }, { k: "stool", x: cols - 1, y: rows - 1 });
   }
   if (cols >= 9) items.push({ k: "chest", x: 0, y: rows - 1 }, { k: "window", x: cols - 4, y: 0 });
   if (cols >= 11) items.push({ k: "bookshelf", x: 3, y: 0 }, { k: "lamp", x: 2, y: 0 });

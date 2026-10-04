@@ -1,6 +1,6 @@
 import { doorOf, FURNITURE, ROOM, type Interior } from "@/lib/furniture";
 import type { Tier } from "@/lib/village";
-import type { Grid, Table } from "@/components/village/world";
+import { walkable, type Grid, type Table } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The two kinds of shared room: inside a house, and the
@@ -54,6 +54,48 @@ export function buildRoom(tier: Tier, interior: Interior): RoomScene {
   const door = { x: doorOf(tier).x + 1, y: h - 1 };
   blocked[door.y][door.x] = false;
   return { kind: "room", w, h, blocked, tier, cols, rows, interior, door };
+}
+
+/**
+ * Where I wake up, as a grid tile: beside my bed (at its foot first), or just
+ * inside the door if there's no bed, or nowhere beside it to stand.
+ */
+export function wakeSpot(room: RoomScene): { x: number; y: number } {
+  const bed = room.interior.items.find((it) => it.k === "bed");
+  if (bed) {
+    // The bed's top-left in grid tiles, and the ring of floor round it, foot first.
+    const gx = bed.x + 1;
+    const gy = bed.y + 2;
+    const { w, h } = FURNITURE.bed;
+    const beside = [
+      ...Array.from({ length: w }, (_, i) => ({ x: gx + i, y: gy + h })),
+      ...Array.from({ length: h }, (_, i) => ({ x: gx + w, y: gy + h - 1 - i })),
+      ...Array.from({ length: h }, (_, i) => ({ x: gx - 1, y: gy + h - 1 - i })),
+    ];
+    const spot = beside.find((t) => walkable(room, t.x, t.y));
+    if (spot) return spot;
+  }
+  return { x: room.door.x, y: room.door.y - 1 };
+}
+
+/**
+ * The piece the notebook sits on: my first desk, or failing that my first
+ * table. In grid tiles, with its index among the room's items.
+ */
+export function journalSpot(interior: Interior): { index: number; x: number; y: number; w: number; kind: "desk" | "table" } | null {
+  for (const kind of ["desk", "table"] as const) {
+    const index = interior.items.findIndex((it) => it.k === kind);
+    if (index >= 0) {
+      const it = interior.items[index];
+      return { index, x: it.x + 1, y: it.y + 2, w: FURNITURE[kind].w, kind };
+    }
+  }
+  return null;
+}
+
+/** Am I close enough to write in the notebook? `tx`, `ty`: my place in grid tiles (feet, so a row's tile is its top + 0.75). */
+export function nearJournal(spot: { x: number; y: number; w: number }, tx: number, ty: number): boolean {
+  return tx >= spot.x - 1 && tx <= spot.x + spot.w + 1 && ty >= spot.y + 0.5 && ty < spot.y + 2.6;
 }
 
 export function buildArena(): ArenaScene {

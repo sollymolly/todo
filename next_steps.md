@@ -4,6 +4,10 @@
 
 ## Done
 
+- Village start: everyone begins in their own room beside their bed (the page loads your room with the village, so there's no flash of outdoors); the door leads out to your own front step. No bed: just inside the door.
+- Journal: a notebook on your desk at home (your table if there's no desk; a bare tent now has a small table). Walk up and press E, or tap it. Entries autosave, are dated, can be deleted, and are only ever shown to their owner. Plain text, like quest notes, not encrypted. **Needs `db/schema.sql` run once in Neon (`journal_entries`)**; until then the panel says it isn't set up.
+- Privacy policy bumped to version 6 for the journal (everyone is asked to agree again on their next request).
+
 - Empty lots: fenced round in wood with a two-tile gate at the front (the fence blocks, the gate is a way in to the tilled soil), and the "Empty lot" sign hung from the gate.
 - Doors open as you walk onto them: your house, a companion's, the arena, the library, the store and the bakery, and out again from inside. Once per visit to a door; a tap-walk to a door still goes in by itself. E / Enter still work. (Houses of people who aren't companions stay locked.)
 - Hall plaza: 4×2 tiles of stone in front of the door, with the dirt street running on below it.

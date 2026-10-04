@@ -1,11 +1,13 @@
 import { sql } from "@/lib/db";
 import { levelFor } from "@/lib/game";
 import { listFriends } from "@/lib/social-actions";
+import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
 import type { Appearance, Equipped } from "@/lib/types";
 import { duelRecords, duelsFor, ONLINE, roomPeople, spaceChat } from "@/lib/village-rooms";
 import {
   cleanHouse,
   spaceOf,
+  tierFor,
   type HouseLook,
   type Neighbour,
   type NudgeView,
@@ -488,6 +490,8 @@ export type VillageData = {
   neighbours: (Neighbour & { focusToday: number; focusWeek: number })[];
   /** Everyone's house, mine included. */
   residents: Resident[];
+  /** The inside of my house: the village opens there, at my bed. */
+  room: Interior;
   pulse: Pulse;
   /** `treat`: a treat from the bakery left with it (src/lib/bakery.ts). */
   notes: { id: string; from: string; body: string; treat: string | null; at: number; read: boolean }[];
@@ -577,10 +581,16 @@ export async function loadVillage(me: string): Promise<VillageData> {
      limit 30
   `) as { id: string; author: string; body: string; treat: string | null; created_at: unknown; read: boolean }[];
 
+  // My own room (as village-actions.ts, loadInterior, would give it).
+  const roomRows = (await sql`select interior from houses where user_id = ${me}::uuid`) as { interior: unknown }[];
+  const myTier = tierFor(myLevel).tier;
+  const room = roomRows[0]?.interior ? cleanInterior(roomRows[0].interior, myTier, myLevel) : defaultInterior(myTier);
+
   return {
     me: meView,
     neighbours,
     residents: await residents(new Set(ids)),
+    room,
     pulse: await pulse(me, null),
     notes: noteRows.map((n) => ({ id: n.id, from: n.author, body: n.body, treat: n.treat, at: ms(n.created_at), read: n.read })),
   };

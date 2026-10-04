@@ -15,7 +15,8 @@ import { goodById } from "@/lib/shop";
 import { FencePiece, FOOT, GATE, LotGate, REACH } from "@/components/village/Fence";
 import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, TownHall, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
-import { buildArena, buildIndoor, buildRoom, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
+import { buildArena, buildIndoor, buildRoom, journalSpot, nearJournal, wakeSpot, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
+import JournalPanel from "@/components/village/JournalPanel";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
 import { follow, headingOf, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, turn, walkTo, type Agent } from "@/components/village/engine";
 import { ATLAS, buildWorld, inRect, lotFence, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
@@ -74,6 +75,7 @@ type Open =
   | { kind: "shop"; focus?: string }
   | { kind: "bakery" }
   | { kind: "desks"; spot: "library" | "bakery" }
+  | { kind: "journal" }
   | null;
 
 type Prompt =
@@ -84,6 +86,7 @@ type Prompt =
   | { kind: "indoor"; what: Indoor }
   | { kind: "counter" }
   | { kind: "desk" }
+  | { kind: "journal" }
   | { kind: "display"; good: string }
   | { kind: "leave" }
   | null;
@@ -177,9 +180,16 @@ export default function Village({ data }: { data: VillageData }) {
   const [sheets, setSheets] = useState<Record<string, string>>({});
   /** The same, in 16 directions, for whoever wears anything drawn that way (sprite.ts composeHeadings). */
   const [fineSheets, setFineSheets] = useState<Record<string, string>>({});
-  const [scene, setScene] = useState<Scene>({ kind: "out" });
-  // In the village I start by my own front door ("home" is the app outside it).
-  const [place, setPlace] = useState<Place>({ kind: "house", hostId: data.me.id });
+  // Everyone starts the day in their own room, beside their bed: the village
+  // opens inside my house, and the door leads out to my own front step.
+  const [scene, setScene] = useState<Scene>(() => ({
+    kind: "room",
+    hostId: data.me.id,
+    room: buildRoom(tierFor(data.me.level).tier, data.room),
+    name: data.me.name,
+    level: data.me.level,
+  }));
+  const [place, setPlace] = useState<Place>({ kind: "inside", hostId: data.me.id });
   const [said, setSaid] = useState<ChatLine[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [hits, setHits] = useState<Record<string, { dmg: number; blocked?: boolean; key: number }>>({});
@@ -364,10 +374,10 @@ export default function Village({ data }: { data: VillageData }) {
     },
     []
   );
-  // I start at my own front door: everyone's is somewhere different.
+  // I start beside my bed, in my own room (wakeSpot).
   if (player.current == null) {
-    const door = world.plots.find((p) => p.owner === me.id)?.door ?? { x: world.hall.door.x, y: world.hall.door.y + 1 };
-    player.current = makeAgent(me.id, door.x, door.y + 1, PLAYER_SPEED);
+    const bed = scene.kind === "room" ? wakeSpot(scene.room) : { x: 0, y: 0 };
+    player.current = makeAgent(me.id, bed.x, bed.y, PLAYER_SPEED);
   }
 
   // Outside: everyone about walks where their own screen has them, as in a
@@ -708,7 +718,7 @@ export default function Village({ data }: { data: VillageData }) {
 
   const viewport = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
-  const placeRef = useRef<Place>({ kind: "house", hostId: data.me.id });
+  const placeRef = useRef<Place>({ kind: "inside", hostId: data.me.id });
   const promptRef = useRef<Prompt>(null);
   const enteredAt = useRef(0);
   const leaveRef = useRef<() => void>(() => {});
@@ -900,6 +910,11 @@ export default function Village({ data }: { data: VillageData }) {
           }
           const d = Math.hypot(tx - (exit.x + 0.5), ty - (exit.y + 0.5));
           if (d < 1.8) best = { kind: "leave" };
+          // My own desk: the notebook. (Over "leave": walking onto the door leaves anyway.)
+          if (sc.kind === "room" && sc.hostId === me.id) {
+            const spot = journalSpot(sc.room.interior);
+            if (spot && nearJournal(spot, tx, ty)) best = { kind: "journal" };
+          }
         }
         if (promptKey(best) !== promptKey(promptRef.current)) {
           promptRef.current = best;
@@ -999,7 +1014,9 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ------------------------------------------------- scene changes */
 
-  const outsideAt = useRef<{ x: number; y: number } | null>(null);
+  // The way out of my room leads to my own front step.
+  const ownDoor = world.plots.find((p) => p.owner === me.id)?.door;
+  const outsideAt = useRef<{ x: number; y: number } | null>(ownDoor ? { x: ownDoor.x, y: ownDoor.y + 1 } : null);
 
   const enterHouse = useCallback(
     async (hostId: string) => {
@@ -1126,6 +1143,7 @@ export default function Village({ data }: { data: VillageData }) {
         setOpen({ kind: sc.kind === "indoor" && sc.indoor.kind === "bakery" ? "bakery" : "shop" });
       }
       else if (p.kind === "desk") openDesks();
+      else if (p.kind === "journal") setOpen({ kind: "journal" });
       else if (p.kind === "display") setOpen({ kind: "shop", focus: p.good });
       else if (p.kind === "leave") leave();
       else void enterHouse(p.id);
@@ -1270,6 +1288,15 @@ export default function Village({ data }: { data: VillageData }) {
     return r && villageOf(r.plot) !== v ? villageInfo(villageOf(r.plot)).name : null;
   }
 
+  /** Tapped the notebook on my desk: walk up to it, then open it. */
+  function goToJournal() {
+    const sc = sceneRef.current;
+    if (sc.kind !== "room" || sc.hostId !== me.id) return;
+    const spot = journalSpot(sc.room.interior);
+    if (!spot) return;
+    walkTo(sc.room, player.current!, spot.x + spot.w - 1, spot.y + 1, () => setOpen({ kind: "journal" }));
+  }
+
   function visitHouse(id: string) {
     const away = awayIn(id);
     const r = residentOf.get(id);
@@ -1387,6 +1414,8 @@ export default function Village({ data }: { data: VillageData }) {
         return scene.kind === "indoor" && scene.indoor.kind === "bakery" ? "Order at the counter" : "Browse the store";
       case "desk":
         return scene.kind === "indoor" && scene.indoor.kind === "bakery" ? "Work at a café table" : "Study at the desks";
+      case "journal":
+        return "Write in your journal";
       case "display":
         return `Look at the ${goodById(prompt.good)?.name.toLowerCase() ?? "goods"}`;
       case "leave":
@@ -1467,6 +1496,7 @@ export default function Village({ data }: { data: VillageData }) {
               room={shownRoom}
               scale={S}
               onPiece={deco ? (i) => setDeco({ ...deco, selected: i, pick: null }) : undefined}
+              onNotebook={isMyRoom && !deco ? goToJournal : undefined}
             />
           )}
           {scene.kind === "arena" && <ArenaView arena={scene.arena} scale={S} />}
@@ -1833,6 +1863,7 @@ export default function Village({ data }: { data: VillageData }) {
           <p className="mt-3 text-xs text-mud-500">A new village opens when the last one fills up.</p>
         </Panel>
       )}
+      {!deco && open?.kind === "journal" && <JournalPanel onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "shop" && <ShopPanel focus={open.focus} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "bakery" && <BakeryPanel friends={neighbours.map((n) => ({ id: n.id, name: n.name }))} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "desks" && (
