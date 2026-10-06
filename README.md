@@ -24,10 +24,10 @@ On the project dashboard hit **Connect** and copy the connection string. Use the
 In the Neon console open the **SQL Editor**, paste the entire contents of
 [`db/schema.sql`](db/schema.sql), and run it.
 
-It's safe to re-run. `create table if not exists` skips tables that already
-exist, though, so it won't add a new **column** to a database you already
-have; for that, run the matching `alter table ... add column if not exists`
-by hand.
+That sets up a new database. A database you already have is brought up to
+date by the files in [`db/migrations/`](db/migrations), each one change: run
+the ones you haven't yet in the SQL Editor, oldest first (they're named by
+date and order). Each is safe to re-run.
 
 That creates the tables, the `bootstrap_user` function (which gives every new
 account a profile and four starter categories), and the XP functions.
@@ -578,6 +578,7 @@ See [`/privacy`](src/app/privacy/page.tsx) for the user-facing version.
 
 ```
 db/schema.sql              the whole database: tables and SQL functions
+db/migrations/             each change since, for a database already running
 src/proxy.ts               auth gate; verifies the session cookie
 src/lib/db.ts              lazy Neon client
 src/lib/session.ts         JWT cookie sign/verify

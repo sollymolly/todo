@@ -17,6 +17,7 @@ import {
   cleanPlanetName,
   cleanRehearsalLabel,
   CODE_ALPHABET,
+  readLook,
   CODE_LENGTH,
   MAX_MEMBERS,
   MAX_OWNED,
@@ -115,13 +116,22 @@ export async function updatePlanet(id: number, name: string, look: PlanetLook): 
   if (!clean) return { ok: false, error: "Give your planet a name." };
   return change(me, async () => {
     if (!(await ownedBy(me, id))) return "Only whoever founded a planet can change it.";
-    // A special look (world.ts, SPECIAL_LOOKS) stays: it can't be picked
-    // again once it's gone.
-    await sql`
-      update planets set name = ${clean},
-             look = case when look = any(${SPECIAL_LOOKS.map((l) => l.look)}::text[]) then look else ${cleanLook(look)} end
-       where id = ${id} and owner_id = ${me}::uuid
-    `;
+    // A special look (world.ts, SPECIAL_LOOKS) is given only by whoever runs
+    // this instance, and only to one planet (db: planets_special_look_key).
+    // Anyone else's planet that has one keeps it.
+    const giver = await canFound(me);
+    try {
+      await sql`
+        update planets set name = ${clean},
+               look = case when not ${giver} and look = any(${SPECIAL_LOOKS.map((l) => l.look)}::text[]) then look
+                           else ${giver ? readLook(look) : cleanLook(look)} end
+         where id = ${id} and owner_id = ${me}::uuid
+      `;
+    } catch (e) {
+      if (/planets_special_look_key|duplicate key/i.test(String(e))) return "Another planet has that look already: it's one planet's alone.";
+      if (/planets_look_check/i.test(String(e))) return "That look is new: run db/migrations/2026-10-06_01_roaring20_look.sql in the Neon SQL Editor first.";
+      throw e;
+    }
     stir(id);
     return null;
   });

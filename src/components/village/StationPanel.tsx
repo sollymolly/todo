@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Panel } from "@/components/village/panels";
-import { isPlanet, isSpecialLook, lookOf, PLANET_LOOKS, PLOTS_PER_VILLAGE, villageInfo, villageOf, type PlanetLook } from "@/components/village/world";
+import { isPlanet, isSpecialLook, lookOf, PLANET_LOOKS, PLOTS_PER_VILLAGE, SPECIAL_LOOKS, villageInfo, villageOf, type PlanetLook } from "@/components/village/world";
 import {
   addRehearsal,
   answerPlanetInvite,
@@ -169,10 +169,11 @@ function Rehearsals({
   );
 }
 
-function LookPicker({ look, onPick }: { look: PlanetLook; onPick: (l: PlanetLook) => void }) {
+/** `special`: the one-planet looks too (world.ts, SPECIAL_LOOKS), for whoever runs this instance. */
+function LookPicker({ look, special = false, onPick }: { look: PlanetLook; special?: boolean; onPick: (l: PlanetLook) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {PLANET_LOOKS.map((l) => (
+      {(special ? [...PLANET_LOOKS, ...SPECIAL_LOOKS] : PLANET_LOOKS).map((l) => (
         <button
           key={l.look}
           type="button"
@@ -374,6 +375,7 @@ export default function StationPanel({
                     p={p}
                     here={p.v === v}
                     mine={p.owner.id === meId}
+                    canGive={planets.canFound}
                     meId={meId}
                     friends={friends}
                     open={opened === p.id}
@@ -453,6 +455,7 @@ function PlanetRow({
   p,
   here,
   mine,
+  canGive,
   meId,
   friends,
   open,
@@ -464,6 +467,8 @@ function PlanetRow({
   p: PlanetView;
   here: boolean;
   mine: boolean;
+  /** May I give it a special look (I run this instance)? */
+  canGive: boolean;
   meId: string;
   friends: { id: string; name: string }[];
   open: boolean;
@@ -514,13 +519,16 @@ function PlanetRow({
                   maxLength={PLANET_NAME_MAX}
                   className={`${INPUT} w-full`}
                 />
-                {isSpecialLook(p.look) ? (
+                {isSpecialLook(p.look) && !canGive ? (
                   <p className="flex items-center gap-2 text-xs text-mud-600">
                     <Swatch look={p.look} size={16} />
                     {lookOf(p.look).label}: a look of its own, which no other planet has.
                   </p>
                 ) : (
-                  <LookPicker look={edit.look} onPick={(look) => setEdit({ ...edit, look })} />
+                  <>
+                    <LookPicker look={edit.look} special={canGive} onPick={(look) => setEdit({ ...edit, look })} />
+                    {canGive && <p className="text-[11px] text-mud-400">Gold-ringed looks are one planet&apos;s alone.</p>}
+                  </>
                 )}
                 <button className={BTN} disabled={busy || !edit.name.trim() || (edit.name.trim() === p.name && edit.look === p.look)}>
                   Save

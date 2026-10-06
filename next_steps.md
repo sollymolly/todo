@@ -1,7 +1,7 @@
 # Next steps
 
 - Knights in 16 directions: the game side is built (see docs/knight-art/SPEC.md, section 8). What's left is the art: find an artist, starting with the pilot set in the spec; Wolthera's LPC diagonal walk cycle (section 9) is a possible head start for the bodies. Decide first whether the Pointy Stick gets a slash animation (cuts the work by a third). As sheets arrive, put them in public/sprites/lpc16/ and run `python scripts/link-lpc16.py`. Then the duel animations (still four-way) are a second step if you want them.
-- **Roaring 20's look:** run `db/schema.sql` again (it widens the planets' look check, and adds `planet_rehearsals` and the rehearsal reminder setting), then give the planet its look by hand in the Neon SQL Editor. Check the id first with `select id, name from planets;`, then run `update planets set look = 'roaring20' where id = <its id>;`. Nobody can pick it in the app, and once a planet has it, it keeps it.
+- **Roaring 20's look and rehearsals:** run these in the Neon SQL Editor, in order: `db/migrations/2026-10-06_01_roaring20_look.sql`, `2026-10-06_02_planet_rehearsals.sql` and `2026-10-06_03_rehearsal_reminders.sql`. Then go to Station → Rockets → Roaring 20 → Look after it, pick "Roaring 20" (gold ring), and Save. Only whoever runs this instance sees that look in the picker.
 
 ## Ideas (not built)
 

@@ -3,11 +3,13 @@
 --  Run in the Neon SQL Editor, or: psql "$DATABASE_URL" -f db/schema.sql
 --  Safe to re-run: everything is idempotent.
 --
---  This is the whole database. Changes are made here, in place; there is no
---  separate migrations folder. When a change touches an existing database
---  (a new column, a changed default), write the matching `alter table ... if
---  not exists` and run it once by hand — `create table if not exists` will not
---  add columns to a table that is already there.
+--  This is the whole database, for setting one up from nothing. Changes are
+--  made here too, so it always stays complete — and, for a database that's
+--  already running, as their own file in db/migrations/ (named by date and
+--  order, e.g. 2026-10-06_01_roaring20_look.sql), run once in the SQL Editor,
+--  oldest first. Each is idempotent like this file. `create table if not
+--  exists` will not add columns to a table that is already there, so this file
+--  alone never brings an existing database up to date.
 -- ===========================================================================
 
 create extension if not exists "pgcrypto";
@@ -691,11 +693,13 @@ create table if not exists planets (
 );
 create index if not exists planets_owner_idx on planets(owner_id);
 -- The looks anyone can pick, and the special ones (world.ts, SPECIAL_LOOKS),
--- which belong to one planet each and are only ever given by hand, e.g.:
---   update planets set look = 'roaring20' where id = <Roaring 20's id>;
+-- which belong to one planet each: only whoever runs this instance can give
+-- one, from the planet's page in the app.
 alter table planets drop constraint if exists planets_look_check;
 alter table planets add constraint planets_look_check
   check (look in ('dust', 'moon', 'nebula', 'glacier', 'roaring20'));
+-- Each special look on one planet at most. (A new special look joins this list too.)
+create unique index if not exists planets_special_look_key on planets(look) where look in ('roaring20');
 
 -- Who's on each planet, the owner included.
 create table if not exists planet_members (
