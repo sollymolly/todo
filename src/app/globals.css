@@ -270,6 +270,9 @@ body {
 @keyframes rocket-approach { from { transform: scale(0.35) } to { transform: scale(1.5) } }
 .rocket-planet { animation: rocket-approach 3.4s ease-in forwards; transform-origin: center; }
 
+/* Roaring 20's planet: notes drifting up off the town hall. */
+.deco-note { opacity: 0; filter: drop-shadow(0 1px 0 #3b0a12); animation: float-up 3.6s ease-out infinite; }
+
 /* A fire in the hearth. */
 @keyframes fire-flicker {
   0%, 100% { transform: scaleY(1); opacity: 1 }
@@ -310,6 +313,7 @@ body {
   .char-idle, .char-cape, .house-smoke rect, .walker-hit, .fire-flicker, .fountain-ripple, .fountain-spray,
   .ride-far svg, .ride-near svg, .ride-sleepers, .ride-train, .ride-smoke rect, .coin-spin, .coin-pop,
   .rocket-far, .rocket-near, .rocket-ship, .rocket-flame, .rocket-planet { animation: none !important; }
+  .deco-note { display: none; }
   .zzz span { animation: none !important; opacity: 1; }
   .zzz span:nth-child(n + 2) { display: none; }
   .mote { display: none; }

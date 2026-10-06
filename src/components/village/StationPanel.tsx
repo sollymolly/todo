@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Panel } from "@/components/village/panels";
-import { isPlanet, PLANET_LOOKS, PLOTS_PER_VILLAGE, villageInfo, villageOf, type PlanetLook } from "@/components/village/world";
+import { isPlanet, isSpecialLook, lookOf, PLANET_LOOKS, PLOTS_PER_VILLAGE, villageInfo, villageOf, type PlanetLook } from "@/components/village/world";
 import {
+  addRehearsal,
   answerPlanetInvite,
   cancelPlanetInvite,
   closePlanet,
@@ -14,9 +15,23 @@ import {
   loadPlanets,
   newPlanetCode,
   removeFromPlanet,
+  removeRehearsal,
   updatePlanet,
 } from "@/lib/planet-actions";
-import { MAX_MEMBERS, MAX_OWNED, PLANET_NAME_MAX, showCode, type Planets, type PlanetView } from "@/lib/planets";
+import {
+  clockLabel,
+  MAX_MEMBERS,
+  MAX_OWNED,
+  MAX_REHEARSALS,
+  PLANET_NAME_MAX,
+  REHEARSAL_LABEL_MAX,
+  REHEARSAL_LEAD_MIN,
+  showCode,
+  WEEKDAYS,
+  type Planets,
+  type PlanetView,
+  type Rehearsal,
+} from "@/lib/planets";
 import type { Resident } from "@/lib/village";
 
 /* --------------------------------------------------------------------------
@@ -36,15 +51,121 @@ const HEAD = "mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mud-
 
 type Done = Awaited<ReturnType<typeof createPlanet>>;
 
-const swatchOf = (look: PlanetLook) => PLANET_LOOKS.find((l) => l.look === look)?.swatch ?? "#888";
-
+/** A planet, small: a special look (world.ts, SPECIAL_LOOKS) wears a gold ring. */
 function Swatch({ look, size = 28 }: { look: PlanetLook; size?: number }) {
   return (
     <span
       aria-hidden
-      className="inline-block shrink-0 rounded-full ring-1 ring-black/20"
-      style={{ width: size, height: size, background: `radial-gradient(circle at 35% 30%, #ffffff66, ${swatchOf(look)} 50%, #00000066)` }}
+      className={`inline-block shrink-0 rounded-full ${isSpecialLook(look) ? "ring-2 ring-[#d4af37]" : "ring-1 ring-black/20"}`}
+      style={{ width: size, height: size, background: `radial-gradient(circle at 35% 30%, #ffffff66, ${lookOf(look).swatch} 50%, #00000066)` }}
     />
+  );
+}
+
+/** The timezone this browser is in, as an IANA name. */
+const myZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
+};
+
+/** "Sundays · 7:00 pm", and where that's the time if it isn't here. */
+function whenLabel(r: Rehearsal): string {
+  const zone = r.tz === myZone() ? "" : ` (${r.tz.split("/").pop()?.replace(/_/g, " ")} time)`;
+  return `${WEEKDAYS[r.weekday]}s · ${clockLabel(r.minute)}${zone}`;
+}
+
+/** A planet's weekly rehearsals: everyone sees them; its owner sets them. */
+function Rehearsals({
+  p,
+  mine,
+  busy,
+  run,
+}: {
+  p: PlanetView;
+  mine: boolean;
+  busy: boolean;
+  run: (act: () => Promise<Done>, done?: string) => Promise<boolean>;
+}) {
+  const [slot, setSlot] = useState({ weekday: 0, time: "19:00", label: "" });
+  if (!mine && p.rehearsals.length === 0) return null;
+  return (
+    <div>
+      <p className={HEAD}>Rehearsals</p>
+      {p.rehearsals.length === 0 ? (
+        <p className="text-xs text-mud-500">None yet. Add the weekly ones, and everyone on {p.name} gets a reminder {REHEARSAL_LEAD_MIN} minutes before.</p>
+      ) : (
+        <>
+          <ul className="space-y-1">
+            {p.rehearsals.map((r) => (
+              <li key={r.id} className="flex items-center gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-mud-800">
+                  {r.label} <span className="text-xs text-mud-500">· {whenLabel(r)}</span>
+                </span>
+                {mine && (
+                  <button className="text-[11px] font-semibold text-mud-500 hover:text-red-700" disabled={busy} onClick={() => void run(() => removeRehearsal(p.id, r.id))}>
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-mud-500">
+            Everyone on it gets a reminder {REHEARSAL_LEAD_MIN} minutes before (Notifications page to switch it off).
+          </p>
+        </>
+      )}
+      {mine && p.rehearsals.length < MAX_REHEARSALS && (
+        <form
+          className="mt-2 space-y-1.5"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const [h, m] = slot.time.split(":").map(Number);
+            if (!Number.isInteger(h) || !Number.isInteger(m)) return;
+            if (await run(() => addRehearsal(p.id, slot.weekday, h * 60 + m, slot.label, myZone()), "Rehearsal added.")) setSlot({ ...slot, label: "" });
+          }}
+        >
+          <div className="flex gap-1.5">
+            <select
+              value={slot.weekday}
+              onChange={(e) => setSlot({ ...slot, weekday: Number(e.target.value) })}
+              aria-label="Day of the week"
+              className={INPUT}
+            >
+              {WEEKDAYS.map((d, i) => (
+                <option key={d} value={i}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <input
+              type="time"
+              value={slot.time}
+              onChange={(e) => setSlot({ ...slot, time: e.target.value })}
+              aria-label="Start time"
+              required
+              className={INPUT}
+            />
+          </div>
+          <div className="flex gap-1.5">
+            <input
+              value={slot.label}
+              onChange={(e) => setSlot({ ...slot, label: e.target.value })}
+              placeholder="Rehearsal"
+              aria-label="What it is"
+              maxLength={REHEARSAL_LABEL_MAX}
+              className={INPUT}
+            />
+            <button className={PRIMARY} disabled={busy || !slot.time}>
+              Add
+            </button>
+          </div>
+          <p className="text-[11px] text-mud-400">In your time here ({myZone()}).</p>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -371,7 +492,7 @@ function PlanetRow({
         </button>
       </div>
       <button onClick={onToggle} aria-expanded={open} className="mt-1.5 text-xs font-semibold text-grass-700 hover:text-grass-600">
-        {open ? "Hide" : mine ? "Look after it" : "Who's on it"}
+        {open ? "Hide" : mine ? "Look after it" : "Details"}
       </button>
 
       {open && (
@@ -393,7 +514,14 @@ function PlanetRow({
                   maxLength={PLANET_NAME_MAX}
                   className={`${INPUT} w-full`}
                 />
-                <LookPicker look={edit.look} onPick={(look) => setEdit({ ...edit, look })} />
+                {isSpecialLook(p.look) ? (
+                  <p className="flex items-center gap-2 text-xs text-mud-600">
+                    <Swatch look={p.look} size={16} />
+                    {lookOf(p.look).label}: a look of its own, which no other planet has.
+                  </p>
+                ) : (
+                  <LookPicker look={edit.look} onPick={(look) => setEdit({ ...edit, look })} />
+                )}
                 <button className={BTN} disabled={busy || !edit.name.trim() || (edit.name.trim() === p.name && edit.look === p.look)}>
                   Save
                 </button>
@@ -468,6 +596,8 @@ function PlanetRow({
               </div>
             </>
           )}
+
+          <Rehearsals p={p} mine={mine} busy={busy} run={run} />
 
           <div>
             <p className={HEAD}>On it</p>

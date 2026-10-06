@@ -1,7 +1,7 @@
 import { sql } from "@/lib/db";
 import { levelFor } from "@/lib/game";
 import { cleanHouse, type HouseLook, type Resident } from "@/lib/village";
-import { cleanLook, MAX_MEMBERS, MAX_PLANETS, type PlanetInvite, type Planets, type PlanetView } from "@/lib/planets";
+import { MAX_MEMBERS, MAX_PLANETS, readLook, type PlanetInvite, type Planets, type PlanetView, type Rehearsal } from "@/lib/planets";
 import { planetVillage, PLOTS_PER_VILLAGE } from "@/components/village/world";
 import type { Appearance, Equipped } from "@/lib/types";
 import { OWNER_EMAIL } from "@/lib/owner";
@@ -150,7 +150,7 @@ export async function planetsFor(me: string): Promise<Planets> {
       `) as { id: number; name: string; look: string; code: string; owner_id: string; owner_name: string }[];
       const ids = rows.map((r) => r.id);
       const owned = rows.filter((r) => r.owner_id === me).map((r) => r.id);
-      const [members, invited, invites, founder] = await Promise.all([
+      const [members, invited, invites, founder, rehearsals] = await Promise.all([
         sql`
           select m.planet_id, m.user_id, p.display_name from planet_members m join profiles p on p.id = m.user_id
            where m.planet_id = any(${ids}::int[]) order by m.joined_at
@@ -169,6 +169,11 @@ export async function planetsFor(me: string): Promise<Planets> {
            order by i.created_at desc
         ` as unknown as Promise<{ planet_id: number; name: string; look: string; from_name: string; members: number }[]>,
         canFound(me),
+        // Its own table, newer than the rest: none until db/schema.sql is run again.
+        (sql`
+          select id, planet_id, weekday, minute, tz, label from planet_rehearsals
+           where planet_id = any(${ids}::int[]) order by weekday, minute
+        ` as unknown as Promise<(Rehearsal & { planet_id: number })[]>).catch((): (Rehearsal & { planet_id: number })[] => []),
       ]);
       const planets: PlanetView[] = rows.map((r) => {
         const mine = r.owner_id === me;
@@ -176,11 +181,14 @@ export async function planetsFor(me: string): Promise<Planets> {
           id: r.id,
           v: planetVillage(r.id),
           name: r.name,
-          look: cleanLook(r.look),
+          look: readLook(r.look),
           owner: { id: r.owner_id, name: r.owner_name },
           code: mine ? r.code : null,
           members: members.filter((m) => m.planet_id === r.id).map((m) => ({ id: m.user_id, name: m.display_name })),
           invited: mine ? invited.filter((m) => m.planet_id === r.id).map((m) => ({ id: m.user_id, name: m.display_name })) : [],
+          rehearsals: rehearsals
+            .filter((x) => x.planet_id === r.id)
+            .map((x) => ({ id: x.id, weekday: x.weekday, minute: x.minute, tz: x.tz, label: x.label })),
         };
       });
       return {
@@ -188,7 +196,7 @@ export async function planetsFor(me: string): Promise<Planets> {
         canFound: founder,
         invites: invites
           .filter((i) => !ids.includes(i.planet_id))
-          .map((i): PlanetInvite => ({ planetId: i.planet_id, name: i.name, look: cleanLook(i.look), from: i.from_name, members: i.members })),
+          .map((i): PlanetInvite => ({ planetId: i.planet_id, name: i.name, look: readLook(i.look), from: i.from_name, members: i.members })),
       };
     },
     { planets: [], invites: [], canFound: false }

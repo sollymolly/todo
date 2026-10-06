@@ -431,9 +431,12 @@ create table if not exists notification_prefs (
   nudges          boolean not null default true,
   /* A reminder at 6pm and 9pm local while a habit due today is unticked. */
   habits          boolean not null default true,
+  /* 15 minutes before a rehearsal on a planet I'm on. */
+  rehearsals      boolean not null default true,
   updated_at      timestamptz not null default now()
 );
 alter table notification_prefs add column if not exists habits boolean not null default true;
+alter table notification_prefs add column if not exists rehearsals boolean not null default true;
 
 create table if not exists notification_log (
   user_id  uuid not null references users(id) on delete cascade,
@@ -442,10 +445,11 @@ create table if not exists notification_log (
   sent_at  timestamptz not null default now(),
   primary key (user_id, kind, ref)
 );
--- 'habit' is keyed by local date and hour: "2026-09-29@18".
+-- 'habit' is keyed by local date and hour: "2026-09-29@18"; 'rehearsal' by
+-- rehearsal and its local date: "12@2026-10-11".
 alter table notification_log drop constraint if exists notification_log_kind_check;
 alter table notification_log add constraint notification_log_kind_check
-  check (kind in ('due', 'morning', 'habit'));
+  check (kind in ('due', 'morning', 'habit', 'rehearsal'));
 create index if not exists notification_log_sent_idx on notification_log(sent_at);
 
 -- ===========================================================================
@@ -680,12 +684,18 @@ create table if not exists planets (
   id         serial primary key,
   owner_id   uuid not null references users(id) on delete cascade,
   name       text not null check (length(name) between 1 and 30),
-  look       text not null default 'dust' check (look in ('dust', 'moon', 'nebula', 'glacier')),
+  look       text not null default 'dust',
   /* Anyone with it can join. The owner can change it, which stops the old one working. */
   code       text not null unique check (code ~ '^[A-Z0-9]{8}$'),
   created_at timestamptz not null default now()
 );
 create index if not exists planets_owner_idx on planets(owner_id);
+-- The looks anyone can pick, and the special ones (world.ts, SPECIAL_LOOKS),
+-- which belong to one planet each and are only ever given by hand, e.g.:
+--   update planets set look = 'roaring20' where id = <Roaring 20's id>;
+alter table planets drop constraint if exists planets_look_check;
+alter table planets add constraint planets_look_check
+  check (look in ('dust', 'moon', 'nebula', 'glacier', 'roaring20'));
 
 -- Who's on each planet, the owner included.
 create table if not exists planet_members (
@@ -722,6 +732,21 @@ create table if not exists planet_houses (
   foreign key (planet_id, user_id) references planet_members(planet_id, user_id) on delete cascade
 );
 create unique index if not exists planet_houses_slot_key on planet_houses(planet_id, slot);
+
+-- A planet's weekly rehearsals (or any regular meeting), set by its owner:
+-- everyone on it is reminded 15 minutes before (src/lib/reminders.ts). At
+-- `minute` past midnight on `weekday` (0 = Sunday), in `tz`, an IANA name:
+-- the owner's browser's when it was added.
+create table if not exists planet_rehearsals (
+  id         serial primary key,
+  planet_id  integer not null references planets(id) on delete cascade,
+  weekday    smallint not null check (weekday between 0 and 6),
+  minute     smallint not null check (minute between 0 and 1439),
+  tz         text not null default 'UTC' check (length(tz) <= 64),
+  label      text not null default 'Rehearsal' check (length(label) between 1 and 40),
+  created_at timestamptz not null default now()
+);
+create index if not exists planet_rehearsals_planet_idx on planet_rehearsals(planet_id);
 
 -- ===========================================================================
 -- Functions. Defined after every table: SQL-language bodies are checked

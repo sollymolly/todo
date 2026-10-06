@@ -44,14 +44,15 @@ import {
   houseWorld,
   inRect,
   isPlanet,
+  lookOf,
   lotFence,
-  PLANET_LOOKS,
   PLOTS_PER_VILLAGE,
   PROPS,
   T,
   villageInfo,
   villageOf,
   type Grid,
+  type PlanetLook,
   type Theme,
   type World,
 } from "@/components/village/world";
@@ -175,6 +176,8 @@ const TREE_TINT: Record<Theme, string | undefined> = {
   moon: "grayscale(1) brightness(1.15)",
   nebula: "hue-rotate(170deg) saturate(1.5)",
   glacier: "hue-rotate(80deg) saturate(0.7) brightness(1.25)",
+  // Roaring 20: crimson and gold.
+  roaring20: "hue-rotate(-110deg) saturate(1.7) brightness(0.85)",
 };
 
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
@@ -1941,7 +1944,7 @@ export default function Village({ data }: { data: VillageData }) {
         (isPlanet(ride) || isPlanet(v) ? (
           <RocketRide
             to={infoOf(ride).name}
-            color={PLANET_LOOKS.find((l) => l.look === infoOf(ride).theme)?.swatch ?? "#5f8f34"}
+            color={isPlanet(ride) ? lookOf(infoOf(ride).theme as PlanetLook).swatch : "#5f8f34"}
             onDone={arrive}
           />
         ) : (
@@ -2217,6 +2220,28 @@ function Outdoors({
       >
         <TownHall busy={sessionsCount > 0} />
       </button>
+      {/* Roaring 20: a song drifting up from the town hall. */}
+      {world.theme === "roaring20" && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute"
+          style={{
+            left: (world.hall.body.x + world.hall.body.w / 2) * T * S,
+            top: (world.hall.body.y + 0.5) * T * S,
+            zIndex: (world.hall.body.y + world.hall.body.h) * T + 1,
+          }}
+        >
+          {["♪", "♫", "♪", "♬"].map((n, i) => (
+            <span
+              key={i}
+              className="deco-note absolute font-bold text-[#e3c16f]"
+              style={{ left: (i - 1.5) * 22 * S, fontSize: 16 * S, animationDelay: `${i * 0.9}s` }}
+            >
+              {n}
+            </span>
+          ))}
+        </div>
+      )}
       {world.tables.map((t, i) => (
         <div
           key={i}

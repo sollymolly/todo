@@ -10,16 +10,18 @@ import { requireUserId } from "@/lib/session";
 import { leaveTable } from "@/lib/village-server";
 import { canFound, joinPlanet, planetsFor } from "@/lib/planet-server";
 import { outsideSpace } from "@/lib/village";
-import { planetVillage } from "@/components/village/world";
+import { planetVillage, SPECIAL_LOOKS } from "@/components/village/world";
 import {
   cleanCode,
   cleanLook,
   cleanPlanetName,
+  cleanRehearsalLabel,
   CODE_ALPHABET,
   CODE_LENGTH,
   MAX_MEMBERS,
   MAX_OWNED,
   MAX_PLANETS,
+  MAX_REHEARSALS,
   type Planets,
 } from "@/lib/planets";
 import type { PlanetLook } from "@/components/village/world";
@@ -113,7 +115,13 @@ export async function updatePlanet(id: number, name: string, look: PlanetLook): 
   if (!clean) return { ok: false, error: "Give your planet a name." };
   return change(me, async () => {
     if (!(await ownedBy(me, id))) return "Only whoever founded a planet can change it.";
-    await sql`update planets set name = ${clean}, look = ${cleanLook(look)} where id = ${id} and owner_id = ${me}::uuid`;
+    // A special look (world.ts, SPECIAL_LOOKS) stays: it can't be picked
+    // again once it's gone.
+    await sql`
+      update planets set name = ${clean},
+             look = case when look = any(${SPECIAL_LOOKS.map((l) => l.look)}::text[]) then look else ${cleanLook(look)} end
+       where id = ${id} and owner_id = ${me}::uuid
+    `;
     stir(id);
     return null;
   });
@@ -197,6 +205,40 @@ export async function joinPlanetByCode(raw: string): Promise<Done & { joined?: n
     return null;
   });
   return r.ok ? { ...r, joined } : r;
+}
+
+/**
+ * A weekly rehearsal on my planet, `minute` past midnight on `weekday`
+ * (0 = Sunday), in timezone `tz` (the browser's, as an IANA name).
+ */
+export async function addRehearsal(id: number, weekday: number, minute: number, label: string, tz: string): Promise<Done> {
+  const me = await requireUserId();
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !Number.isInteger(minute) || minute < 0 || minute > 1439)
+    return { ok: false, error: "Pick a day and a time." };
+  if (await rateLimited("planet", me)) return { ok: false, error: TOO_MANY };
+  return change(me, async () => {
+    if (!(await ownedBy(me, id))) return "Only whoever founded a planet can set its rehearsals.";
+    const n = (await sql`select count(*)::int as n from planet_rehearsals where planet_id = ${id}`) as { n: number }[];
+    if (n[0].n >= MAX_REHEARSALS) return `A planet can have ${MAX_REHEARSALS} rehearsals a week. Take one off first.`;
+    // A timezone Postgres doesn't know is UTC, as everywhere else.
+    await sql`
+      insert into planet_rehearsals (planet_id, weekday, minute, tz, label)
+      values (${id}, ${weekday}, ${minute},
+              coalesce((select name from pg_timezone_names where name = ${String(tz).slice(0, 64)} limit 1), 'UTC'),
+              ${cleanRehearsalLabel(label) || "Rehearsal"})
+    `;
+    return null;
+  });
+}
+
+export async function removeRehearsal(id: number, rehearsalId: number): Promise<Done> {
+  const me = await requireUserId();
+  if (!okId(rehearsalId)) return { ok: false, error: "That rehearsal isn't there any more." };
+  return change(me, async () => {
+    if (!(await ownedBy(me, id))) return "Only whoever founded a planet can change its rehearsals.";
+    await sql`delete from planet_rehearsals where id = ${rehearsalId} and planet_id = ${id}`;
+    return null;
+  });
 }
 
 /** A new code for my planet: the old one stops working. */

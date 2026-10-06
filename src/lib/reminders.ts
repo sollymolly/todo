@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { sendToUser } from "@/lib/push";
+import { clockLabel, REHEARSAL_LEAD_MIN } from "@/lib/planets";
 
 /* --------------------------------------------------------------------------
    What the every-five-minutes job sends (src/app/api/cron/reminders).
@@ -24,7 +25,7 @@ let retrying = 0;
  * time, or it's still the morning window). Without this, one failed request
  * to a push service was a reminder lost for good.
  */
-async function release(userId: string, kind: "due" | "morning" | "habit", refs: string[]) {
+async function release(userId: string, kind: "due" | "morning" | "habit" | "rehearsal", refs: string[]) {
   if (!refs.length) return;
   await sql`
     delete from notification_log
@@ -39,6 +40,7 @@ export async function runReminders(): Promise<{
   due: number;
   morning: number;
   habits: number;
+  rehearsals: number;
   pruned: number;
   retrying: number;
 }> {
@@ -50,7 +52,8 @@ export async function runReminders(): Promise<{
   const due = await dueSoon();
   const morning = await morningSummaries();
   const habits = await habitReminders().catch(() => 0);
-  return { due, morning, habits, pruned, retrying };
+  const rehearsals = await rehearsalReminders().catch(() => 0); // db/schema.sql not run again yet
+  return { due, morning, habits, rehearsals, pruned, retrying };
 }
 
 /* ------------------------------------------------------------ deadlines */
@@ -292,6 +295,73 @@ async function habitReminders(): Promise<number> {
     }).catch(() => 0);
     if (reached) sent++;
     else await release(f.user_id, "habit", [ref]);
+  }
+  return sent;
+}
+
+/* ----------------------------------------------------------- rehearsals */
+
+type RehearsalRow = { user_id: string; rehearsal_id: number; label: string; planet: string; minute: number; ref: string };
+
+/**
+ * Everyone on a planet, REHEARSAL_LEAD_MIN before each of its weekly
+ * rehearsals (src/lib/planets.ts). Each rehearsal keeps its own timezone, so
+ * "Sunday 7pm" is Sunday 7pm where it's held, whoever's being reminded. The
+ * ref names the day it's on, so each week's is sent once.
+ */
+async function rehearsalReminders(): Promise<number> {
+  const found = (await sql`
+    with slots as (
+      select r.id, r.label, r.minute, r.weekday, p.id as planet_id, p.name as planet,
+             coalesce((select name from pg_timezone_names where name = r.tz limit 1), 'UTC') as tz
+        from planet_rehearsals r join planets p on p.id = r.planet_id
+    ),
+    local as (
+      -- The day it'd be on: the one the lead time ends in, so a rehearsal
+      -- just after midnight is found from just before it.
+      select s.*, now() at time zone s.tz as here,
+             date_trunc('day', (now() at time zone s.tz) + make_interval(mins => ${REHEARSAL_LEAD_MIN}::int)) as day
+        from slots s
+    ),
+    due as (
+      select l.*, l.day + make_interval(mins => l.minute::int) as starts
+        from local l
+       where extract(dow from l.day)::int = l.weekday
+    )
+    select m.user_id, d.id as rehearsal_id, d.label, d.planet, d.minute,
+           d.id::text || '@' || to_char(d.starts, 'YYYY-MM-DD') as ref
+      from due d
+      join planet_members m on m.planet_id = d.planet_id
+      join (select distinct user_id from push_subscriptions) s on s.user_id = m.user_id
+      left join notification_prefs np on np.user_id = m.user_id
+     where d.starts > d.here
+       and d.starts <= d.here + make_interval(mins => ${REHEARSAL_LEAD_MIN}::int)
+       and coalesce(np.rehearsals, true)
+  `) as RehearsalRow[];
+  if (!found.length) return 0;
+
+  const claimed = new Set(
+    (
+      (await sql`
+        insert into notification_log (user_id, kind, ref)
+        select u, 'rehearsal', r from unnest(${found.map((f) => f.user_id)}::uuid[], ${found.map((f) => f.ref)}::text[]) as x(u, r)
+        on conflict do nothing
+        returning user_id || ' ' || ref as key
+      `) as { key: string }[]
+    ).map((r) => r.key)
+  );
+
+  let sent = 0;
+  for (const f of found) {
+    if (!claimed.has(`${f.user_id} ${f.ref}`)) continue;
+    const reached = await sendToUser(f.user_id, {
+      title: `${f.label} in ${REHEARSAL_LEAD_MIN} minutes`,
+      body: `${f.planet} · starts at ${clockLabel(f.minute)}.`,
+      url: "/village",
+      tag: `rehearsal-${f.rehearsal_id}`,
+    }).catch(() => 0);
+    if (reached) sent++;
+    else await release(f.user_id, "rehearsal", [f.ref]);
   }
   return sent;
 }

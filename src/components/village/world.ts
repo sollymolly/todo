@@ -184,13 +184,25 @@ export const planetIdOf = (v: number) => v - PLANET_BASE;
  */
 export const houseWorld = (v: number) => (isPlanet(v) ? v : 0);
 
-export type PlanetLook = "dust" | "moon" | "nebula" | "glacier";
+export type PlanetLook = "dust" | "moon" | "nebula" | "glacier" | "roaring20";
 export const PLANET_LOOKS: { look: PlanetLook; label: string; swatch: string }[] = [
   { look: "dust", label: "Red dust", swatch: "#c0613a" },
   { look: "moon", label: "Moon rock", swatch: "#a7a9b0" },
   { look: "nebula", label: "Nebula", swatch: "#8a4fc0" },
   { look: "glacier", label: "Glacier", swatch: "#6fc4dc" },
 ];
+/**
+ * Looks nobody can pick: each belongs to one planet alone, given it by hand
+ * (db/schema.sql says how), and kept whatever its owner changes.
+ */
+export const SPECIAL_LOOKS: { look: PlanetLook; label: string; swatch: string }[] = [
+  // Princeton's Roaring 20, the a cappella group: crimson velvet, black
+  // marble and gold, the 1920s, and a song coming from the town hall.
+  { look: "roaring20", label: "Roaring 20", swatch: "#a6192e" },
+];
+export const isSpecialLook = (look: string) => SPECIAL_LOOKS.some((l) => l.look === look);
+/** A planet look's name and colour, special ones included. */
+export const lookOf = (look: PlanetLook) => [...PLANET_LOOKS, ...SPECIAL_LOOKS].find((l) => l.look === look) ?? PLANET_LOOKS[0];
 
 /** A planet's name and look, as the page knows it (VillageData.planets). */
 export type PlanetInfo = { v: number; name: string; look: PlanetLook };

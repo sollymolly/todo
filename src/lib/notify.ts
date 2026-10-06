@@ -16,6 +16,8 @@ export type NotificationPrefs = {
   nudges: boolean;
   /** At 6pm and 9pm local, while a habit due today is still unticked. */
   habits: boolean;
+  /** 15 minutes before a rehearsal on a planet I'm on. */
+  rehearsals: boolean;
 };
 
 export const DEFAULT_PREFS: NotificationPrefs = {
@@ -26,6 +28,7 @@ export const DEFAULT_PREFS: NotificationPrefs = {
   messages: true,
   nudges: true,
   habits: true,
+  rehearsals: true,
 };
 
 export const LEAD_CHOICES: { minutes: number; label: string }[] = [
@@ -51,6 +54,7 @@ export function cleanPrefs(raw: Partial<NotificationPrefs> | null | undefined): 
     messages: typeof r.messages === "boolean" ? r.messages : DEFAULT_PREFS.messages,
     nudges: typeof r.nudges === "boolean" ? r.nudges : DEFAULT_PREFS.nudges,
     habits: typeof r.habits === "boolean" ? r.habits : DEFAULT_PREFS.habits,
+    rehearsals: typeof r.rehearsals === "boolean" ? r.rehearsals : DEFAULT_PREFS.rehearsals,
   };
 }
 

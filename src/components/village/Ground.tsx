@@ -11,6 +11,12 @@ import { ATLAS, GROUND, T, inRect, lotFence, type Rect, type Theme, type World }
 
 /** The plaza's stones: the town hall's grey, a shade darker underfoot. */
 const STONE = { faces: ["#aaa398", "#a59e93"], top: "#bbb4a9", shade: "#928b81", joint: "#6f6961" };
+/** Some worlds pave theirs otherwise: Roaring 20's is black marble set in gold. */
+const STONES: Partial<Record<Theme, typeof STONE>> = {
+  roaring20: { faces: ["#2b2326", "#251e21"], top: "#3d3337", shade: "#181315", joint: "#c9a24a" },
+};
+/** A gold art-deco diamond on every third tile of grass, for Roaring 20. */
+const DECO_GOLD = "rgba(214,175,85,0.6)";
 const STONE_W = 32;
 const STONE_H = 16;
 
@@ -21,12 +27,12 @@ const STONE_H = 16;
  * whose stone is one picture spread over several tiles and doesn't repeat
  * cleanly from a single one. In px, at 1×.
  */
-function stonePaving(r: Rect): { x: number; y: number; w: number; h: number; fill: string }[] {
+function stonePaving(r: Rect, stone: typeof STONE = STONE): { x: number; y: number; w: number; h: number; fill: string }[] {
   const x0 = r.x * T;
   const y0 = r.y * T;
   const x1 = (r.x + r.w) * T;
   const y1 = (r.y + r.h) * T;
-  const out = [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0, fill: STONE.joint }];
+  const out = [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0, fill: stone.joint }];
   for (let y = y0; y < y1; y += STONE_H) {
     const course = y / STONE_H;
     const shift = course % 2 ? STONE_W / 2 : 0;
@@ -36,10 +42,10 @@ function stonePaving(r: Rect): { x: number; y: number; w: number; h: number; fil
       const rgt = Math.min(bx + STONE_W, x1) - 1;
       const w = rgt - l;
       const h = STONE_H - 2;
-      const face = STONE.faces[((bx / (STONE_W / 2)) * 7 + course * 3) & 1];
+      const face = stone.faces[((bx / (STONE_W / 2)) * 7 + course * 3) & 1];
       out.push({ x: l, y: y + 1, w, h, fill: face });
-      out.push({ x: l, y: y + 1, w, h: 1, fill: STONE.top });
-      out.push({ x: l, y: y + h, w, h: 1, fill: STONE.shade });
+      out.push({ x: l, y: y + 1, w, h: 1, fill: stone.top });
+      out.push({ x: l, y: y + h, w, h: 1, fill: stone.shade });
     }
   }
   return out;
@@ -57,6 +63,8 @@ const GRASS_TINT: Record<Theme, string | null> = {
   moon: "rgba(176,176,184,0.86)",
   nebula: "rgba(112,56,168,0.62)",
   glacier: "rgba(150,214,236,0.74)",
+  // Crimson velvet.
+  roaring20: "rgba(128,16,34,0.8)",
 };
 
 /** The railway along the bottom: a gravel bed, sleepers, two rails. In px, at 1×. */
@@ -110,8 +118,8 @@ export default function Ground({ world, scale }: { world: World; scale: number }
       const lots = empty.map((p) => ({ x: (p.x + 1.5) * T, y: (p.y + 1.5) * T, w: 5 * T, h: 4.5 * T }));
       for (const p of empty) for (const g of lotFence(p.x, p.y).gate.tiles) doors.add(`${g.x},${g.y}`);
       const paving = [
-        ...stonePaving(world.hall.plaza),
-        ...stonePaving(world.station.platform),
+        ...stonePaving(world.hall.plaza, STONES[world.theme]),
+        ...stonePaving(world.station.platform, STONES[world.theme]),
         ...railway(world.station.track),
         ...lots.flatMap(lotSoil),
       ];
@@ -135,6 +143,14 @@ export default function Ground({ world, scale }: { world: World; scale: number }
               if (tint) {
                 ctx.fillStyle = tint;
                 ctx.fillRect(x * T, y * T, T, T);
+              }
+              if (world.theme === "roaring20" && x % 3 === 1 && y % 3 === 1) {
+                // Row by row, 1, 3, 5, 7, 5, 3, 1 px wide, in the tile's middle.
+                ctx.fillStyle = DECO_GOLD;
+                for (let k = -3; k <= 3; k++) {
+                  const half = 3 - Math.abs(k);
+                  ctx.fillRect(x * T + 16 - half, y * T + 16 + k, half * 2 + 1, 1);
+                }
               }
             }
           }

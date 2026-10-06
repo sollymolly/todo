@@ -72,8 +72,9 @@ export default function PrivacyPage() {
             <li>
               <B>Planets</B> — the private planets you&apos;re on: their names
               and looks, who founded each and who&apos;s on it, invitations sent
-              and received, each planet&apos;s join code, and the house (and
-              rooms) you have on each.
+              and received, each planet&apos;s join code, its weekly rehearsal
+              times if its founder sets any, and the house (and rooms) you
+              have on each.
             </li>
             <li>
               <B>Work sessions</B> — when you joined and left each table, and

@@ -230,6 +230,14 @@ export default function NotificationSettings({
 
           <li className="flex items-center gap-3 py-3">
             <div className="mr-auto min-w-0">
+              <p className="text-sm font-semibold text-mud-900">Rehearsal reminders</p>
+              <p className="text-xs text-mud-500">15 minutes before a rehearsal on a planet you&apos;re on.</p>
+            </div>
+            <Toggle on={prefs.rehearsals} label="Rehearsal reminders" onChange={(v) => update({ rehearsals: v })} />
+          </li>
+
+          <li className="flex items-center gap-3 py-3">
+            <div className="mr-auto min-w-0">
               <p className="text-sm font-semibold text-mud-900">Messages</p>
               <p className="text-xs text-mud-500">When a companion writes to you.</p>
             </div>
