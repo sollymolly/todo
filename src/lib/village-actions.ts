@@ -8,7 +8,8 @@ import { requireUserId } from "@/lib/session";
 import { rateLimited, TOO_MANY } from "@/lib/rate-limit";
 import { sendToUser } from "@/lib/push";
 import { friendIdsOf, leaveTable, residents, villageCount } from "@/lib/village-server";
-import { villageOf } from "@/components/village/world";
+import { isPlanet, PLANET_BASE, planetIdOf, planetVillage, PLOTS_PER_VILLAGE, villageOf } from "@/components/village/world";
+import { isMember, planetIdsOf } from "@/lib/planet-server";
 import { duelById, inSpace } from "@/lib/village-rooms";
 import { cleanInterior, defaultInterior, type Interior } from "@/lib/furniture";
 import { coinsLeft, goodById, XP_PER_COIN } from "@/lib/shop";
@@ -52,28 +53,64 @@ async function areFriends(a: string, b: string): Promise<boolean> {
 
 /* ------------------------------------------------------------------ house */
 
-export async function saveHouse(look: HouseLook): Promise<HouseLook> {
+/**
+ * The planet `village` is, if it's one I'm on; 0 for a public village
+ * (where my one house is); null for a planet I'm not on.
+ */
+async function myPlanet(me: string, village: unknown): Promise<number | null> {
+  const v = Number(village);
+  if (!Number.isInteger(v) || !isPlanet(v)) return 0;
+  return (await isMember(me, planetIdOf(v))) ? planetIdOf(v) : null;
+}
+
+/** My house's look: the one in the public villages, or on the planet `village` is. */
+export async function saveHouse(look: HouseLook, village: number = 0): Promise<HouseLook | null> {
   const me = await requireUserId();
+  const planet = await myPlanet(me, village);
+  if (planet == null) return null;
   const rows = (await sql`select xp from profiles where id = ${me}::uuid`) as { xp: number }[];
   const clean = cleanHouse(look, levelFor(rows[0]?.xp ?? 0), await owned(me));
-  await sql`
-    insert into houses (user_id, style, roof, garden, updated_at)
-    values (${me}::uuid, ${clean.style}, ${clean.roof}, ${clean.garden}, now())
-    on conflict (user_id) do update set
-      style = excluded.style, roof = excluded.roof, garden = excluded.garden, updated_at = now()
-  `;
+  if (planet)
+    await sql`
+      update planet_houses set style = ${clean.style}, roof = ${clean.roof}, garden = ${clean.garden}, updated_at = now()
+       where planet_id = ${planet} and user_id = ${me}::uuid
+    `;
+  else
+    await sql`
+      insert into houses (user_id, style, roof, garden, updated_at)
+      values (${me}::uuid, ${clean.style}, ${clean.roof}, ${clean.garden}, now())
+      on conflict (user_id) do update set
+        style = excluded.style, roof = excluded.roof, garden = excluded.garden, updated_at = now()
+    `;
   return clean;
 }
 
-/** Everyone's house, for redrawing the village after someone arrives or moves. */
+/** Everyone's house, for redrawing the village after someone arrives or moves: here, and on my planets. */
 export async function loadResidents(): Promise<Resident[]> {
   const me = await requireUserId();
-  return residents(new Set([me, ...(await friendIdsOf(me))]));
+  const [friends, planets] = await Promise.all([friendIdsOf(me), planetIdsOf(me)]);
+  return residents(new Set([me, ...friends]), planets);
 }
 
-/** Moves my house to an empty lot. My rooms come with me. */
+/** Moves my house to an empty lot — in the public villages, or on a planet I'm on. My rooms come with me. */
 export async function moveHouse(plot: number): Promise<Result> {
   const me = await requireUserId();
+  if (Number.isInteger(plot) && plot >= 0 && isPlanet(villageOf(plot))) {
+    const v = villageOf(plot);
+    const planet = await myPlanet(me, v);
+    if (!planet) return { ok: false, error: "That's not a lot." };
+    try {
+      await sql`
+        update planet_houses set slot = ${plot % PLOTS_PER_VILLAGE}, slot_at = now()
+         where planet_id = ${planet} and user_id = ${me}::uuid
+      `;
+    } catch (e) {
+      if (/planet_houses_slot_key|duplicate key/i.test(String(e))) return { ok: false, error: "Someone's just moved in there." };
+      throw e;
+    }
+    after(() => poke(outsideSpace(v)));
+    return { ok: true };
+  }
   // Any empty lot in any village there is; a new village opens by itself
   // when the last one fills (village-server.ts, ensurePlot).
   if (!Number.isInteger(plot) || plot < 0 || villageOf(plot) >= (await villageCount())) return { ok: false, error: "That's not a lot." };
@@ -340,11 +377,13 @@ export async function joinSession(sessionId: string, todoId: string | null): Pro
   if (!UUID.test(sessionId)) return { ok: false, error: "That table isn't there any more." };
   if (await rateLimited("session", me)) return { ok: false, error: TOO_MANY };
 
-  // Joinable if a friend of mine is sitting at it right now.
-  const friends = await friendIdsOf(me);
+  // Joinable if a friend of mine is sitting at it right now — and, on a
+  // planet, only if I'm on it too.
+  const [friends, planets] = await Promise.all([friendIdsOf(me), planetIdsOf(me)]);
   const ok = (await sql`
     select 1 from work_sessions s
      where s.id = ${sessionId}::uuid and s.ended_at is null
+       and (s.village < ${PLANET_BASE} or s.village = any(${planets.map(planetVillage)}::int[]))
        and exists (
          select 1 from session_members m
           where m.session_id = s.id and m.left_at is null and m.user_id = any(${friends}::uuid[])
@@ -396,15 +435,30 @@ export async function setFocusRhythm(rhythm: Rhythm | null): Promise<void> {
 
 /* ------------------------------------------------------------ interiors */
 
-/** A house's inside, as everyone who walks in sees it. Owner or companions only. */
-export async function loadInterior(hostId: string): Promise<{ interior: Interior; tier: Tier; level: number; name: string } | null> {
+/**
+ * A house's inside, as everyone who walks in sees it. Owner or companions
+ * only. `village`: where the house is — any public village has the one, and
+ * a planet (one I'm on) its own, if they have a house there.
+ */
+export async function loadInterior(
+  hostId: string,
+  village: number = 0
+): Promise<{ interior: Interior; tier: Tier; level: number; name: string } | null> {
   const me = await requireUserId();
   if (!UUID.test(hostId) || (hostId !== me && !(await areFriends(me, hostId)))) return null;
-  const rows = (await sql`
-    select p.display_name, p.xp, h.interior
-      from profiles p left join houses h on h.user_id = p.id
-     where p.id = ${hostId}::uuid
-  `) as { display_name: string; xp: number; interior: unknown }[];
+  const planet = await myPlanet(me, village);
+  if (planet == null) return null;
+  const rows = (await (planet
+    ? sql`
+        select p.display_name, p.xp, h.interior
+          from profiles p join planet_houses h on h.user_id = p.id and h.planet_id = ${planet}
+         where p.id = ${hostId}::uuid
+      `
+    : sql`
+        select p.display_name, p.xp, h.interior
+          from profiles p left join houses h on h.user_id = p.id
+         where p.id = ${hostId}::uuid
+      `)) as { display_name: string; xp: number; interior: unknown }[];
   const r = rows[0];
   if (!r) return null;
   const level = levelFor(r.xp);
@@ -412,15 +466,24 @@ export async function loadInterior(hostId: string): Promise<{ interior: Interior
   return { interior: r.interior ? cleanInterior(r.interior, tier, level) : defaultInterior(tier), tier, level, name: r.display_name };
 }
 
-export async function saveInterior(raw: Interior): Promise<Interior> {
+/** My rooms: in the public villages' house, or (`village`) on a planet I'm on. */
+export async function saveInterior(raw: Interior, village: number = 0): Promise<Interior | null> {
   const me = await requireUserId();
+  const planet = await myPlanet(me, village);
+  if (planet == null) return null;
   const rows = (await sql`select xp from profiles where id = ${me}::uuid`) as { xp: number }[];
   const level = levelFor(rows[0]?.xp ?? 0);
   const clean = cleanInterior(raw, tierFor(level).tier, level, await owned(me));
-  await sql`
-    insert into houses (user_id, interior, updated_at) values (${me}::uuid, ${JSON.stringify(clean)}::jsonb, now())
-    on conflict (user_id) do update set interior = excluded.interior, updated_at = now()
-  `;
+  if (planet)
+    await sql`
+      update planet_houses set interior = ${JSON.stringify(clean)}::jsonb, updated_at = now()
+       where planet_id = ${planet} and user_id = ${me}::uuid
+    `;
+  else
+    await sql`
+      insert into houses (user_id, interior, updated_at) values (${me}::uuid, ${JSON.stringify(clean)}::jsonb, now())
+      on conflict (user_id) do update set interior = excluded.interior, updated_at = now()
+    `;
   return clean;
 }
 

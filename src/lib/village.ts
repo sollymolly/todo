@@ -1,4 +1,5 @@
 import type { Appearance, Equipped } from "@/lib/types";
+import { houseWorld } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The village: what's shared by the page, the server and the
@@ -57,7 +58,7 @@ export const LIVE_ROOM_PULSE_MS = 5_000;
  */
 export function spaceOf(p: Place | null, village: number): string | null {
   if (!p) return null;
-  if (p.kind === "inside") return `inside:${p.hostId}`;
+  if (p.kind === "inside") return insideSpace(p.hostId, village);
   if (p.kind === "arena") return arenaSpace(village);
   if (p.kind === "hall" || p.kind === "library" || p.kind === "store" || p.kind === "bakery") return `${p.kind}:${village}`;
   return null;
@@ -66,14 +67,26 @@ export function spaceOf(p: Place | null, village: number): string | null {
 /** Each village's own arena, and everywhere outside in it. */
 export const arenaSpace = (village: number) => `arena:${village}`;
 export const outsideSpace = (village: number) => `village:${village}`;
+/**
+ * Inside someone's house: the one they have in every public village, or
+ * the one on a planet (world.ts, houseWorld), which is a room of its own.
+ */
+export function insideSpace(hostId: string, village: number): string {
+  const w = houseWorld(village);
+  return w ? `inside:${hostId}:${w}` : `inside:${hostId}`;
+}
 
 type SpaceKind = "hall" | "arena" | "village" | "library" | "store" | "bakery" | "inside";
 
-/** A space's kind and village: "hall:2" → hall, 2. Rooms have no village. */
-export function readSpace(space: string): { kind: SpaceKind; village: number } | null {
-  const m = /^(hall|arena|village|library|store|bakery):(\d{1,6})$/.exec(space);
+/**
+ * A space's kind and village: "hall:2" → hall, 2. Inside a house: whose
+ * (`host`), and the planet it's on — or -1, a public village's.
+ */
+export function readSpace(space: string): { kind: SpaceKind; village: number; host?: string } | null {
+  const m = /^(hall|arena|village|library|store|bakery):(\d{1,7})$/.exec(space);
   if (m) return { kind: m[1] as SpaceKind, village: Number(m[2]) };
-  return space.startsWith("inside:") ? { kind: "inside", village: -1 } : null;
+  const i = /^inside:([0-9a-f-]{36})(?::(\d{1,7}))?$/i.exec(space);
+  return i ? { kind: "inside", village: i[2] ? Number(i[2]) : -1, host: i[1] } : null;
 }
 
 /**
@@ -302,6 +315,11 @@ export type Pulse = {
   presence: Record<string, { place: Place; seenAt: number; village: number }>;
   /** The village this check-in was from: where `outdoors` and `room` are. */
   village: number;
+  /**
+   * The village asked for is a planet I'm not on (any more): this check-in
+   * is from `village` instead, the one my house is in, and that's where I go.
+   */
+  bounced?: boolean;
   sessions: SessionView[];
   /** The viewer's own open seat, if any. */
   mySessionId: string | null;

@@ -61,6 +61,10 @@ export const LIMITS = {
   treat: { limit: 20, windowSeconds: 3600 },
   /** Per account. Journal saves (the page saves as you write, so generous). */
   journal: { limit: 120, windowSeconds: 600 },
+  /** Per account. Founding planets, inviting to them, changing their codes. */
+  planet: { limit: 30, windowSeconds: 600 },
+  /** Per account. Joining by code: tight, so codes can't be guessed. */
+  planetCode: { limit: 10, windowSeconds: 600 },
 } as const satisfies Record<string, Limit>;
 
 /**

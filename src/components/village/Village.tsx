@@ -15,6 +15,8 @@ import { goodById } from "@/lib/shop";
 import { FencePiece, FOOT, GATE, LotGate, REACH } from "@/components/village/Fence";
 import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, TownHall, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
+import RocketRide from "@/components/village/RocketRide";
+import StationPanel from "@/components/village/StationPanel";
 import {
   buildArena,
   buildIndoor,
@@ -36,12 +38,30 @@ import WardrobePanel from "@/components/village/WardrobePanel";
 import CoinPurse from "@/components/village/CoinPurse";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
 import { follow, getUp, headingOf, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, restOn, step, swingNow, tilesOf, turn, walkTo, type Agent } from "@/components/village/engine";
-import { ATLAS, buildWorld, inRect, lotFence, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
+import {
+  ATLAS,
+  buildWorld,
+  houseWorld,
+  inRect,
+  isPlanet,
+  lotFence,
+  PLANET_LOOKS,
+  PLOTS_PER_VILLAGE,
+  PROPS,
+  T,
+  villageInfo,
+  villageOf,
+  type Grid,
+  type Theme,
+  type World,
+} from "@/components/village/world";
 import { composeAttack, composeHeadings, composeSheet, spriteKey, type AttackSheet } from "@/lib/sprite";
 import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
 import { HIT_COOLDOWN_MS } from "@/lib/duel";
 import { useVillageLive } from "@/lib/live-client";
 import { challenge, loadInterior, loadResidents, markNudgesSeen, moveHouse, saveInterior } from "@/lib/village-actions";
+import { loadPlanets } from "@/lib/planet-actions";
+import type { Planets } from "@/lib/planets";
 import { cleanInterior, FURNITURE, type FurnitureKind, type Interior } from "@/lib/furniture";
 import {
   APP_PULSE_MS,
@@ -150,6 +170,11 @@ const TREE_TINT: Record<Theme, string | undefined> = {
   forest: "brightness(0.85) saturate(1.1)",
   spring: "hue-rotate(250deg) saturate(0.75) brightness(1.15)",
   snowy: "saturate(0.35) brightness(1.3)",
+  // Planets: whatever grows there isn't from here.
+  dust: "hue-rotate(-75deg) saturate(1.5) brightness(0.9)",
+  moon: "grayscale(1) brightness(1.15)",
+  nebula: "hue-rotate(170deg) saturate(1.5)",
+  glacier: "hue-rotate(80deg) saturate(0.7) brightness(1.25)",
 };
 
 const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind);
@@ -180,16 +205,32 @@ export default function Village({ data }: { data: VillageData }) {
   }, [scale]);
 
   // Villages of PLOTS_PER_VILLAGE houses each, every house on its own plot,
-  // the same on every screen (world.ts), joined by trains. I start in my
-  // own. Redrawn when someone arrives or moves house.
+  // the same on every screen (world.ts), joined by trains; and the private
+  // planets I'm on, reached by rocket, where everyone on one has a house of
+  // their own. I start in my own village. Redrawn when someone arrives or
+  // moves house.
   const [residents, setResidents] = useState<Resident[]>(data.residents);
-  const residentOf = useMemo(() => new Map(residents.map((r) => [r.id, r])), [residents]);
-  const [v, setV] = useState(() => villageOf(data.residents.find((r) => r.id === data.me.id)?.plot ?? 0));
+  const [planets, setPlanets] = useState<Planets>(() => ({ planets: data.planets, invites: data.invites, canFound: data.canFound }));
+  /** A village's or a planet's name and look. */
+  const infoOf = useCallback((n: number) => villageInfo(n, planets.planets), [planets.planets]);
+  const [v, setV] = useState(() => villageOf(data.residents.find((r) => r.id === data.me.id && !isPlanet(villageOf(r.plot)))?.plot ?? 0));
   const vRef = useRef(v);
   useEffect(() => {
     vRef.current = v;
   }, [v]);
-  const villages = useMemo(() => Math.max(1, ...residents.map((r) => villageOf(r.plot) + 1)), [residents]);
+  // Someone's house as it matters here: on a planet, the one they have on
+  // it; anywhere else (or if they've none on it), theirs in the villages.
+  const residentOf = useMemo(() => {
+    const m = new Map<string, Resident>();
+    for (const r of residents) {
+      const w = houseWorld(villageOf(r.plot));
+      if (w ? w === houseWorld(v) : !m.has(r.id)) m.set(r.id, r);
+    }
+    return m;
+  }, [residents, v]);
+  /** The public village my house is in: where a rocket back from a planet lands. */
+  const homeV = villageOf(residents.find((r) => r.id === data.me.id && !isPlanet(villageOf(r.plot)))?.plot ?? 0);
+  const villages = useMemo(() => Math.max(1, ...residents.filter((r) => !isPlanet(villageOf(r.plot))).map((r) => villageOf(r.plot) + 1)), [residents]);
   const world: World = useMemo(() => {
     const owners: (string | null)[] = Array(PLOTS_PER_VILLAGE).fill(null);
     const tiers: (Tier | null)[] = Array(PLOTS_PER_VILLAGE).fill(null);
@@ -198,8 +239,8 @@ export default function Village({ data }: { data: VillageData }) {
         owners[r.plot % PLOTS_PER_VILLAGE] = r.id;
         tiers[r.plot % PLOTS_PER_VILLAGE] = tierFor(r.level).tier;
       }
-    return buildWorld(v, owners, tiers);
-  }, [residents, v]);
+    return buildWorld(v, owners, tiers, planets.planets);
+  }, [residents, v, planets.planets]);
   const plotOf = useMemo(() => new Map(world.plots.filter((p) => p.owner).map((p) => [p.owner!, p])), [world]);
 
   /* ------------------------------------------------------------ state */
@@ -1101,7 +1142,8 @@ export default function Village({ data }: { data: VillageData }) {
 
   const enterHouse = useCallback(
     async (hostId: string) => {
-      const d = await loadInterior(hostId).catch(() => null);
+      // Their house here: on a planet, the one they have on it.
+      const d = await loadInterior(hostId, vRef.current).catch(() => null);
       if (!d) return toast("The door's locked — try again in a moment.");
       const room = buildRoom(d.tier, d.interior);
       const p = player.current!;
@@ -1421,16 +1463,16 @@ export default function Village({ data }: { data: VillageData }) {
     setDeco({ ...deco, draft: clean });
   }
 
-  /** Someone's village, if it isn't this one: their house is a train ride away. */
+  /** Someone's village, if it isn't this one: their house is a train (or rocket) ride away. */
   function awayIn(id: string): string | null {
     const r = residentOf.get(id);
-    return r && villageOf(r.plot) !== v ? villageInfo(villageOf(r.plot)).name : null;
+    return r && villageOf(r.plot) !== v ? infoOf(villageOf(r.plot)).name : null;
   }
 
   function visitHouse(id: string) {
     const away = awayIn(id);
     const r = residentOf.get(id);
-    if (away) return toast(`${r ? `${r.name}'s` : "Their"} house is in ${away}. Take the train from the station.`);
+    if (away) return toast(`${r ? `${r.name}'s` : "Their"} house is in ${away}. ${isPlanet(v) ? "Take a rocket" : "Take the train"} from the station.`);
     const plot = plotOf.get(id);
     if (!plot) return;
     // Anyone's house can be seen; only companions go in (village-actions, loadInterior).
@@ -1473,13 +1515,15 @@ export default function Village({ data }: { data: VillageData }) {
 
   // Aboard, on the way to village `ride`; arriving puts me on its platform.
   const [ride, setRide] = useState<number | null>(null);
+  /** The planet a check-in last turned me away from, so it's dealt with once. */
+  const bouncedFrom = useRef<number | null>(null);
   function board(to: number) {
     setOpen(null);
     if (to !== v) setRide(to);
   }
   const arrive = useCallback(() => {
     if (ride == null) return;
-    // Every village's station is in the same place (world.ts).
+    // Every village's station is in the same place (world.ts), a planet's too.
     const door = world.station.door;
     const p = player.current!;
     p.path = [];
@@ -1488,6 +1532,13 @@ export default function Village({ data }: { data: VillageData }) {
     p.x = door.x * T + T / 2;
     p.y = door.y * T + T / 2 + 8;
     p.dir = 0;
+    // Sent home from a planet while indoors: out, and straight aboard.
+    if (sceneRef.current.kind !== "out") {
+      sceneRef.current = { kind: "out" };
+      setScene(sceneRef.current);
+      setDeco(null);
+    }
+    bouncedFrom.current = null;
     vRef.current = ride;
     setV(ride);
     setRide(null);
@@ -1495,6 +1546,35 @@ export default function Village({ data }: { data: VillageData }) {
     setPlace(placeRef.current);
     beatNow.current();
   }, [ride, world]);
+
+  /** The planets have changed: their houses may have too. */
+  const updatePlanets = useCallback(
+    (p: Planets) => {
+      setPlanets(p);
+      // On a planet I'm not on any more (I left it, it was closed, or I was
+      // taken off): a rocket home, to my own village.
+      if (isPlanet(vRef.current) && !p.planets.some((x) => x.v === vRef.current)) {
+        setOpen(null);
+        setRide((r) => r ?? homeV);
+      }
+      void loadResidents()
+        .then(setResidents)
+        .catch(() => {});
+    },
+    [homeV]
+  );
+
+  // The check-in turned me away from this planet: find out what's changed.
+  useEffect(() => {
+    if (!livePulse.bounced || !isPlanet(vRef.current) || bouncedFrom.current === vRef.current) return;
+    bouncedFrom.current = vRef.current;
+    toast(`You're not on ${infoOf(vRef.current).name} any more.`);
+    void loadPlanets()
+      .then(updatePlanets)
+      .catch(() => {
+        bouncedFrom.current = null; // ask again at the next check-in
+      });
+  }, [livePulse, toast, infoOf, updatePlanets]);
 
   /* ------------------------------------------------------------- words */
 
@@ -1515,8 +1595,12 @@ export default function Village({ data }: { data: VillageData }) {
     }
     if (status === "home") return label + seat;
     const { place: p, village } = livePulse.presence[id]!;
-    // In a village: which one, by name.
-    const named = `In ${villageInfo(village ?? 0).name}`;
+    // In a village: which one, by name. On a planet I'm not on: not which.
+    const named = !isPlanet(village ?? 0)
+      ? `In ${infoOf(village ?? 0).name}`
+      : planets.planets.some((x) => x.v === village)
+        ? `On ${infoOf(village).name}`
+        : "On a private planet";
     if (seating.has(id)) return `${named} · working at the town hall`;
     const whose = (host: string) => (host === me.id ? "your" : host === id ? "their" : `${byId.get(host)?.name ?? "someone"}'s`);
     if (p.kind === "hall") return `${named} · at the town hall`;
@@ -1572,11 +1656,13 @@ export default function Village({ data }: { data: VillageData }) {
   const insideCount = useMemo(() => {
     const m = new Map<string, number>();
     for (const n of neighbours) {
-      const p = livePulse.presence[n.id]?.place;
-      if (online(n.id) && p?.kind === "inside") m.set(p.hostId, (m.get(p.hostId) ?? 0) + 1);
+      const at = livePulse.presence[n.id];
+      // Inside a house in this world: a planet's are its own.
+      if (online(n.id) && at?.place.kind === "inside" && houseWorld(at.village ?? 0) === houseWorld(v))
+        m.set(at.place.hostId, (m.get(at.place.hostId) ?? 0) + 1);
     }
     return m;
-  }, [neighbours, livePulse.presence, online]);
+  }, [neighbours, livePulse.presence, online, v]);
   const isMyRoom = scene.kind === "room" && scene.hostId === me.id;
   const hostName = scene.kind === "room" ? (isMyRoom ? "Your" : `${scene.name}'s`) : "";
   const roomTier = scene.kind === "room" ? tierFor(scene.level).label.toLowerCase() : "";
@@ -1774,8 +1860,9 @@ export default function Village({ data }: { data: VillageData }) {
               <button onClick={goToArena} className="panel rounded-lg px-3 py-1.5 text-xs font-semibold text-mud-700 hover:text-grass-700">
                 Arena
               </button>
-              <button onClick={goToStation} className="panel rounded-lg px-3 py-1.5 text-xs font-semibold text-mud-700 hover:text-grass-700">
+              <button onClick={goToStation} className="panel relative rounded-lg px-3 py-1.5 text-xs font-semibold text-mud-700 hover:text-grass-700">
                 Station
+                {planets.invites.length > 0 && <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-red-600" aria-label="An invitation to a planet" />}
               </button>
             </>
           )}
@@ -1849,7 +1936,17 @@ export default function Village({ data }: { data: VillageData }) {
         </p>
       )}
 
-      {ride != null && <TrainRide to={villageInfo(ride).name} onDone={arrive} />}
+      {ride != null &&
+        // To a planet or back from one, by rocket; between villages, by train.
+        (isPlanet(ride) || isPlanet(v) ? (
+          <RocketRide
+            to={infoOf(ride).name}
+            color={PLANET_LOOKS.find((l) => l.look === infoOf(ride).theme)?.swatch ?? "#5f8f34"}
+            onDone={arrive}
+          />
+        ) : (
+          <TrainRide to={infoOf(ride).name} onDone={arrive} />
+        ))}
 
       {(toasts.length > 0 || elsewhere || moving) && (
         <div className="absolute inset-x-0 top-14 z-[70000] flex flex-col items-center gap-2 px-3">
@@ -1911,7 +2008,7 @@ export default function Village({ data }: { data: VillageData }) {
           }}
           onSave={async () => {
             setDeco({ ...deco, saving: true });
-            const saved = await saveInterior(deco.draft).catch(() => null);
+            const saved = await saveInterior(deco.draft, vRef.current).catch(() => null);
             if (!saved) {
               toast("Couldn't save your room.");
               setDeco({ ...deco, saving: false });
@@ -1934,10 +2031,14 @@ export default function Village({ data }: { data: VillageData }) {
       {!deco && open?.kind === "mine" && (
         <MyHousePanel
           me={me}
+          house={residentOf.get(me.id)?.house ?? me.house}
+          village={v}
           notes={data.notes}
           onLook={(look) => {
-            setMe((m) => ({ ...m, house: look }));
-            setResidents((rs) => rs.map((r) => (r.id === me.id ? { ...r, house: look } : r)));
+            // Only the house here: on a planet, the one I have on it.
+            const w = houseWorld(v);
+            if (!w) setMe((m) => ({ ...m, house: look }));
+            setResidents((rs) => rs.map((r) => (r.id === me.id && houseWorld(villageOf(r.plot)) === w ? { ...r, house: look } : r)));
           }}
           onMove={() => {
             // The lots are outside: step out to choose one.
@@ -1948,7 +2049,7 @@ export default function Village({ data }: { data: VillageData }) {
           onClose={() => setOpen(null)}
         />
       )}
-      {!deco && open?.kind === "hall" && <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} onClose={() => setOpen(null)} />}
+      {!deco && open?.kind === "hall" && <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} planets={planets.planets} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "people" && (
         <PeoplePanel
           people={neighbours.map((n) => ({ n, status: statusOfId(n.id), where: whereIs(n.id) }))}
@@ -1956,10 +2057,14 @@ export default function Village({ data }: { data: VillageData }) {
           onGo={(id) => {
             setOpen(null);
             const p = livePulse.presence[id]?.place;
-            // About in another village: that's a train ride.
+            // About in another village: that's a train ride (to a planet, a
+            // rocket's) — unless it's a planet I'm not on.
             const theirs = livePulse.presence[id]?.village ?? 0;
             if (statusOfId(id) === "village" && theirs !== v) {
-              toast(`${byId.get(id)?.name ?? "They"} ${byId.get(id) ? "is" : "are"} in ${villageInfo(theirs).name}. Take the train from the station.`);
+              const who = `${byId.get(id)?.name ?? "They"} ${byId.get(id) ? "is" : "are"}`;
+              if (isPlanet(theirs) && !planets.planets.some((x) => x.v === theirs)) return toast(`${who} on a private planet.`);
+              const by = isPlanet(theirs) || isPlanet(v) ? "Take a rocket" : "Take the train";
+              toast(`${who} ${isPlanet(theirs) ? "on" : "in"} ${infoOf(theirs).name}. ${by} from the station.`);
               return goToStation();
             }
             // Out in this village: walk to where they're standing.
@@ -1975,38 +2080,18 @@ export default function Village({ data }: { data: VillageData }) {
         />
       )}
       {!deco && open?.kind === "train" && (
-        <Panel title={`${world.name} station`} sub="Trains to every village, whenever you like" onClose={() => setOpen(null)}>
-          <ul className="space-y-1.5">
-            {Array.from({ length: villages }, (_, n) => {
-              const info = villageInfo(n);
-              const houses = residents.filter((r) => villageOf(r.plot) === n);
-              const friends = houses.filter((r) => r.known && r.id !== me.id).length;
-              const mine = houses.some((r) => r.id === me.id);
-              return (
-                <li key={n}>
-                  <button
-                    disabled={n === v}
-                    onClick={() => board(n)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ring-1 ring-mud-200 hover:bg-mud-100 disabled:bg-grass-100/60 disabled:ring-grass-300"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-mud-900">
-                        {info.name}
-                        {mine && <span className="ml-1.5 text-xs font-normal text-mud-500">· your house</span>}
-                      </span>
-                      <span className="block text-xs text-mud-500">
-                        {info.theme[0].toUpperCase() + info.theme.slice(1)} · {houses.length} of {PLOTS_PER_VILLAGE} houses
-                        {friends ? ` · ${friends} companion${friends === 1 ? "" : "s"}` : ""}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs font-semibold text-grass-700">{n === v ? "You're here" : "Board ›"}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 text-xs text-mud-500">A new village opens when the last one fills up.</p>
-        </Panel>
+        <StationPanel
+          v={v}
+          name={world.name}
+          villages={villages}
+          residents={residents}
+          meId={me.id}
+          planets={planets}
+          friends={neighbours.map((n) => ({ id: n.id, name: n.name }))}
+          onPlanets={updatePlanets}
+          onBoard={board}
+          onClose={() => setOpen(null)}
+        />
       )}
       {!deco && open?.kind === "journal" && <JournalPanel onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "wardrobe" && (
@@ -2021,7 +2106,7 @@ export default function Village({ data }: { data: VillageData }) {
       {!deco && open?.kind === "shop" && <ShopPanel focus={open.focus} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "bakery" && <BakeryPanel friends={neighbours.map((n) => ({ id: n.id, name: n.name }))} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "desks" && (
-        <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} spot={open.spot} onClose={() => setOpen(null)} />
+        <HallPanel sessions={livePulse.sessions} sheets={sheets} me={me} spot={open.spot} planets={planets.planets} onClose={() => setOpen(null)} />
       )}
       {!deco && open?.kind === "duelist" && byId.get(open.id) && (
         <DuelistCard

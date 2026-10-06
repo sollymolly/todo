@@ -11,10 +11,10 @@
    — re-consenting people for nothing trains them to click through.
    -------------------------------------------------------------------------- */
 
-export const PRIVACY_VERSION = 6;
+export const PRIVACY_VERSION = 7;
 
 /** Shown alongside the version so "which one did I agree to" has an answer. */
-export const PRIVACY_EFFECTIVE = "4 October 2026";
+export const PRIVACY_EFFECTIVE = "6 October 2026";
 
 /**
  * The handful of points someone must actually see before agreeing. The full
@@ -27,6 +27,7 @@ export const PRIVACY_HIGHLIGHTS = [
   "Companions you accept can see your level, completed-quest count, and your category names with how many quests are open in each. Never the quests themselves.",
   "In the village, companions see whether you're there and where, your house, your streak, and your work-session time. A nudge can point at one of your quests by its category and deadline only. Door notes are plain text, not encrypted.",
   "Anyone at the same work-session table, or inside the same companion's house, sees your character and display name — and hears what you say there — even if they aren't your companion. Talk in the village is plain text and deleted after an hour.",
+  "On a private planet, everyone on it sees who else is, their houses there, and them out and about on it, companions or not. Anyone with a planet's code can join it. Companions not on it only see that you're on a private planet, not which.",
   "New accounts start already befriended to whoever runs this instance, which gives them that same visibility.",
   "Data is held by Neon (database) and Vercel (hosting). If you ask for a password reset, Resend delivers the email. If you import a screenshot, it is sent to an AI model through OpenRouter to be read. There is no analytics, no advertising and no third-party tracking.",
 ] as const;

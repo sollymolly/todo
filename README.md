@@ -83,6 +83,8 @@ Worth knowing:
   unpredictably; the pooler is what absorbs that.
 - **Put the Neon project in the same region as your Vercel functions.** Every
   page here is dynamic, so a cross-region hop is paid on every single load.
+  `vercel.json` pins the functions to `pdx1` (Portland), next to Neon's
+  `us-west-2`; change it if your Neon project is elsewhere.
 - **Messaging needs HTTPS.** Web Crypto is unavailable outside a secure
   context. Vercel and `localhost` both qualify; a dev server reached over a LAN
   IP does not, and the app says so rather than failing silently.

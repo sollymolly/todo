@@ -3,7 +3,8 @@ import { sql } from "@/lib/db";
 import { fightStartsAt, INVITE_MS, judge, strike, type Facing, type Stance } from "@/lib/duel";
 import { poke } from "@/lib/live";
 import type { Appearance, Equipped } from "@/lib/types";
-import { arenaSpace, readSpace, type ChatLine, type DuelView, type Place, type RoomPerson } from "@/lib/village";
+import { arenaSpace, insideSpace, readSpace, type ChatLine, type DuelView, type Place, type RoomPerson } from "@/lib/village";
+import { houseWorld, PLANET_BASE } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    Shared rooms, talk and duels — the server side. Used by
@@ -30,10 +31,13 @@ export async function roomPeople(me: string, place: Place, known: Set<string>, v
   type Row = { user_id: string; x: number | null; y: number | null; facing: number | null; display_name: string; appearance: Appearance; equipped: Equipped };
   let rows: Row[] = [];
   if (place.kind === "inside") {
+    // The house they have in every public village, or the one on this planet.
+    const world = houseWorld(village);
     rows = (await sql`
       select v.user_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
         from village_presence v join profiles p on p.id = v.user_id
        where v.place = 'inside' and v.host_id = ${place.hostId}::uuid
+         and (case when ${world}::int = 0 then v.village < ${PLANET_BASE} else v.village = ${world}::int end)
          and v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
     `) as Row[];
   } else if (place.kind === "arena" || place.kind === "library" || place.kind === "store" || place.kind === "bakery") {
@@ -82,7 +86,7 @@ export async function inSpace(me: string, space: string): Promise<boolean> {
   const r = rows[0];
   const s = readSpace(space);
   if (!r || !s) return false;
-  if (s.kind === "inside") return r.place === "inside" && `inside:${r.host_id}` === space;
+  if (s.kind === "inside") return r.place === "inside" && !!r.host_id && insideSpace(r.host_id, r.village) === space;
   return r.place === s.kind && r.village === s.village;
 }
 

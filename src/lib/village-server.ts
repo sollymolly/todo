@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { sql } from "@/lib/db";
 import { levelFor } from "@/lib/game";
 import { listFriends } from "@/lib/social-actions";
@@ -20,7 +21,9 @@ import {
   type SessionView,
   type Spot,
 } from "@/lib/village";
-import { plotAt, PLOTS_PER_VILLAGE, villageOf } from "@/components/village/world";
+import { isPlanet, PLANET_BASE, planetIdOf, planetVillage, plotAt, PLOTS_PER_VILLAGE, villageOf } from "@/components/village/world";
+import { planetHousesVersion, planetIdsOf, planetResidents, planetsFor } from "@/lib/planet-server";
+import type { PlanetInvite, PlanetView } from "@/lib/planets";
 
 /* --------------------------------------------------------------------------
    The village's queries, shared by the page, its actions and
@@ -44,8 +47,15 @@ export async function friendIdsOf(me: string): Promise<string[]> {
 
 /* ------------------------------------------------------------------ plots */
 
-/** Everyone with a house, wherever it stands: the whole village. `known`: me and my companions. */
-export async function residents(known: Set<string>): Promise<Resident[]> {
+/**
+ * Everyone with a house, wherever it stands: every public village, and the
+ * planets given (`planets`: the ones I'm on). `known`: me and my companions.
+ */
+export async function residents(known: Set<string>, planets: number[] = []): Promise<Resident[]> {
+  return [...(await publicResidents(known)), ...(await planetResidents(planets, known))];
+}
+
+async function publicResidents(known: Set<string>): Promise<Resident[]> {
   const rows = (await sql`
     select h.user_id, h.plot, p.display_name, p.appearance, p.equipped, p.xp, h.style, h.roof, h.garden,
            coalesce((select max(b.streak)::int from habits b where b.user_id = h.user_id and b.active), 0) as streak
@@ -68,10 +78,10 @@ export async function residents(known: Set<string>): Promise<Resident[]> {
   });
 }
 
-/** Changes whenever a plot is given or moved (Pulse.plotsAt). */
+/** Changes whenever a plot is given or moved, here or on a planet (Pulse.plotsAt). */
 async function plotsVersion(): Promise<string> {
   const rows = (await sql`select count(*)::int as n, max(plot_at) as at from houses where plot is not null`) as { n: number; at: unknown }[];
-  return `${rows[0]?.n ?? 0}:${rows[0]?.at ? ms(rows[0].at) : 0}`;
+  return `${rows[0]?.n ?? 0}:${rows[0]?.at ? ms(rows[0].at) : 0}|${await planetHousesVersion()}`;
 }
 
 /** How many villages there are: one for every PLOTS_PER_VILLAGE houses, and always at least one. */
@@ -141,15 +151,27 @@ function placeOf(kind: string, host: string | null): Place {
  * at home in the app whose house is there, who stands by their door.
  */
 async function outdoorsOf(me: string, known: Set<string>, village: number): Promise<OutdoorPerson[]> {
-  const rows = (await sql`
-    select v.user_id, v.place, v.host_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
-      from village_presence v
-      join profiles p on p.id = v.user_id
-      left join houses h on h.user_id = v.user_id
-     where v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
-       and ((v.place in ('square', 'hall', 'house') and v.village = ${village})
-            or (v.place = 'home' and h.plot / ${PLOTS_PER_VILLAGE} = ${village}))
-  `) as {
+  // At home in the app, by the door of their house here: a public village's
+  // lot, or their own house on this planet.
+  const rows = (await (isPlanet(village)
+    ? sql`
+        select v.user_id, v.place, v.host_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
+          from village_presence v
+          join profiles p on p.id = v.user_id
+         where v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
+           and ((v.place in ('square', 'hall', 'house') and v.village = ${village})
+                or (v.place = 'home' and exists (
+                      select 1 from planet_houses ph where ph.user_id = v.user_id and ph.planet_id = ${planetIdOf(village)})))
+      `
+    : sql`
+        select v.user_id, v.place, v.host_id, v.x, v.y, v.facing, p.display_name, p.appearance, p.equipped
+          from village_presence v
+          join profiles p on p.id = v.user_id
+          left join houses h on h.user_id = v.user_id
+         where v.seen_at > now() - ${ONLINE}::interval and v.user_id <> ${me}::uuid
+           and ((v.place in ('square', 'hall', 'house') and v.village = ${village})
+                or (v.place = 'home' and h.plot / ${PLOTS_PER_VILLAGE} = ${village}))
+      `)) as {
     user_id: string;
     place: string;
     host_id: string | null;
@@ -227,6 +249,10 @@ export async function releasePresence(me: string, device: string) {
 
 /* --------------------------------------------------------------- sessions */
 
+/** When this instance last swept (pulse), and the soonest it sweeps again. */
+let sweptAt = 0;
+const SWEEP_EVERY_MS = 15_000;
+
 /**
  * Takes anyone who stopped checking in off their table as of their last
  * check-in, pays what they'd earned, and closes tables nobody is at.
@@ -245,11 +271,16 @@ export async function sweepSessions() {
   `;
 }
 
-/** "Still here": keeps my seat, and pays any focus rounds now complete. */
+/**
+ * "Still here": keeps my seat, and pays any focus rounds now complete. A
+ * seat already past sweepSessions' two minutes isn't revived — the sweep
+ * takes me off as of when I was last seen, so time away is never paid.
+ */
 export async function sessionHeartbeat(me: string): Promise<number> {
   const rows = (await sql`
     update session_members set last_seen = now()
      where user_id = ${me}::uuid and left_at is null
+       and last_seen >= now() - interval '2 minutes'
      returning id
   `) as { id: string }[];
   if (!rows[0]) return 0;
@@ -277,13 +308,17 @@ export async function leaveTable(me: string): Promise<number> {
   return xp;
 }
 
-/** Tables anyone I know is sitting at, with who's there. */
-async function visibleSessions(me: string, known: Set<string>): Promise<SessionView[]> {
+/**
+ * Tables anyone I know is sitting at, with who's there: in a public village,
+ * or on a planet I'm on (`planets`, as village numbers).
+ */
+async function visibleSessions(me: string, known: Set<string>, planets: number[]): Promise<SessionView[]> {
   const ids = [...known];
   const sessions = (await sql`
     select s.id, s.host_id, s.village, s.spot, s.focus, s.focus_from, s.focus_work, s.focus_rest, s.started_at
       from work_sessions s
      where s.ended_at is null
+       and (s.village < ${PLANET_BASE} or s.village = any(${planets}::int[]))
        and exists (
          select 1 from session_members m
           where m.session_id = s.id and m.left_at is null and m.user_id = any(${ids}::uuid[])
@@ -377,6 +412,14 @@ async function lastVillage(me: string): Promise<number> {
   return rows[0]?.v ?? 0;
 }
 
+/** The public village my house is in. */
+async function homeVillage(me: string): Promise<number> {
+  const rows = (await sql`
+    select coalesce((select plot / ${PLOTS_PER_VILLAGE} from houses where user_id = ${me}::uuid), 0) as v
+  `) as { v: number }[];
+  return rows[0]?.v ?? 0;
+}
+
 /**
  * One check-in: where I am, and what the village looks like from here.
  * `place` null moves nobody: it only keeps my seat at a table. `device`
@@ -390,48 +433,74 @@ export async function pulse(
   device: string | null = null,
   village: number | null = null
 ): Promise<Pulse> {
-  await sweepSessions();
-  const friends = await friendIdsOf(me);
+  // Closing tables nobody's at is everyone's business, not this check-in's:
+  // it runs once the answer has gone, at most every SWEEP_EVERY_MS here (and
+  // from the cron route regardless). Meanwhile a seat already gone stale
+  // isn't kept alive by its own check-in — see sessionHeartbeat.
+  if (Date.now() - sweptAt > SWEEP_EVERY_MS) {
+    sweptAt = Date.now();
+    after(() => sweepSessions().catch(() => {}));
+  }
+
+  // Every query is a round trip to the database, so each step's go together;
+  // only what one step needs from the step before keeps them apart.
+  const [friends, asked, planetIds] = await Promise.all([friendIdsOf(me), village ?? lastVillage(me), planetIdsOf(me)]);
   const known = new Set([me, ...friends]);
-  const here = village ?? (await lastVillage(me));
+  // A planet only for those on it: anyone else (taken off it, say) is back
+  // in their own village, and told so if they asked to be there.
+  const planets = planetIds.map(planetVillage);
+  const refused = isPlanet(asked) && !planets.includes(asked);
+  const here = refused ? await homeVillage(me) : asked;
 
   // Inside a house only if it's mine or a companion's; otherwise I'm out on
   // the square. What this device sees is wherever it has me, even when
   // another of my devices is the one friends see.
   const at: Place | null = place?.kind === "inside" && !known.has(place.hostId) ? { kind: "square" } : place;
-  const elsewhere = at ? !(await writePresence(me, at, pos, device, here)) : false;
+  // Written before anything is read back, so the answer has me where I am.
+  const [shownHere, focusXp] = await Promise.all([at ? writePresence(me, at, pos, device, here) : true, sessionHeartbeat(me)]);
+  const elsewhere = !shownHere;
   // A room everyone in it sees the same: a house, or one of this village's
   // arena, library, store and bakery.
   const shared = at?.kind === "inside" || at?.kind === "arena" || at?.kind === "library" || at?.kind === "store" || at?.kind === "bakery";
-  const focusXp = await sessionHeartbeat(me);
-
-  const presenceRows = (await sql`
-    select user_id, place, host_id, village, seen_at from village_presence
-     where user_id = any(${friends}::uuid[])
-  `) as { user_id: string; place: string; host_id: string | null; village: number; seen_at: unknown }[];
-
-  const presence: Pulse["presence"] = {};
-  for (const r of presenceRows) presence[r.user_id] = { place: placeOf(r.place, r.host_id), seenAt: ms(r.seen_at), village: r.village };
-
-  const sessions = await visibleSessions(me, known);
-  const mine = (await sql`
-    select session_id from session_members where user_id = ${me}::uuid and left_at is null
-  `) as { session_id: string }[];
+  const space = shared || at?.kind === "hall" ? spaceOf(at, here) : null;
 
   // The shared space I'm in: who's there, and what's been said.
-  let room: Pulse["room"] = null;
-  let duels: Pulse["duels"] = [];
-  const space = shared || at?.kind === "hall" ? spaceOf(at, here) : null;
-  try {
-    if (space && at)
-      room = {
-        space,
-        people: at.kind === "hall" ? [] : await roomPeople(me, at, known, here),
-        chat: await spaceChat(space, known),
-      };
-    duels = await duelsFor(me, at?.kind === "arena" ? here : null);
-  } catch {
-    /* db/schema.sql not run yet */
+  const roomNow = async (): Promise<Pulse["room"]> => {
+    if (!space || !at) return null;
+    try {
+      const [people, chat] = await Promise.all([at.kind === "hall" ? [] : roomPeople(me, at, known, here), spaceChat(space, known)]);
+      return { space, people, chat };
+    } catch {
+      return null; // db/schema.sql not run yet
+    }
+  };
+
+  const [presenceRows, sessions, mine, room, duels, nudges, outdoors, plotsAt] = await Promise.all([
+    sql`
+      select user_id, place, host_id, village, seen_at from village_presence
+       where user_id = any(${friends}::uuid[])
+    ` as unknown as Promise<{ user_id: string; place: string; host_id: string | null; village: number; seen_at: unknown }[]>,
+    visibleSessions(me, known, planets),
+    sql`
+      select session_id from session_members where user_id = ${me}::uuid and left_at is null
+    ` as unknown as Promise<{ session_id: string }[]>,
+    roomNow(),
+    duelsFor(me, at?.kind === "arena" ? here : null).catch((): Pulse["duels"] => []), // db/schema.sql not run yet
+    unseenNudges(me),
+    outdoorsOf(me, known, here),
+    plotsVersion(),
+  ]);
+
+  // A companion on a planet I'm not on is somewhere private: which planet
+  // and where on it aren't mine to know.
+  const presence: Pulse["presence"] = {};
+  for (const r of presenceRows) {
+    const hidden = isPlanet(r.village) && !planets.includes(r.village);
+    presence[r.user_id] = {
+      place: hidden && r.place !== "home" ? { kind: "square" } : placeOf(r.place, r.host_id),
+      seenAt: ms(r.seen_at),
+      village: hidden ? PLANET_BASE : r.village,
+    };
   }
 
   return {
@@ -441,13 +510,14 @@ export async function pulse(
     sessions,
     mySessionId: mine[0]?.session_id ?? null,
     focusXp,
-    nudges: await unseenNudges(me),
+    nudges,
     room,
     duels,
     elsewhere,
-    outdoors: await outdoorsOf(me, known, here),
+    outdoors,
     village: here,
-    plotsAt: await plotsVersion(),
+    bounced: refused && village != null,
+    plotsAt,
   };
 }
 
@@ -488,8 +558,13 @@ export async function focusTotals(ids: string[]): Promise<Map<string, { today: n
 export type VillageData = {
   me: Neighbour & { focusToday: number; focusWeek: number };
   neighbours: (Neighbour & { focusToday: number; focusWeek: number })[];
-  /** Everyone's house, mine included. */
+  /** Everyone's house, mine included: in every public village, and on the planets I'm on. */
   residents: Resident[];
+  /** The planets I'm on, and invitations to others (src/lib/planets.ts). */
+  planets: PlanetView[];
+  invites: PlanetInvite[];
+  /** Whether I may found planets (for now, only whoever runs this instance). */
+  canFound: boolean;
   /** The inside of my house: the village opens there, at my bed. */
   room: Interior;
   pulse: Pulse;
@@ -503,15 +578,21 @@ export async function loadVillage(me: string): Promise<VillageData> {
   // My house, and my companions': theirs are built the first time anyone
   // who knows them comes by, so nobody's missing from a friend's village
   // just because they haven't opened it themselves yet.
-  await ensurePlot(me, ids.slice(1));
-  const unplaced = (await sql`
-    select f.id from unnest(${ids.slice(1)}::uuid[]) as f(id)
-      left join houses h on h.user_id = f.id
-     where h.plot is null
-  `) as { id: string }[];
+  // Mine first, as theirs are placed near it; finding which of theirs are
+  // missing can go alongside.
+  const [, unplaced] = await Promise.all([
+    ensurePlot(me, ids.slice(1)),
+    sql`
+      select f.id from unnest(${ids.slice(1)}::uuid[]) as f(id)
+        left join houses h on h.user_id = f.id
+       where h.plot is null
+    ` as unknown as Promise<{ id: string }[]>,
+  ]);
   for (const { id } of unplaced) await ensurePlot(id, await friendIdsOf(id));
 
-  const [meRows, houses, totals] = await Promise.all([
+  // The rest all at once: none of it waits on any other part, and each is a
+  // round trip to the database.
+  const [meRows, houses, totals, records, noteRows, roomRows, everyone, firstPulse] = await Promise.all([
     sql`
       select p.display_name, p.xp, p.appearance, p.equipped,
              coalesce((select max(h.streak)::int from habits h where h.user_id = p.id and h.active), 0) as streak,
@@ -525,6 +606,19 @@ export async function loadVillage(me: string): Promise<VillageData> {
     >,
     housesOf(ids),
     focusTotals(ids),
+    duelRecords(ids).catch(() => new Map<string, { wins: number; losses: number }>()), // no duels yet
+    sql`
+      select n.id, p.display_name as author, n.body, n.treat, n.created_at, n.read_at is not null as read
+        from door_notes n join profiles p on p.id = n.author_id
+       where n.owner_id = ${me}::uuid
+       order by n.created_at desc
+       limit 30
+    ` as unknown as Promise<{ id: string; author: string; body: string; treat: string | null; created_at: unknown; read: boolean }[]>,
+    // My own room (as village-actions.ts, loadInterior, would give it).
+    sql`select interior from houses where user_id = ${me}::uuid` as unknown as Promise<{ interior: unknown }[]>,
+    // Everyone's houses, here and on my planets.
+    planetsFor(me).then(async (p) => ({ ...p, residents: await residents(new Set(ids), p.planets.map((x) => x.id)) })),
+    pulse(me, null),
   ]);
 
   const m = meRows[0];
@@ -542,7 +636,7 @@ export async function loadVillage(me: string): Promise<VillageData> {
     categories: [],
     focusToday: totals.get(me)?.today ?? 0,
     focusWeek: totals.get(me)?.week ?? 0,
-    duels: { wins: 0, losses: 0 },
+    duels: records.get(me) ?? { wins: 0, losses: 0 },
   };
 
   const neighbours = friends.map((f) => {
@@ -560,38 +654,22 @@ export async function loadVillage(me: string): Promise<VillageData> {
       categories: f.categories,
       focusToday: totals.get(f.user_id)?.today ?? 0,
       focusWeek: totals.get(f.user_id)?.week ?? 0,
-      duels: { wins: 0, losses: 0 },
+      duels: records.get(f.user_id) ?? { wins: 0, losses: 0 },
     };
   });
 
-  let records = new Map<string, { wins: number; losses: number }>();
-  try {
-    records = await duelRecords(ids);
-  } catch {
-    /* no duels yet */
-  }
-  meView.duels = records.get(me) ?? { wins: 0, losses: 0 };
-  for (const n of neighbours) n.duels = records.get(n.id) ?? { wins: 0, losses: 0 };
-
-  const noteRows = (await sql`
-    select n.id, p.display_name as author, n.body, n.treat, n.created_at, n.read_at is not null as read
-      from door_notes n join profiles p on p.id = n.author_id
-     where n.owner_id = ${me}::uuid
-     order by n.created_at desc
-     limit 30
-  `) as { id: string; author: string; body: string; treat: string | null; created_at: unknown; read: boolean }[];
-
-  // My own room (as village-actions.ts, loadInterior, would give it).
-  const roomRows = (await sql`select interior from houses where user_id = ${me}::uuid`) as { interior: unknown }[];
   const myTier = tierFor(myLevel).tier;
   const room = roomRows[0]?.interior ? cleanInterior(roomRows[0].interior, myTier, myLevel) : defaultInterior(myTier);
 
   return {
     me: meView,
     neighbours,
-    residents: await residents(new Set(ids)),
+    residents: everyone.residents,
+    planets: everyone.planets,
+    invites: everyone.invites,
+    canFound: everyone.canFound,
     room,
-    pulse: await pulse(me, null),
+    pulse: firstPulse,
     notes: noteRows.map((n) => ({ id: n.id, from: n.author, body: n.body, treat: n.treat, at: ms(n.created_at), read: n.read })),
   };
 }

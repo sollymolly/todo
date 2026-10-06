@@ -70,6 +70,12 @@ export default function PrivacyPage() {
               messages; and nudges sent and received.
             </li>
             <li>
+              <B>Planets</B> — the private planets you&apos;re on: their names
+              and looks, who founded each and who&apos;s on it, invitations sent
+              and received, each planet&apos;s join code, and the house (and
+              rooms) you have on each.
+            </li>
+            <li>
               <B>Work sessions</B> — when you joined and left each table, and
               which of your quests you said you were working on.
             </li>
@@ -151,6 +157,17 @@ export default function PrivacyPage() {
             the town hall, you&apos;re seen and heard by your companions only,
             and the person you&apos;re duelling. Your duel record is visible to
             your companions.
+          </p>
+          <p className="mt-3">
+            On a <B>private planet</B>, everyone on it sees who else is (by
+            display name), their houses there, and them out and about on it —
+            companions or not — the same as in a village. Whoever founded it
+            also sees who they&apos;ve invited, and can take anyone off it.
+            Anyone with a planet&apos;s code can join it, so share a code only
+            with people you&apos;d have there. Companions who aren&apos;t on a
+            planet see only that you&apos;re on a private planet, never which
+            one or where on it. An invitation to a planet sends a notification
+            with the inviter&apos;s name and the planet&apos;s.
           </p>
           <p className="mt-3">
             Anyone who knows your exact username or email can send you a

@@ -5,7 +5,7 @@ import { FLOORS, FURNITURE, WALLS, type FurnitureKind } from "@/lib/furniture";
 import { STORE_GOODS } from "@/lib/shop";
 import { TreatShape } from "@/components/village/Treat";
 import { T } from "@/components/village/world";
-import { journalSpot, restOf, type ArenaScene, type IndoorScene, type RoomScene } from "@/components/village/rooms";
+import { journalSpot, restOf, seatNudge, type ArenaScene, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 
 /* --------------------------------------------------------------------------
    Drawing the shared rooms. Positions are grid tiles × 32 × scale, the same
@@ -105,7 +105,8 @@ export function RoomView({
         const spec = FURNITURE[it.k];
         const lift = LIFT[it.k];
         const isWall = spec.layer === "wall";
-        const left = (it.x + 1) * T;
+        // A chair pulled up to a table is drawn in its middle (not while arranging the room, where pieces keep to the grid).
+        const left = (it.x + 1) * T + (onPiece ? 0 : seatNudge(room.interior, i));
         const top = isWall ? 0.4 * T : (it.y + 2) * T - lift;
         const h = isWall ? 36 : spec.h * T + lift;
         const z = isWall ? 1 : spec.layer === "rug" ? 2 : (it.y + 2 + spec.h) * T;
@@ -136,9 +137,8 @@ export function RoomView({
           front of its chair if it has one, else at the right-hand end */}
       {notebook &&
         (() => {
-          const col = notebook.seat >= 0 ? notebook.col : notebook.x + notebook.w - 1;
           const style = {
-            left: (col * T + (T - NOTEBOOK.w) / 2) * S,
+            left: (notebook.mid * T - NOTEBOOK.w / 2) * S,
             top: (notebook.y * T + (notebook.kind === "desk" ? 2 : -11)) * S,
             width: NOTEBOOK.w * S,
             height: NOTEBOOK.h * S,

@@ -31,30 +31,61 @@ export default async function Home({
   let profile: Profile | null = null;
   let categories: Category[] = [];
   let todos: Todo[] = [];
+  // The sections below the board each fall back on their own when their
+  // tables aren't set up: a missing badge is no reason to withhold the board.
+  let unread = 0;
+  let nudges: NudgeView[] = [];
+  const steps: Record<string, Subtask[]> = {};
+  let tableColumns: TableColumn[] = [];
+  let tableValues: ColumnValues = {};
+  let habits: Habit[] = [];
+  let habitToday = new Date().toISOString().slice(0, 10);
+  let habitFreezes: number | undefined;
   // Set inside the try, acted on after it: redirect() signals by throwing, and
   // the catch below would read that as a database failure.
   let orphanedSession = false;
 
   try {
+    // Every query is a round trip to the database, so the writes go together
+    // and then every read does. They touch different rows, meeting only at
+    // the profile, which each locks before changing it.
+    //
     // Anything past its deadline by more than a day fails before we read, and
-    // finished quests past the retention window are cleared out.
-    sweptCount = (await sweepOverdue()).count;
-    await pruneFinished();
-    // Settles habit days that ended unticked as misses. Idempotent, so it runs
-    // on every load — see settle_habits in db/schema.sql.
-    await syncHabits();
+    // finished quests past the retention window are cleared out. Habit days
+    // that ended unticked are settled as misses: idempotent, so it runs on
+    // every load — see settle_habits in db/schema.sql.
+    [{ count: sweptCount }] = await Promise.all([sweepOverdue(), pruneFinished(), syncHabits()]);
 
-    const [profileRows, categoryRows, todoRows] = await Promise.all([
+    const [profileRows, categoryRows, todoRows, unreadCount, nudgeRows, stepRows, table, habitBoard] = await Promise.all([
       sql`select * from profiles where id = ${userId}::uuid`,
       sql`select * from categories where user_id = ${userId}::uuid order by sort_order`,
       // Same rule as byDeadline() on the client: soonest first, undated last.
       sql`select * from todos where user_id = ${userId}::uuid
            order by due_date asc nulls last, created_at asc`,
+      unreadTotal().catch(() => 0), // companions aren't set up yet
+      // Nudges from companions that haven't been seen.
+      unseenNudges(userId).catch((): NudgeView[] => []), // the village isn't set up yet
+      (sql`
+        select id, todo_id, title, done, position
+          from subtasks
+         where user_id = ${userId}::uuid
+         order by todo_id, position
+      ` as unknown as Promise<Subtask[]>).catch((): Subtask[] => []), // steps aren't set up yet
+      // The table's custom columns and their values.
+      loadTableData().catch(() => null), // custom columns aren't set up yet
+      listHabits().catch(() => null), // habits aren't set up yet
     ]);
 
     profile = (profileRows as Profile[])[0] ?? null;
     categories = categoryRows as Category[];
     todos = (todoRows as Record<string, unknown>[]).map(normalizeTodo);
+    unread = unreadCount;
+    nudges = nudgeRows;
+    // Grouped here rather than passed down flat so every row doesn't
+    // re-filter the whole set on each render.
+    for (const s of stepRows) (steps[s.todo_id] ??= []).push(s);
+    if (table) ({ columns: tableColumns, values: tableValues } = table);
+    if (habitBoard) ({ habits, today: habitToday, freezes: habitFreezes } = habitBoard);
 
     // A profile can be missing if a user row was created outside the app.
     if (!profile) {
@@ -82,57 +113,6 @@ export default async function Home({
   if (orphanedSession) return <StaleSessionNotice />;
 
   if (!profile) return <SetupNotice message="Could not create your profile." />;
-
-  // Its own try/catch: this is the only read here that needs the social tables, and
-  // a missing badge is not a reason to withhold the whole board.
-  let unread = 0;
-  try {
-    unread = await unreadTotal();
-  } catch {
-    /* companions aren't set up yet */
-  }
-
-  // Nudges from companions that haven't been seen.
-  let nudges: NudgeView[] = [];
-  try {
-    nudges = await unseenNudges(userId);
-  } catch {
-    /* the village isn't set up yet */
-  }
-
-  // Likewise for subtasks. Grouped here rather than passed down flat so
-  // every row doesn't re-filter the whole set on each render.
-  const steps: Record<string, Subtask[]> = {};
-  try {
-    const rows = (await sql`
-      select id, todo_id, title, done, position
-        from subtasks
-       where user_id = ${userId}::uuid
-       order by todo_id, position
-    `) as Subtask[];
-    for (const s of rows) (steps[s.todo_id] ??= []).push(s);
-  } catch {
-    /* steps aren't set up yet */
-  }
-
-  // And for the table's custom columns and their values.
-  let tableColumns: TableColumn[] = [];
-  let tableValues: ColumnValues = {};
-  try {
-    ({ columns: tableColumns, values: tableValues } = await loadTableData());
-  } catch {
-    /* custom columns aren't set up yet */
-  }
-
-  // Habits and their log, a section of their own.
-  let habits: Habit[] = [];
-  let habitToday = new Date().toISOString().slice(0, 10);
-  let habitFreezes: number | undefined;
-  try {
-    ({ habits, today: habitToday, freezes: habitFreezes } = await listHabits());
-  } catch {
-    /* habits aren't set up yet */
-  }
 
   return (
     <Dashboard

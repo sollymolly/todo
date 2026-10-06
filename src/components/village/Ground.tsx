@@ -52,6 +52,11 @@ const GRASS_TINT: Record<Theme, string | null> = {
   forest: "rgba(10,50,20,0.3)",
   spring: "rgba(170,230,120,0.22)",
   snowy: "rgba(240,246,255,0.82)",
+  // Planets: hardly grass at all.
+  dust: "rgba(196,92,48,0.72)",
+  moon: "rgba(176,176,184,0.86)",
+  nebula: "rgba(112,56,168,0.62)",
+  glacier: "rgba(150,214,236,0.74)",
 };
 
 /** The railway along the bottom: a gravel bed, sleepers, two rails. In px, at 1×. */

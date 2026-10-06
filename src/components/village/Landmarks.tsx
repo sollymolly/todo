@@ -285,7 +285,18 @@ export function Station({ name }: { name: string }) {
       <rect x="95" y="18" width="2" height="9" fill={OUTLINE} />
       <rect x="95" y="25" width="7" height="2" fill={OUTLINE} />
       <rect x="40" y="46" width="112" height="16" fill="#e8dcc0" stroke={OUTLINE} strokeWidth="2" />
-      <text x="96" y="58" textAnchor="middle" fontSize="10" fontWeight="700" fill={OUTLINE} fontFamily="Georgia, serif">
+      {/* A long name (a planet's can be) squeezed to fit the board. */}
+      <text
+        x="96"
+        y="58"
+        textAnchor="middle"
+        fontSize={name.length > 16 ? Math.max(6, Math.round(160 / name.length)) : 10}
+        textLength={name.length > 16 ? 104 : undefined}
+        lengthAdjust="spacingAndGlyphs"
+        fontWeight="700"
+        fill={OUTLINE}
+        fontFamily="Georgia, serif"
+      >
         {name.toUpperCase()}
       </text>
       {[22, 52, 140, 160].map((x) => (

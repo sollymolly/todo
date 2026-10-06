@@ -38,7 +38,7 @@ import {
   type Status,
 } from "@/lib/village";
 import { MyQuestSwitch, QuestPicker, RhythmPicker, StartSessionForm, useMyQuests } from "@/components/village/SessionControls";
-import { villageInfo } from "@/components/village/world";
+import { villageInfo, type PlanetInfo } from "@/components/village/world";
 import { ownsGood, useShop } from "@/components/village/shop-state";
 import TreatArt from "@/components/village/Treat";
 import { treatById } from "@/lib/bakery";
@@ -368,12 +368,18 @@ function JoinButton({ session, label }: { session: SessionView; label: string })
 
 export function MyHousePanel({
   me,
+  house,
+  village,
   notes,
   onLook,
   onMove,
   onClose,
 }: {
   me: Stats;
+  /** How my house here looks: on a planet, the one I have on it. */
+  house: HouseLook;
+  /** Where I am, so the house there is the one saved. */
+  village: number;
   notes: { id: string; from: string; body: string; treat: string | null; at: number; read: boolean }[];
   onLook: (look: HouseLook) => void;
   /** Pick an empty lot to move to. */
@@ -382,7 +388,7 @@ export function MyHousePanel({
 }) {
   const [tab, setTab] = useState<"notes" | "house">(notes.length ? "notes" : "house");
   const [list, setList] = useState(notes);
-  const [look, setLook] = useState(me.house);
+  const [look, setLook] = useState(house);
   // Roof colours bought at the store join the rest (shop-state.ts).
   const shop = useShop();
   const [saving, setSaving] = useState(false);
@@ -504,7 +510,7 @@ export function MyHousePanel({
             disabled={saving}
             onClick={async () => {
               setSaving(true);
-              const saved = await saveHouse(look).catch(() => null);
+              const saved = await saveHouse(look, village).catch(() => null);
               if (saved) onLook(saved);
               setSaving(false);
             }}
@@ -529,6 +535,7 @@ export function HallPanel({
   sheets,
   me,
   spot = "hall",
+  planets = [],
   onClose,
 }: {
   sessions: SessionView[];
@@ -536,6 +543,8 @@ export function HallPanel({
   me: Stats;
   /** Opened at the town hall, a library desk or a bakery table: where a new table goes. */
   spot?: Spot;
+  /** The planets I'm on: a table on one is named by it. */
+  planets?: PlanetInfo[];
   onClose: () => void;
 }) {
   const { pulse, skew } = useSessionStore();
@@ -566,7 +575,7 @@ export function HallPanel({
                 <p className="text-sm font-semibold text-mud-900">
                   {isMine ? "Your table" : `${host?.villager.name ?? "A"}'s table`}
                   <span className="ml-1.5 text-xs font-normal text-mud-500">
-                    · {villageInfo(s.village ?? 0).name} {SPOT_LABEL[s.spot ?? "hall"]}
+                    · {villageInfo(s.village ?? 0, planets).name} {SPOT_LABEL[s.spot ?? "hall"]}
                   </span>
                 </p>
                 <p className="text-xs tabular-nums text-mud-600">

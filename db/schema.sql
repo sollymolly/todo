@@ -614,7 +614,7 @@ create unique index if not exists session_members_one_open
 -- Talk in a shared space. Short, plain text, deleted after an hour.
 create table if not exists space_chat (
   id         uuid primary key default gen_random_uuid(),
-  /* 'inside:<owner id>', 'arena' or 'hall' */
+  /* 'inside:<owner id>' (on a planet, 'inside:<owner id>:<village>'), 'arena:<village>', 'hall:<village>'… */
   space      text not null check (length(space) <= 60),
   author_id  uuid not null references users(id) on delete cascade,
   body       text not null check (length(body) between 1 and 140),
@@ -664,6 +664,64 @@ create unique index if not exists duels_one_per_arena on duels (village)
  where status in ('pending', 'active');
 create index if not exists duels_a_idx on duels(a_id, created_at desc);
 create index if not exists duels_b_idx on duels(b_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Planets: private, invite-only worlds (src/lib/planet-actions.ts). Each is a
+-- village of its own — the same layout, with its own town hall, arena and
+-- shops — that only its members can go to, by rocket from any station. Its
+-- village number is 100000 + id (world.ts, PLANET_BASE), so presence, tables,
+-- duels and talk key on it just as they do on a public village's.
+--
+-- Whoever founds one owns it: they name it, invite companions or share its
+-- code, and can take anyone off it. Members have a house there of its own —
+-- its own look, rooms and lot — apart from their house in the public villages.
+-- ---------------------------------------------------------------------------
+create table if not exists planets (
+  id         serial primary key,
+  owner_id   uuid not null references users(id) on delete cascade,
+  name       text not null check (length(name) between 1 and 30),
+  look       text not null default 'dust' check (look in ('dust', 'moon', 'nebula', 'glacier')),
+  /* Anyone with it can join. The owner can change it, which stops the old one working. */
+  code       text not null unique check (code ~ '^[A-Z0-9]{8}$'),
+  created_at timestamptz not null default now()
+);
+create index if not exists planets_owner_idx on planets(owner_id);
+
+-- Who's on each planet, the owner included.
+create table if not exists planet_members (
+  planet_id integer not null references planets(id) on delete cascade,
+  user_id   uuid not null references users(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (planet_id, user_id)
+);
+create index if not exists planet_members_user_idx on planet_members(user_id);
+
+-- Invitations from the owner to a companion, waiting for a yes or no.
+create table if not exists planet_invites (
+  planet_id  integer not null references planets(id) on delete cascade,
+  user_id    uuid not null references users(id) on delete cascade,
+  invited_by uuid not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (planet_id, user_id)
+);
+create index if not exists planet_invites_user_idx on planet_invites(user_id);
+
+-- A member's house on a planet, on lot `slot` of its 24 (world.ts, plotAt):
+-- like `houses`, but one per planet, and gone with the membership.
+create table if not exists planet_houses (
+  planet_id  integer not null,
+  user_id    uuid not null,
+  slot       integer not null check (slot between 0 and 23),
+  slot_at    timestamptz not null default now(),
+  style      text not null default 'timber' check (style in ('timber', 'stone', 'brick')),
+  roof       text not null default 'red' check (length(roof) <= 20),
+  garden     text not null default 'flowers' check (garden in ('flowers', 'vegetables', 'hedges')),
+  interior   jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (planet_id, user_id),
+  foreign key (planet_id, user_id) references planet_members(planet_id, user_id) on delete cascade
+);
+create unique index if not exists planet_houses_slot_key on planet_houses(planet_id, slot);
 
 -- ===========================================================================
 -- Functions. Defined after every table: SQL-language bodies are checked

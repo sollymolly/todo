@@ -111,7 +111,7 @@ export type Facing = 0 | 1 | 2 | 3; // LPC rows: up, left, down, right
 export type Grid = { w: number; h: number; blocked: boolean[][] };
 
 export type World = {
-  /** Which village (plot / PLOTS_PER_VILLAGE), its name and look. */
+  /** Which village (plot / PLOTS_PER_VILLAGE; a planet from PLANET_BASE up), its name and look. */
   v: number;
   name: string;
   theme: Theme;
@@ -155,9 +155,10 @@ export const BUILDINGS: LandmarkKind[] = ["store", "library", "bakery"];
 /**
  * The look of a village: how its grass and trees are tinted (Ground.tsx,
  * Village.tsx) and how thick its woods are. The first is the meadow the
- * village always was; the rest follow in turn.
+ * village always was; the rest follow in turn. Planets have looks of their
+ * own (PLANET_LOOKS), picked by whoever founds one.
  */
-export type Theme = "meadow" | "forest" | "autumn" | "snowy" | "spring";
+export type Theme = "meadow" | "forest" | "autumn" | "snowy" | "spring" | PlanetLook;
 const THEMES: Theme[] = ["meadow", "autumn", "forest", "spring", "snowy"];
 
 const NAMES = [
@@ -165,8 +166,44 @@ const NAMES = [
   "Stonebridge", "Fernley", "Hollowmere", "Kingsrest", "Larkspur", "Mossgate", "Fairhaven", "Briarwood",
 ];
 
-/** A village's name and look, the same for everyone. */
-export function villageInfo(v: number): { name: string; theme: Theme } {
+/* ----------------------------------------------------------------- planets */
+
+/**
+ * Private, invite-only worlds (src/lib/planets.ts). Each is a village of its
+ * own, laid out like any other, numbered from PLANET_BASE up (db: planets.id
+ * + PLANET_BASE) — so everything keyed on a village number (presence, tables,
+ * duels, talk) works there unchanged, and never meets a public village's.
+ */
+export const PLANET_BASE = 100_000;
+export const isPlanet = (v: number) => v >= PLANET_BASE;
+export const planetVillage = (id: number) => PLANET_BASE + id;
+export const planetIdOf = (v: number) => v - PLANET_BASE;
+/**
+ * Which of someone's houses a village has: every public village shares the
+ * one (0), and each planet has its own.
+ */
+export const houseWorld = (v: number) => (isPlanet(v) ? v : 0);
+
+export type PlanetLook = "dust" | "moon" | "nebula" | "glacier";
+export const PLANET_LOOKS: { look: PlanetLook; label: string; swatch: string }[] = [
+  { look: "dust", label: "Red dust", swatch: "#c0613a" },
+  { look: "moon", label: "Moon rock", swatch: "#a7a9b0" },
+  { look: "nebula", label: "Nebula", swatch: "#8a4fc0" },
+  { look: "glacier", label: "Glacier", swatch: "#6fc4dc" },
+];
+
+/** A planet's name and look, as the page knows it (VillageData.planets). */
+export type PlanetInfo = { v: number; name: string; look: PlanetLook };
+
+/**
+ * A village's name and look, the same for everyone. A planet's come from
+ * `planets`; one that isn't among them is one I'm not on.
+ */
+export function villageInfo(v: number, planets: PlanetInfo[] = []): { name: string; theme: Theme } {
+  if (isPlanet(v)) {
+    const p = planets.find((x) => x.v === v);
+    return { name: p?.name ?? "A private planet", theme: p?.look ?? "dust" };
+  }
   const round = Math.floor(v / NAMES.length);
   return { name: NAMES[v % NAMES.length] + (round ? ` ${round + 1}` : ""), theme: THEMES[v % THEMES.length] };
 }
@@ -242,10 +279,11 @@ export function plotAt(n: number): { x: number; y: number } {
 /**
  * Village `v`, the same on every screen. `owners[i]` is whose house is on
  * its i-th plot — plot v × PLOTS_PER_VILLAGE + i (db: houses.plot) — or
- * nothing for an empty lot, and `tiers[i]` how big that house is.
+ * nothing for an empty lot, and `tiers[i]` how big that house is. `planets`:
+ * the planets I'm on, for a planet's name and look.
  */
-export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | null)[] = []): World {
-  const { name, theme } = villageInfo(v);
+export function buildWorld(v: number, owners: (string | null)[], tiers: (Tier | null)[] = [], planets: PlanetInfo[] = []): World {
+  const { name, theme } = villageInfo(v, planets);
   const bands = BANDS;
   const h = RAIL_TOP + 7 + MARGIN;
   const w = WORLD_W;

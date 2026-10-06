@@ -4,6 +4,9 @@
 
 ## Done
 
+- Planets: private, invite-only villages reached by rocket from the station (Trains and Rockets tabs). Join by invitation or code; each member has a separate house there. Only OWNER_EMAIL can found planets for now (`canFound` in src/lib/planet-server.ts). **Needs `db/schema.sql` run once in Neon (`planets`, `planet_members`, `planet_invites`, `planet_houses`)**; until then the village works as before, and joining or founding a planet says they aren't set up.
+- Privacy policy bumped to version 7 for planets.
+
 - Village start: everyone begins in their own room beside their bed (the page loads your room with the village, so there's no flash of outdoors); the door leads out to your own front step. No bed: just inside the door.
 - Journal: a notebook on your desk at home (your table if there's no desk; a bare tent now has a small table). Walk up and press E, or tap it. Entries autosave, are dated, can be deleted, and are only ever shown to their owner. Plain text, like quest notes, not encrypted. **Needs `db/schema.sql` run once in Neon (`journal_entries`)**; until then the panel says it isn't set up.
 - Privacy policy bumped to version 6 for the journal (everyone is asked to agree again on their next request).

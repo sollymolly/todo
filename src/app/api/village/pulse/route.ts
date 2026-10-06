@@ -44,10 +44,13 @@ function readPos(raw: unknown): Pos | null {
   return { x, y, facing: (Number.isInteger(f) && f >= 0 && f <= 3 ? f : 2) as Pos["facing"] };
 }
 
-/** Which village they're in: a small whole number, or none (wherever they last were). */
+/**
+ * Which village they're in: a small whole number (a planet's from 100000 up;
+ * whether they're on it is pulse's to check), or none (wherever they last were).
+ */
 function readVillage(raw: unknown): number | null {
   const v = Number(raw);
-  return raw != null && Number.isInteger(v) && v >= 0 && v < 100_000 ? v : null;
+  return raw != null && Number.isInteger(v) && v >= 0 && v < 1_000_000 ? v : null;
 }
 
 /** Which of someone's open apps is asking: an id it made up for itself. */

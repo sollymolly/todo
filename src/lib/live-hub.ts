@@ -4,6 +4,8 @@ import { CHANNEL, poke, publishLive, type LiveMessage } from "@/lib/live";
 import { HIT_COOLDOWN_MS, HIT_GRACE_MS, type Facing, type Stance } from "@/lib/duel";
 import { landHit } from "@/lib/village-rooms";
 import { readSpace } from "@/lib/village";
+import { isMember } from "@/lib/planet-server";
+import { isPlanet, planetIdOf } from "@/components/village/world";
 import { cleanHeading } from "@/lib/heading";
 
 /** A village's arena: where stances are kept and swings judged. */
@@ -46,6 +48,8 @@ type Conn = {
   pumping: boolean;
   lastPosAt: number;
   lastHit: number;
+  /** Spaces asked for so far: a join checked after a newer one was asked for is dropped. */
+  joins: number;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -88,13 +92,17 @@ function subscriber(): Redis {
   return sub;
 }
 
-/** May this person be in this space at all? The same rule the check-in uses. */
-function allowed(c: Conn, space: string): boolean {
+/**
+ * May this person be in this space at all? The same rule the check-in uses:
+ * a house only if it's theirs or a companion's, and a planet (anywhere on
+ * it, houses included) only if they're on it — asked each time, so someone
+ * taken off a planet can't come back by reconnecting.
+ */
+async function allowed(c: Conn, space: string): Promise<boolean> {
   const s = readSpace(space);
-  if (s && s.kind !== "inside" && s.kind !== "hall") return true;
-  if (!space.startsWith("inside:")) return false;
-  const host = space.slice("inside:".length);
-  return UUID.test(host) && (host === c.me || c.known.has(host));
+  if (!s || s.kind === "hall") return false;
+  if (s.kind === "inside" && !(s.host && UUID.test(s.host) && (s.host === c.me || c.known.has(s.host)))) return false;
+  return isPlanet(s.village) ? isMember(c.me, planetIdOf(s.village)) : true;
 }
 
 function leave(c: Conn) {
@@ -119,10 +127,12 @@ function leave(c: Conn) {
   }
 }
 
-function join(c: Conn, space: string) {
+async function join(c: Conn, space: string) {
   if (c.space === space) return;
+  const n = ++c.joins;
   leave(c);
-  if (!allowed(c, space)) return;
+  // Somewhere else asked for, or the socket gone, while that was checked: never mind.
+  if (!(await allowed(c, space).catch(() => false)) || n !== c.joins || c.ws.readyState !== c.ws.OPEN) return;
   c.space = space;
   let conns = bySpace.get(space);
   if (!conns) {
@@ -214,7 +224,7 @@ async function onHit(c: Conn) {
 
 /** Takes over a freshly upgraded socket for the rest of its life. */
 export function attach(ws: WebSocket, me: string, known: Set<string>) {
-  const c: Conn = { ws, me, known, space: null, nextPos: null, pumping: false, lastPosAt: 0, lastHit: 0 };
+  const c: Conn = { ws, me, known, space: null, nextPos: null, pumping: false, lastPosAt: 0, lastHit: 0, joins: 0 };
 
   ws.on("message", (data) => {
     let m: { t?: unknown; space?: unknown };
@@ -224,8 +234,11 @@ export function attach(ws: WebSocket, me: string, known: Set<string>) {
       return;
     }
     if (m.t === "join") {
-      if (typeof m.space === "string" && m.space.length <= 60) join(c, m.space);
-      else leave(c);
+      if (typeof m.space === "string" && m.space.length <= 60) void join(c, m.space);
+      else {
+        c.joins++;
+        leave(c);
+      }
     } else if (m.t === "pos") onPos(c, m as { x?: unknown; y?: unknown; f?: unknown; g?: unknown; j?: unknown; h?: unknown });
     else if (m.t === "hit") void onHit(c);
   });

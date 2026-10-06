@@ -42,6 +42,17 @@ export function formatWeek(week: string): string {
    -------------------------------------------------------------------------- */
 export const UPDATES: Update[] = [
   {
+    week: "2026-10-05",
+    title: "Private planets, by rocket",
+    items: [
+      "New: planets. A planet is a private village of its own, out among the stars, with its own town hall, arena, store, library and bakery, and only the people on it can go there. Take a rocket from any station: the station now has a Trains tab and a Rockets tab.",
+      "Everyone on a planet has a house there of its own, apart from their house in the villages: decorate it, change its look, or move it to another lot, and your house back in the villages stays just as it was.",
+      "Get on a planet by invitation (a red dot on the Station button means one's waiting; say yes or no on the Rockets tab) or by typing in its code, like ABCD-2345, from whoever gave it to you.",
+      "Whoever founds a planet names it, picks its look (red dust, moon rock, nebula or glacier), invites companions, shares or changes its code, and can take people off it. Anyone else on it can leave whenever they like. Founding planets isn't open to everyone yet, but anyone can be invited to one.",
+      "Companions who aren't on a planet with you only see that you're on a private planet, never which one. The privacy policy has been updated to cover planets, and you'll be asked to agree to it once.",
+    ],
+  },
+  {
     week: "2026-09-28",
     title: "A village for you and your companions, work sessions, and HabitKnight as an app",
     items: [

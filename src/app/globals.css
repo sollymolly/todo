@@ -249,9 +249,26 @@ body {
 .ride-far svg { animation: ride-scroll 9s linear infinite; }
 .ride-near svg { animation: ride-scroll 3.5s linear infinite; }
 .ride-sleepers { animation: ride-scroll 0.6s linear infinite; }
-@keyframes ride-rock { 0%, 100% { transform: translate(-50%, 0) } 50% { transform: translate(-50%, -2px) } }
+/* Only the rock: Tailwind's -translate-x-1/2 centres the train with `translate`, which adds to `transform`. */
+@keyframes ride-rock { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-2px) } }
 .ride-train { animation: ride-rock 0.35s ease-in-out infinite; }
 .ride-smoke rect { animation: smoke-rise 1.2s ease-out infinite; transform-box: fill-box; }
+
+/* The rocket ride to a planet: stars stream past, the rocket shudders on its
+   flame, and the planet ahead grows as it comes in. */
+@keyframes rocket-stars { from { transform: translateY(0) } to { transform: translateY(50%) } }
+.rocket-far { animation: rocket-stars 6s linear infinite; }
+.rocket-near { animation: rocket-stars 1.6s linear infinite; }
+@keyframes rocket-shake {
+  0%, 100% { transform: translate(0, 0) }
+  25% { transform: translate(-1px, 1px) }
+  75% { transform: translate(1px, -1px) }
+}
+.rocket-ship { animation: rocket-shake 0.12s linear infinite; }
+@keyframes rocket-flame { 0%, 100% { transform: scaleY(1) } 50% { transform: scaleY(0.7) } }
+.rocket-flame { animation: rocket-flame 0.15s ease-in-out infinite; transform-box: fill-box; transform-origin: top center; }
+@keyframes rocket-approach { from { transform: scale(0.35) } to { transform: scale(1.5) } }
+.rocket-planet { animation: rocket-approach 3.4s ease-in forwards; transform-origin: center; }
 
 /* A fire in the hearth. */
 @keyframes fire-flicker {
@@ -291,7 +308,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .char-idle, .char-cape, .house-smoke rect, .walker-hit, .fire-flicker, .fountain-ripple, .fountain-spray,
-  .ride-far svg, .ride-near svg, .ride-sleepers, .ride-train, .ride-smoke rect, .coin-spin, .coin-pop { animation: none !important; }
+  .ride-far svg, .ride-near svg, .ride-sleepers, .ride-train, .ride-smoke rect, .coin-spin, .coin-pop,
+  .rocket-far, .rocket-near, .rocket-ship, .rocket-flame, .rocket-planet { animation: none !important; }
   .zzz span { animation: none !important; opacity: 1; }
   .zzz span:nth-child(n + 2) { display: none; }
   .mote { display: none; }

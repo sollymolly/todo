@@ -124,13 +124,41 @@ export function poseAt(room: RoomScene, px: number, py: number): Pose | null {
   if (it.k === "bed") return { kind: "lie", x: left + (spec.w * T) / 2, y: top + 54, z: top + spec.h * T + 1, show: 33 };
   const feet = SEAT_FEET[it.k];
   if (feet == null) return null;
-  // A sofa seats two, each on their own cushion; anything else, in the middle.
-  const x = it.k === "sofa" ? (gx + 0.5) * T : left + (spec.w * T) / 2;
+  // A sofa seats two, each on their own cushion; anything else, in the middle
+  // (of the table, for a chair pulled up to one).
+  const x = it.k === "sofa" ? (gx + 0.5) * T : left + (spec.w * T) / 2 + seatNudge(room.interior, i);
   // Pulled up to a table or a desk: sat lower, so it hides them from the
   // waist down and the chair's back shows over their head.
   const ahead = pieceAt(room.interior, gx, it.y + 2 + spec.h);
   const tucked = ahead >= 0 && (room.interior.items[ahead].k === "table" || room.interior.items[ahead].k === "desk");
   return { kind: "sit", x, y: top + feet + (tucked ? 15 : 0), z: top + spec.h * T + 1, show: tucked ? 64 : 50 };
+}
+
+/**
+ * A seat pulled up to a wider table or desk, behind it or in front, and the
+ * only one on that side: px to slide it sideways so it's drawn (and sat on)
+ * in the middle of the table. 0 for anything else.
+ */
+export function seatNudge(interior: Interior, index: number): number {
+  const s = interior.items[index];
+  if (!s || s.k === "sofa" || restOf(s.k) !== "sit") return 0;
+  const { w: sw, h: sh } = FURNITURE[s.k];
+  const overlaps = (x: number, w: number, ox: number, ow: number) => x < ox + ow && x + w > ox;
+  for (const t of interior.items) {
+    if (t.k !== "table" && t.k !== "desk") continue;
+    const { w: tw, h: th } = FURNITURE[t.k];
+    if (tw <= sw || !overlaps(s.x, sw, t.x, tw)) continue;
+    const behind = s.y + sh === t.y;
+    if (!behind && s.y !== t.y + th) continue;
+    // Another seat on the same side: leave them both where they are.
+    const shared = interior.items.some((o, j) => {
+      if (j === index || restOf(o.k) !== "sit") return false;
+      const { w: ow, h: oh } = FURNITURE[o.k];
+      return overlaps(o.x, ow, t.x, tw) && (behind ? o.y + oh === t.y : o.y === t.y + th);
+    });
+    return shared ? 0 : (t.x + tw / 2 - (s.x + sw / 2)) * T;
+  }
+  return 0;
 }
 
 /**
@@ -164,18 +192,19 @@ export function restSpot(room: RoomScene, index: number, from: { x: number; y: n
  * The piece the notebook sits on: my first desk, or failing that my first
  * table. In grid tiles, with its index among the room's items — and the seat
  * that goes with it (-1 if none): one tucked in behind it, or else pulled up
- * at its side or in front. `col`: the seat's column nearest the middle of the
- * piece, where the notebook is put.
+ * at its side or in front. `mid`: where the notebook is put, as the grid x of
+ * its middle — in front of the seat (the middle of the piece, if the seat is
+ * drawn there), or at the right-hand end if there's no seat.
  */
 export function journalSpot(
   interior: Interior
-): { index: number; x: number; y: number; w: number; kind: "desk" | "table"; seat: number; col: number } | null {
+): { index: number; x: number; y: number; w: number; kind: "desk" | "table"; seat: number; mid: number } | null {
   for (const kind of ["desk", "table"] as const) {
     const index = interior.items.findIndex((it) => it.k === kind);
     if (index < 0) continue;
     const it = interior.items[index];
     const w = FURNITURE[kind].w;
-    const spot = { index, x: it.x + 1, y: it.y + 2, w, kind, seat: -1, col: -1 };
+    const spot = { index, x: it.x + 1, y: it.y + 2, w, kind, seat: -1, mid: it.x + w + 0.5 };
     // Floor columns the piece covers, and how a seat at (x, y, sw, sh) lies to it.
     const overlaps = (x: number, sw: number) => x < it.x + w && x + sw > it.x;
     const rank = (s: { x: number; y: number }, sw: number, sh: number) =>
@@ -191,7 +220,7 @@ export function journalSpot(
       // The seat's column closest to the piece's middle.
       const mid = it.x + w / 2 - 0.5;
       const c = Math.max(s.x, Math.min(s.x + sw - 1, Math.round(mid)));
-      spot.col = Math.max(it.x, Math.min(it.x + w - 1, c)) + 1;
+      spot.mid = Math.max(it.x, Math.min(it.x + w - 1, c)) + 1.5 + seatNudge(interior, i) / T;
     });
     return spot;
   }

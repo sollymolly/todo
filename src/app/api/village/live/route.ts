@@ -26,7 +26,8 @@ export async function GET() {
   if (!liveEnabled()) return new Response("live village is off", { status: 503 });
 
   // Friends are read once per connection; one made mid-connection is picked
-  // up at the next reconnect, at most a few minutes later.
+  // up at the next reconnect, at most a few minutes later. (Planets are
+  // checked as each is joined: see live-hub.ts.)
   const known = new Set(await friendIdsOf(me).catch(() => [] as string[]));
 
   try {
