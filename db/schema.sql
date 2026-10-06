@@ -534,6 +534,16 @@ create table if not exists journal_entries (
 );
 create index if not exists journal_entries_user_idx on journal_entries(user_id, created_at desc);
 
+-- An entry also has a topic, how the day felt and the weather (ids from
+-- src/lib/journal.ts), and its day and time (created_at) can be changed. One
+-- with a topic and nothing written yet is kept.
+alter table journal_entries add column if not exists topic text not null default '' check (length(topic) <= 80);
+alter table journal_entries add column if not exists mood text check (length(mood) <= 20);
+alter table journal_entries add column if not exists weather text check (length(weather) <= 20);
+alter table journal_entries drop constraint if exists journal_entries_body_check;
+alter table journal_entries add constraint journal_entries_body_check
+  check (length(body) <= 10000 and (length(body) >= 1 or length(topic) >= 1));
+
 -- A treat from the village bakery (src/lib/bakery.ts) can come with a note, or
 -- be left on its own: then the note may be empty.
 alter table door_notes add column if not exists treat text check (length(treat) <= 20);

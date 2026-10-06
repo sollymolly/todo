@@ -12,7 +12,7 @@ import type { Tier } from "@/lib/village";
    -------------------------------------------------------------------------- */
 
 export type FurnitureKind =
-  | "bed" | "table" | "chair" | "stool" | "plant" | "rug" | "lamp" | "chest"
+  | "bed" | "table" | "chair" | "stool" | "plant" | "rug" | "lamp" | "wardrobe"
   | "bookshelf" | "desk" | "sofa" | "armorstand" | "fireplace" | "trophy" | "throne"
   | "painting" | "window" | "clock" | "mirror" | "banner"
   | "piano" | "aquarium" | "telescope" | "stainedglass"
@@ -29,7 +29,7 @@ export const FURNITURE: Record<FurnitureKind, { label: string; w: number; h: num
   plant: { label: "Potted plant", w: 1, h: 1, layer: "floor", level: 1 },
   rug: { label: "Rug", w: 3, h: 2, layer: "rug", level: 1 },
   lamp: { label: "Lamp", w: 1, h: 1, layer: "floor", level: 2 },
-  chest: { label: "Chest", w: 1, h: 1, layer: "floor", level: 2 },
+  wardrobe: { label: "Wardrobe", w: 1, h: 1, layer: "floor", level: 1 },
   bookshelf: { label: "Bookshelf", w: 2, h: 1, layer: "floor", level: 3 },
   desk: { label: "Desk", w: 2, h: 1, layer: "floor", level: 3 },
   sofa: { label: "Sofa", w: 2, h: 1, layer: "floor", level: 4 },
@@ -93,7 +93,7 @@ export const MAX_ITEMS = 40;
 
 /** Floor size, in tiles, by the size of the house. */
 export const ROOM: Record<Tier, { cols: number; rows: number }> = {
-  tent: { cols: 6, rows: 4 },
+  tent: { cols: 7, rows: 4 },
   hut: { cols: 7, rows: 5 },
   cottage: { cols: 9, rows: 6 },
   house: { cols: 11, rows: 7 },
@@ -108,23 +108,26 @@ export function doorOf(tier: Tier) {
   return { x, clear: [{ x, y: rows - 1 }, { x, y: rows - 2 }] };
 }
 
-/** A furnished room for a house that hasn't been decorated yet. */
+/**
+ * A furnished room for a house that hasn't been decorated yet. The back wall
+ * is symmetric: a window near each end and a painting in the middle, over
+ * the door. The chair is tucked in behind the table, facing the room, and
+ * the wardrobe stands in the front corner.
+ */
 export function defaultInterior(tier: Tier): Interior {
   const { cols, rows } = ROOM[tier];
+  const mid = Math.floor(cols / 2);
   const items: Placed[] = [
     { k: "window", x: 1, y: 0 },
-    { k: "painting", x: cols - 2, y: 0 },
+    { k: "painting", x: mid, y: 0 },
+    { k: "window", x: cols - 2, y: 0 },
     { k: "bed", x: 0, y: 0 },
     { k: "plant", x: cols - 1, y: 0 },
+    { k: "rug", x: mid - 1, y: Math.max(1, Math.floor(rows / 2) - 1) },
+    { k: "table", x: cols - 3, y: rows - 2 },
+    { k: "chair", x: cols - 3, y: rows - 3 },
+    { k: "wardrobe", x: 0, y: rows - 1 },
   ];
-  if (cols >= 7) {
-    items.push({ k: "rug", x: Math.floor(cols / 2) - 1, y: Math.max(1, Math.floor(rows / 2) - 1) });
-    items.push({ k: "table", x: cols - 3, y: rows - 2 }, { k: "chair", x: cols - 4, y: rows - 2 });
-  } else {
-    // A tent: a small table by the back wall, with the stool in the corner.
-    items.push({ k: "table", x: cols - 2, y: 1 }, { k: "stool", x: cols - 1, y: rows - 1 });
-  }
-  if (cols >= 9) items.push({ k: "chest", x: 0, y: rows - 1 }, { k: "window", x: cols - 4, y: 0 });
   if (cols >= 11) items.push({ k: "bookshelf", x: 3, y: 0 }, { k: "lamp", x: 2, y: 0 });
   return { wall: "cream", floor: "oak", items: cleanItems(items, tier, 99) };
 }
@@ -153,7 +156,9 @@ function cleanItems(raw: unknown[], tier: Tier, level: number, has: (item: strin
   const rugs = new Set<string>();
   const out: Placed[] = [];
   for (const it of raw.slice(0, MAX_ITEMS * 2)) {
-    const p = it as Partial<Placed>;
+    // The chest became the wardrobe: a room saved with one has one.
+    const p = { ...(it as Partial<Placed>) };
+    if ((p.k as string) === "chest") p.k = "wardrobe";
     const spec = p.k && FURNITURE[p.k as FurnitureKind];
     if (!spec || level < spec.level || (spec.shop && !has(`furniture:${p.k}`))) continue;
     const x = Math.round(Number(p.x));

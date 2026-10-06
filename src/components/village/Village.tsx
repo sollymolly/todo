@@ -15,12 +15,29 @@ import { goodById } from "@/lib/shop";
 import { FencePiece, FOOT, GATE, LotGate, REACH } from "@/components/village/Fence";
 import { Bakery, Fountain, GardenGround, Hedge, Library, ParkGround, Station, Store, TownHall, Well } from "@/components/village/Landmarks";
 import TrainRide from "@/components/village/TrainRide";
-import { buildArena, buildIndoor, buildRoom, journalSpot, nearJournal, wakeSpot, type ArenaScene, type Indoor, type IndoorScene, type RoomScene } from "@/components/village/rooms";
+import {
+  buildArena,
+  buildIndoor,
+  buildRoom,
+  journalSpot,
+  nearJournal,
+  pieceAt,
+  poseAt,
+  restOf,
+  restSpot,
+  wakeSpot,
+  type ArenaScene,
+  type Indoor,
+  type IndoorScene,
+  type RoomScene,
+} from "@/components/village/rooms";
 import JournalPanel from "@/components/village/JournalPanel";
+import WardrobePanel from "@/components/village/WardrobePanel";
+import CoinPurse from "@/components/village/CoinPurse";
 import { FriendHousePanel, HallPanel, MyHousePanel, Panel, PeoplePanel, type Stats } from "@/components/village/panels";
-import { follow, headingOf, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, step, swingNow, tilesOf, turn, walkTo, type Agent } from "@/components/village/engine";
+import { follow, getUp, headingOf, jumpNow, keepInRing, makeAgent, nudgePlayer, paint, PLAYER_SPEED, restOn, step, swingNow, tilesOf, turn, walkTo, type Agent } from "@/components/village/engine";
 import { ATLAS, buildWorld, inRect, lotFence, PLOTS_PER_VILLAGE, PROPS, T, villageInfo, villageOf, type Grid, type Theme, type World } from "@/components/village/world";
-import { composeAttack, composeHeadings, composeSheet, type AttackSheet } from "@/lib/sprite";
+import { composeAttack, composeHeadings, composeSheet, spriteKey, type AttackSheet } from "@/lib/sprite";
 import { checkIn, keepSeat, patchDuelHp, publishPulse, serverNow, setVillageWhere, useSessionStore } from "@/lib/session-store";
 import { HIT_COOLDOWN_MS } from "@/lib/duel";
 import { useVillageLive } from "@/lib/live-client";
@@ -76,6 +93,7 @@ type Open =
   | { kind: "bakery" }
   | { kind: "desks"; spot: "library" | "bakery" }
   | { kind: "journal" }
+  | { kind: "wardrobe" }
   | null;
 
 type Prompt =
@@ -87,6 +105,9 @@ type Prompt =
   | { kind: "counter" }
   | { kind: "desk" }
   | { kind: "journal" }
+  | { kind: "rest"; index: number; lie: boolean }
+  | { kind: "getup" }
+  | { kind: "wardrobe"; index: number }
   | { kind: "display"; good: string }
   | { kind: "leave" }
   | null;
@@ -136,7 +157,17 @@ const placeKey = (p: Place) => ("hostId" in p ? `${p.kind}:${p.hostId}` : p.kind
 const HOLD_MS = 220;
 
 const promptKey = (p: Prompt) =>
-  !p ? "" : p.kind === "house" ? `house:${p.id}` : p.kind === "indoor" ? `indoor:${p.what}` : p.kind === "display" ? `display:${p.good}` : p.kind;
+  !p
+    ? ""
+    : p.kind === "house"
+      ? `house:${p.id}`
+      : p.kind === "indoor"
+        ? `indoor:${p.what}`
+        : p.kind === "display"
+          ? `display:${p.good}`
+          : p.kind === "rest" || p.kind === "wardrobe"
+            ? `${p.kind}:${p.index}`
+            : p.kind;
 
 export default function Village({ data }: { data: VillageData }) {
   const [me, setMe] = useState<Stats>(data.me);
@@ -301,38 +332,46 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ----------------------------------------------------------- sheets */
 
+  // Made again whenever someone's look changes (a change at the wardrobe,
+  // say): each is kept only if it's still the latest for that look.
+  const sheetKeys = useRef(new Map<string, string>());
   useEffect(() => {
-    let live = true;
     const all: Villager[] = [me, ...neighbours, ...outdoorPeople.map((o) => o.villager), ...roomPeople.map((p) => p.villager)];
     for (const v of all) {
-      if (sheets[v.id]) continue;
+      const key = spriteKey(v.appearance, v.equipped);
+      if (sheetKeys.current.get(v.id) === key) continue;
+      sheetKeys.current.set(v.id, key);
+      const latest = () => sheetKeys.current.get(v.id) === key;
       void composeSheet(v.appearance, v.equipped).then((url) => {
-        if (live && url) setSheets((s) => (s[v.id] ? s : { ...s, [v.id]: url }));
+        if (url && latest()) setSheets((s) => ({ ...s, [v.id]: url }));
       });
       void composeHeadings(v.appearance, v.equipped).then((url) => {
-        if (live && url) setFineSheets((s) => (s[v.id] ? s : { ...s, [v.id]: url }));
+        if (!latest()) return;
+        setFineSheets((s) => {
+          if (url) return { ...s, [v.id]: url };
+          if (!s[v.id]) return s;
+          const next = { ...s };
+          delete next[v.id];
+          return next;
+        });
       });
     }
-    return () => {
-      live = false;
-    };
-  }, [me, neighbours, outdoorPeople, roomPeople, sheets]);
+  }, [me, neighbours, outdoorPeople, roomPeople]);
 
   // Duel animations, for whoever's in the arena with me (and me): built
   // there only, since that's the one place anyone swings.
+  const attackKeys = useRef(new Map<string, string>());
   useEffect(() => {
     if (scene.kind !== "arena") return;
-    let live = true;
     for (const v of [me, ...roomPeople.map((p) => p.villager)]) {
-      if (attacks[v.id]) continue;
+      const key = spriteKey(v.appearance, v.equipped);
+      if (attackKeys.current.get(v.id) === key) continue;
+      attackKeys.current.set(v.id, key);
       void composeAttack(v.appearance, v.equipped).then((a) => {
-        if (live && a) setAttacks((s) => (s[v.id] ? s : { ...s, [v.id]: a }));
+        if (a && attackKeys.current.get(v.id) === key) setAttacks((s) => ({ ...s, [v.id]: a }));
       });
     }
-    return () => {
-      live = false;
-    };
-  }, [scene.kind, me, roomPeople, attacks]);
+  }, [scene.kind, me, roomPeople]);
 
   /* --------------------------------------------------------- the grid */
 
@@ -374,10 +413,16 @@ export default function Village({ data }: { data: VillageData }) {
     },
     []
   );
-  // I start beside my bed, in my own room (wakeSpot).
+  // I start the day in bed, in my own room, and the first step gets me up
+  // beside it (wakeSpot). No bed: just inside the door.
   if (player.current == null) {
-    const bed = scene.kind === "room" ? wakeSpot(scene.room) : { x: 0, y: 0 };
-    player.current = makeAgent(me.id, bed.x, bed.y, PLAYER_SPEED);
+    const room = scene.kind === "room" ? scene.room : null;
+    const bed = room ? wakeSpot(room) : { x: 0, y: 0 };
+    const a = makeAgent(me.id, bed.x, bed.y, PLAYER_SPEED);
+    const i = room ? room.interior.items.findIndex((it) => it.k === "bed") : -1;
+    const spot = room && i >= 0 ? restSpot(room, i, bed) : null;
+    if (spot) restOn(a, spot.on.x, spot.on.y, spot.beside, 0);
+    player.current = a;
   }
 
   // Outside: everyone about walks where their own screen has them, as in a
@@ -742,6 +787,7 @@ export default function Village({ data }: { data: VillageData }) {
     let sentKey = "";
     let sentGuard = false;
     let sentAt = 0;
+    let wasResting = !!player.current?.rise;
     const tick = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
@@ -782,8 +828,18 @@ export default function Village({ data }: { data: VillageData }) {
           } else if (!p.path.length) p.moving = false;
         }
       }
-      if ((vx || vy) && !countdown) nudgePlayer(g, p, vx, vy, dt * pace, lastAxis.current);
-      else step(g, p, dt * pace);
+      if ((vx || vy) && !countdown) {
+        // Sitting or in bed: the first step gets me up.
+        getUp(p, t);
+        nudgePlayer(g, p, vx, vy, dt * pace, lastAxis.current);
+      } else step(g, p, dt * pace);
+      // Getting on or off something is a hop: others see it as a jump.
+      if (!!p.rise !== wasResting) {
+        wasResting = !!p.rise;
+        jumps.current++;
+      }
+      const room = sc.kind === "room" ? sc.room : null;
+      p.pose = room ? poseAt(room, p.x, p.y) : null;
       if (fight && !countdown && sc.kind === "arena") keepInRing(p, sc.arena.ring);
       // In a fight, always facing them, so I can back off still on guard.
       const them = fight && !countdown && opponentRef.current ? roomAgents.current.get(opponentRef.current) : null;
@@ -812,6 +868,7 @@ export default function Village({ data }: { data: VillageData }) {
       const others = sc.kind === "out" ? agents.current : roomAgents.current;
       for (const a of others.values()) {
         step(g, a, dt);
+        a.pose = room ? poseAt(room, a.x, a.y) : null;
         paint(a, S, t);
       }
 
@@ -908,12 +965,36 @@ export default function Village({ data }: { data: VillageData }) {
               if (!best && !d.wall && Array.from({ length: d.w }, (_, i) => Math.hypot(tx - (d.x + i + 0.5), ty - (d.y + 0.5))).some((r) => r < 1.4))
                 best = { kind: "display", good: d.good };
           }
+          // In a house: something to sit on (or, at home, my bed), and my wardrobe.
+          if (sc.kind === "room") {
+            const mine = sc.hostId === me.id;
+            let near = 1.3;
+            sc.room.interior.items.forEach((it, index) => {
+              const rest = restOf(it.k);
+              const wardrobe = mine && it.k === "wardrobe";
+              if (!wardrobe && !(rest === "sit" || (rest === "lie" && mine))) return;
+              const { w, h } = FURNITURE[it.k];
+              for (let dy = 0; dy < h; dy++)
+                for (let dx = 0; dx < w; dx++) {
+                  const d = Math.hypot(tx - (it.x + 1 + dx + 0.5), ty - (it.y + 2 + dy + 0.5));
+                  if (d >= near) continue;
+                  near = d;
+                  best = wardrobe ? { kind: "wardrobe", index } : { kind: "rest", index, lie: rest === "lie" };
+                }
+            });
+          }
           const d = Math.hypot(tx - (exit.x + 0.5), ty - (exit.y + 0.5));
           if (d < 1.8) best = { kind: "leave" };
           // My own desk: the notebook. (Over "leave": walking onto the door leaves anyway.)
           if (sc.kind === "room" && sc.hostId === me.id) {
             const spot = journalSpot(sc.room.interior);
             if (spot && nearJournal(spot, tx, ty)) best = { kind: "journal" };
+          }
+          // Sitting or lying down: at my desk, write; anywhere else, get up.
+          if (p.rise && sc.kind === "room") {
+            const spot = sc.hostId === me.id ? journalSpot(sc.room.interior) : null;
+            const on = pieceAt(sc.room.interior, Math.floor(tx), Math.floor(ty));
+            best = spot && spot.seat >= 0 && on === spot.seat ? { kind: "journal" } : { kind: "getup" };
           }
         }
         if (promptKey(best) !== promptKey(promptRef.current)) {
@@ -1027,6 +1108,7 @@ export default function Village({ data }: { data: VillageData }) {
       const plot = plotOf.get(hostId);
       outsideAt.current = plot ? { x: plot.door.x, y: plot.door.y + 1 } : null;
       p.path = [];
+      p.rise = null;
       p.x = room.door.x * T + T / 2;
       p.y = (room.door.y - 1) * T + T / 2 + 8;
       p.dir = 0;
@@ -1048,6 +1130,7 @@ export default function Village({ data }: { data: VillageData }) {
     const p = player.current!;
     outsideAt.current = { x: world.arena.door.x, y: world.arena.door.y + 1 };
     p.path = [];
+    p.rise = null;
     p.x = arena.gate.x * T + T / 2;
     p.y = (arena.gate.y - 1) * T + T / 2 + 8;
     p.dir = 0;
@@ -1070,6 +1153,7 @@ export default function Village({ data }: { data: VillageData }) {
       const p = player.current!;
       outsideAt.current = door ? { x: door.x, y: door.y + 1 } : null;
       p.path = [];
+      p.rise = null;
       p.x = indoor.door.x * T + T / 2;
       p.y = (indoor.door.y - 1) * T + T / 2 + 8;
       p.dir = 0;
@@ -1092,6 +1176,7 @@ export default function Village({ data }: { data: VillageData }) {
     const p = player.current!;
     const back = outsideAt.current ?? { x: world.hall.door.x, y: world.hall.door.y + 2 };
     p.path = [];
+    p.rise = null;
     p.x = back.x * T + T / 2;
     p.y = back.y * T + T / 2 + 8;
     p.dir = 2;
@@ -1125,6 +1210,57 @@ export default function Village({ data }: { data: VillageData }) {
 
   /* ------------------------------------------------------------- input */
 
+  /**
+   * Walk up to piece `index` of the room I'm in and, if I `rest`, sit on it
+   * or lie down on it; then `then`. False if there's no way to it.
+   */
+  const goToPiece = useCallback((index: number, rest: boolean, then?: () => void): boolean => {
+    const sc = sceneRef.current;
+    if (sc.kind !== "room") return false;
+    const p = player.current!;
+    const at = () => ({ x: Math.floor(p.x / T), y: Math.floor((p.y - 8) / T) });
+    // Already on it.
+    if (rest && p.rise && pieceAt(sc.room.interior, at().x, at().y) === index) {
+      then?.();
+      return true;
+    }
+    getUp(p, performance.now());
+    const spot = restSpot(sc.room, index, at());
+    if (!spot) return false;
+    return walkTo(sc.room, p, spot.beside.x, spot.beside.y, () => {
+      // Somewhere else by now: never mind.
+      if (sceneRef.current !== sc) return;
+      if (rest) restOn(p, spot.on.x, spot.on.y, spot.beside, performance.now());
+      then?.();
+    });
+  }, []);
+
+  const goRest = useCallback(
+    (index: number) => {
+      if (!goToPiece(index, true)) toast("There's no way to get to that.");
+    },
+    [goToPiece, toast]
+  );
+
+  /** My notebook: sit down at my desk (or table) and open it. */
+  const goToJournal = useCallback(() => {
+    const sc = sceneRef.current;
+    if (sc.kind !== "room" || sc.hostId !== me.id) return;
+    const spot = journalSpot(sc.room.interior);
+    if (!spot) return;
+    const write = () => setOpen({ kind: "journal" });
+    if (spot.seat >= 0 && goToPiece(spot.seat, true, write)) return;
+    walkTo(sc.room, player.current!, spot.x + spot.w - 1, spot.y + 1, write);
+  }, [me.id, goToPiece]);
+
+  /** My wardrobe: walk up to it and open it, to change. */
+  const goToWardrobe = useCallback(
+    (index: number) => {
+      if (!goToPiece(index, false, () => setOpen({ kind: "wardrobe" }))) setOpen({ kind: "wardrobe" });
+    },
+    [goToPiece]
+  );
+
   /** The tables in the room I'm in: the library's desks or the bakery's. */
   const openDesks = useCallback(() => {
     const sc = sceneRef.current;
@@ -1143,12 +1279,15 @@ export default function Village({ data }: { data: VillageData }) {
         setOpen({ kind: sc.kind === "indoor" && sc.indoor.kind === "bakery" ? "bakery" : "shop" });
       }
       else if (p.kind === "desk") openDesks();
-      else if (p.kind === "journal") setOpen({ kind: "journal" });
+      else if (p.kind === "journal") goToJournal();
+      else if (p.kind === "rest") goRest(p.index);
+      else if (p.kind === "getup") getUp(player.current!, performance.now());
+      else if (p.kind === "wardrobe") goToWardrobe(p.index);
       else if (p.kind === "display") setOpen({ kind: "shop", focus: p.good });
       else if (p.kind === "leave") leave();
       else void enterHouse(p.id);
     },
-    [enterArena, enterHouse, enterIndoor, leave, openDesks]
+    [enterArena, enterHouse, enterIndoor, leave, openDesks, goToJournal, goRest, goToWardrobe]
   );
 
   useEffect(() => {
@@ -1288,15 +1427,6 @@ export default function Village({ data }: { data: VillageData }) {
     return r && villageOf(r.plot) !== v ? villageInfo(villageOf(r.plot)).name : null;
   }
 
-  /** Tapped the notebook on my desk: walk up to it, then open it. */
-  function goToJournal() {
-    const sc = sceneRef.current;
-    if (sc.kind !== "room" || sc.hostId !== me.id) return;
-    const spot = journalSpot(sc.room.interior);
-    if (!spot) return;
-    walkTo(sc.room, player.current!, spot.x + spot.w - 1, spot.y + 1, () => setOpen({ kind: "journal" }));
-  }
-
   function visitHouse(id: string) {
     const away = awayIn(id);
     const r = residentOf.get(id);
@@ -1353,6 +1483,7 @@ export default function Village({ data }: { data: VillageData }) {
     const door = world.station.door;
     const p = player.current!;
     p.path = [];
+    p.rise = null;
     p.goal = null;
     p.x = door.x * T + T / 2;
     p.y = door.y * T + T / 2 + 8;
@@ -1416,6 +1547,12 @@ export default function Village({ data }: { data: VillageData }) {
         return scene.kind === "indoor" && scene.indoor.kind === "bakery" ? "Work at a café table" : "Study at the desks";
       case "journal":
         return "Write in your journal";
+      case "rest":
+        return prompt.lie ? "Lie down" : "Sit down";
+      case "getup":
+        return "Get up";
+      case "wardrobe":
+        return "Change clothes";
       case "display":
         return `Look at the ${goodById(prompt.good)?.name.toLowerCase() ?? "goods"}`;
       case "leave":
@@ -1497,6 +1634,10 @@ export default function Village({ data }: { data: VillageData }) {
               scale={S}
               onPiece={deco ? (i) => setDeco({ ...deco, selected: i, pick: null }) : undefined}
               onNotebook={isMyRoom && !deco ? goToJournal : undefined}
+              onRest={deco ? undefined : (i) => (isMyRoom && i === journalSpot(scene.room.interior)?.seat ? goToJournal() : goRest(i))}
+              canLie={isMyRoom}
+              onWardrobe={isMyRoom && !deco ? goToWardrobe : undefined}
+              writing={open?.kind === "journal"}
             />
           )}
           {scene.kind === "arena" && <ArenaView arena={scene.arena} scale={S} />}
@@ -1616,6 +1757,7 @@ export default function Village({ data }: { data: VillageData }) {
           </h1>
         </div>
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+          <CoinPurse />
           {scene.kind === "out" && (
             <>
               <button onClick={() => setOpen({ kind: "people" })} className="panel rounded-lg px-3 py-1.5 text-xs font-semibold text-mud-700 hover:text-grass-700">
@@ -1640,7 +1782,10 @@ export default function Village({ data }: { data: VillageData }) {
           {scene.kind === "room" && isMyRoom && !deco && (
             <>
               <button
-                onClick={() => setDeco({ draft: scene.room.interior, pick: null, selected: null, saving: false })}
+                onClick={() => {
+                  getUp(player.current!, performance.now());
+                  setDeco({ draft: scene.room.interior, pick: null, selected: null, saving: false });
+                }}
                 className="panel rounded-lg px-3 py-1.5 text-xs font-semibold text-grass-700 hover:text-grass-600"
               >
                 ✎ Decorate
@@ -1864,6 +2009,15 @@ export default function Village({ data }: { data: VillageData }) {
         </Panel>
       )}
       {!deco && open?.kind === "journal" && <JournalPanel onClose={() => setOpen(null)} />}
+      {!deco && open?.kind === "wardrobe" && (
+        <WardrobePanel
+          level={me.level}
+          appearance={me.appearance}
+          equipped={me.equipped}
+          onChange={(appearance, equipped) => setMe((m) => ({ ...m, appearance, equipped }))}
+          onClose={() => setOpen(null)}
+        />
+      )}
       {!deco && open?.kind === "shop" && <ShopPanel focus={open.focus} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "bakery" && <BakeryPanel friends={neighbours.map((n) => ({ id: n.id, name: n.name }))} onClose={() => setOpen(null)} />}
       {!deco && open?.kind === "desks" && (
@@ -2334,6 +2488,12 @@ function Walker({
         )}
         {bar && <HeadBar hp={bar.hp} max={bar.max} />}
       </div>
+      {/* Asleep in bed: shown by the loop (engine.ts paint) while lying down. */}
+      <span data-zzz aria-hidden className="zzz pointer-events-none absolute" style={{ display: "none", left: 38 * scale, top: 4 * scale }}>
+        <span>z</span>
+        <span>z</span>
+        <span>Z</span>
+      </span>
       {label && (
         <span
           className={`pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 whitespace-nowrap rounded px-1 text-[10px] font-semibold shadow-sm ${

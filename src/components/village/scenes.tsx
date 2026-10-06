@@ -5,7 +5,7 @@ import { FLOORS, FURNITURE, WALLS, type FurnitureKind } from "@/lib/furniture";
 import { STORE_GOODS } from "@/lib/shop";
 import { TreatShape } from "@/components/village/Treat";
 import { T } from "@/components/village/world";
-import { journalSpot, type ArenaScene, type IndoorScene, type RoomScene } from "@/components/village/rooms";
+import { journalSpot, restOf, type ArenaScene, type IndoorScene, type RoomScene } from "@/components/village/rooms";
 
 /* --------------------------------------------------------------------------
    Drawing the shared rooms. Positions are grid tiles × 32 × scale, the same
@@ -18,12 +18,23 @@ export function RoomView({
   scale: S,
   onPiece,
   onNotebook,
+  onRest,
+  canLie = false,
+  onWardrobe,
+  writing = false,
 }: {
   room: RoomScene;
   scale: number;
   onPiece?: (index: number) => void;
   /** In my own room: tapping the notebook on the desk opens it. */
   onNotebook?: () => void;
+  /** Tapping something to sit on (or, with `canLie`, a bed) goes and rests there. */
+  onRest?: (index: number) => void;
+  canLie?: boolean;
+  /** In my own room: tapping the wardrobe goes to it, to change. */
+  onWardrobe?: (index: number) => void;
+  /** I'm sat writing in the notebook: it lies open. */
+  writing?: boolean;
 }) {
   const notebook = journalSpot(room.interior);
   const wall = WALLS.find((w) => w.id === room.interior.wall) ?? WALLS[0];
@@ -98,16 +109,20 @@ export function RoomView({
         const top = isWall ? 0.4 * T : (it.y + 2) * T - lift;
         const h = isWall ? 36 : spec.h * T + lift;
         const z = isWall ? 1 : spec.layer === "rug" ? 2 : (it.y + 2 + spec.h) * T;
+        const rest = restOf(it.k);
+        const tap =
+          onPiece ?? (onRest && rest && (rest === "sit" || canLie) ? onRest : it.k === "wardrobe" ? onWardrobe : undefined);
         return (
           <div
             key={`${it.k}-${it.x}-${it.y}-${i}`}
-            className={`absolute ${onPiece ? "cursor-pointer hover:brightness-110" : "pointer-events-none"}`}
+            className={`absolute ${tap ? "cursor-pointer hover:brightness-110" : "pointer-events-none"}`}
             style={{ left: left * S, top: top * S, width: spec.w * T * S, height: h * S, zIndex: z }}
+            title={!onPiece && tap ? (rest === "lie" ? "Lie down" : rest ? "Sit down" : "Change clothes") : undefined}
             onPointerDown={
-              onPiece
+              tap
                 ? (e) => {
                     e.stopPropagation();
-                    onPiece(i);
+                    tap(i);
                   }
                 : undefined
             }
@@ -117,12 +132,14 @@ export function RoomView({
         );
       })}
 
-      {/* The notebook, on the desk (or the table, if there's no desk) */}
+      {/* The notebook, on the desk (or the table, if there's no desk): in
+          front of its chair if it has one, else at the right-hand end */}
       {notebook &&
         (() => {
+          const col = notebook.seat >= 0 ? notebook.col : notebook.x + notebook.w - 1;
           const style = {
-            left: (notebook.x * T + notebook.w * T - 32) * S,
-            top: (notebook.y * T + (notebook.kind === "desk" ? 2 : -8)) * S,
+            left: (col * T + (T - NOTEBOOK.w) / 2) * S,
+            top: (notebook.y * T + (notebook.kind === "desk" ? 2 : -11)) * S,
             width: NOTEBOOK.w * S,
             height: NOTEBOOK.h * S,
             zIndex: (notebook.y + 1) * T + 1,
@@ -139,7 +156,7 @@ export function RoomView({
                 onNotebook();
               }}
             >
-              <Notebook />
+              <Notebook open={writing} />
             </button>
           ) : (
             <div aria-hidden className="pointer-events-none absolute" style={style}>

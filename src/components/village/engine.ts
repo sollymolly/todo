@@ -1,5 +1,6 @@
 import { findPath, nearestOpen, T, tileAt, walkable, type Facing, type Grid } from "@/components/village/world";
 import { headingToward, LEGACY_HEADING } from "@/lib/heading";
+import type { Pose } from "@/components/village/rooms";
 
 /* --------------------------------------------------------------------------
    Everyone who walks: you, and friends going where they are.
@@ -54,6 +55,15 @@ export type Agent = {
   swingAt: number;
   /** When they last jumped (performance.now()), for the hop; 0 never. */
   jumpAt: number;
+  /**
+   * Sitting or lying on something in a room (rooms.ts, poseAt): drawn there
+   * instead of where they stand. Set by the loop each frame.
+   */
+  pose: Pose | null;
+  /** Me, resting: the open tile I got on from (world px), where I get up to. */
+  rise: { x: number; y: number } | null;
+  /** Getting on or off something: drawn sliding over from here (world px) as they hop, from `at`. */
+  hop: { x: number; y: number; at: number } | null;
 };
 
 /** How long a swing takes to play, start to finish. */
@@ -101,7 +111,44 @@ export function makeAgent(id: string, tx: number, ty: number, speed = WALK_SPEED
     guard: false,
     swingAt: 0,
     jumpAt: 0,
+    pose: null,
+    rise: null,
+    hop: null,
   };
+}
+
+/** Where a walker is drawn: on what they're resting on, or where they stand. */
+function shownAt(a: Agent): { x: number; y: number } {
+  return a.pose && !a.moving ? a.pose : a;
+}
+
+/**
+ * Hops onto a seat or a bed: my place becomes tile (tx, ty) of it, and
+ * `from` (a tile beside it) is where I'll get up to. Facing the room.
+ */
+export function restOn(a: Agent, tx: number, ty: number, from: { x: number; y: number }, now: number) {
+  a.hop = { ...shownAt(a), at: now };
+  a.path = [];
+  a.onArrive = undefined;
+  a.goal = null;
+  a.rise = { x: from.x * T + T / 2, y: from.y * T + T / 2 + 8 };
+  a.x = tx * T + T / 2;
+  a.y = ty * T + T / 2 + 8;
+  a.moving = false;
+  turn(a, 0, 1);
+  a.jumpAt = now;
+}
+
+/** Up off a seat or out of bed, back onto the tile I got on from. False if I wasn't resting. */
+export function getUp(a: Agent, now: number): boolean {
+  if (!a.rise) return false;
+  a.hop = { ...shownAt(a), at: now };
+  a.x = a.rise.x;
+  a.y = a.rise.y;
+  a.rise = null;
+  a.pose = null;
+  a.jumpAt = now;
+  return true;
 }
 
 /**
@@ -209,6 +256,8 @@ function straighten(world: Grid, start: { x: number; y: number }, path: { x: num
 
 /** Walk to a tile along the streets; true if there's a way there. */
 export function walkTo(world: Grid, a: Agent, tx: number, ty: number, onArrive?: () => void): boolean {
+  // Resting: up first.
+  getUp(a, performance.now());
   const from = nearestOpen(world, Math.floor(a.x / T), Math.floor((a.y - 8) / T));
   const to = nearestOpen(world, tx, ty);
   const path = findPath(world, from, to);
@@ -340,36 +389,58 @@ export function nudgePlayer(world: Grid, a: Agent, vx: number, vy: number, dt: n
 export function paint(a: Agent, scale: number, now: number) {
   const el = a.el;
   if (!el) return;
-  el.style.transform = `translate3d(${Math.round((a.x - FRAME / 2) * scale)}px, ${Math.round((a.y - FEET) * scale)}px, 0)`;
+  const pose = a.pose && !a.moving ? a.pose : null;
+  let { x, y } = pose ?? a;
+  // Hopping on or off something: slide over from where they were.
+  if (a.hop) {
+    const k = (now - a.hop.at) / JUMP_MS;
+    if (k >= 1 || k < 0) a.hop = null;
+    else {
+      const e = 1 - (1 - k) * (1 - k);
+      x = a.hop.x + (x - a.hop.x) * e;
+      y = a.hop.y + (y - a.hop.y) * e;
+    }
+  }
+  el.style.transform = `translate3d(${Math.round((x - FRAME / 2) * scale)}px, ${Math.round((y - FEET) * scale)}px, 0)`;
   // Walkers start hidden (Village.tsx) so none shows at the scene's corner
   // before its first placing.
   if (el.style.visibility) el.style.visibility = "";
-  el.style.zIndex = String(Math.round(a.y));
+  el.style.zIndex = String(pose ? pose.z : Math.round(Math.max(a.y, y)));
   const sprite = el.firstElementChild as HTMLElement | null;
   const duel = sprite?.nextElementSibling as HTMLElement | null;
+  // Resting: only the top of the knight shows (the rest is on the seat, or
+  // under the covers), and someone in bed is asleep. Changed only when it changes.
+  const posed = pose ? `${pose.kind}:${pose.show}:${scale}` : "";
+  if (sprite && (sprite.dataset.pose ?? "") !== posed) {
+    sprite.dataset.pose = posed;
+    sprite.style.clipPath = pose ? `inset(0 0 ${(FRAME - pose.show) * scale}px 0)` : "";
+    const zzz = el.querySelector<HTMLElement>(":scope > [data-zzz]");
+    if (zzz) zzz.style.display = pose?.kind === "lie" ? "" : "none";
+  }
   const cols = Number(duel?.dataset.cols || 0);
   const swing = now - a.swingAt;
-  const pose = !cols ? -1 : swing >= 0 && swing < SWING_MS ? Math.floor((swing / SWING_MS) * cols) : a.guard ? GUARD_FRAME : -1;
+  const anim = !cols ? -1 : swing >= 0 && swing < SWING_MS ? Math.floor((swing / SWING_MS) * cols) : a.guard ? GUARD_FRAME : -1;
   // A jump lifts the knight, not where they stand: their shadow, name and
   // place in the crowd stay on the ground.
   const lift = `translateY(${-Math.round(jumpLift(a, now) * scale)}px)`;
   if (sprite && sprite.style.transform !== lift) sprite.style.transform = lift;
   if (duel && duel.style.transform !== lift) duel.style.transform = lift;
   if (sprite) {
-    show(sprite, pose < 0);
-    if (pose < 0) {
-      const frame = a.moving ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
+    show(sprite, anim < 0);
+    if (anim < 0) {
+      const frame = a.moving && !pose ? 1 + (Math.floor(a.stride / 10) % 8) : 0;
       // A sheet of 16 rows (Walker's data-rows) shows the heading itself; a
-      // plain one, the nearest of its four ways.
-      const row = Number(sprite.dataset.rows) === 16 ? headingOf(a) : a.dir;
+      // plain one, the nearest of its four ways. Resting, always facing the room.
+      const fine = Number(sprite.dataset.rows) === 16;
+      const row = pose ? (fine ? LEGACY_HEADING[2] : 2) : fine ? headingOf(a) : a.dir;
       sprite.style.backgroundPosition = `${-frame * FRAME * scale}px ${-row * FRAME * scale}px`;
     }
   }
   if (duel && cols) {
-    show(duel, pose >= 0);
-    if (pose >= 0) {
+    show(duel, anim >= 0);
+    if (anim >= 0) {
       const f = Number(duel.dataset.frame) * scale;
-      duel.style.backgroundPosition = `${-pose * f}px ${-a.dir * f}px`;
+      duel.style.backgroundPosition = `${-anim * f}px ${-a.dir * f}px`;
     }
   }
 }

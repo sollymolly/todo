@@ -1,6 +1,6 @@
-import { doorOf, FURNITURE, ROOM, type Interior } from "@/lib/furniture";
+import { doorOf, FURNITURE, ROOM, type FurnitureKind, type Interior } from "@/lib/furniture";
 import type { Tier } from "@/lib/village";
-import { walkable, type Grid, type Table } from "@/components/village/world";
+import { T, walkable, type Grid, type Table } from "@/components/village/world";
 
 /* --------------------------------------------------------------------------
    The two kinds of shared room: inside a house, and the
@@ -78,24 +78,129 @@ export function wakeSpot(room: RoomScene): { x: number; y: number } {
   return { x: room.door.x, y: room.door.y - 1 };
 }
 
+/* --------------------------------------------------------------------------
+   Sitting and lying down. Someone resting is *on* the piece — their place is
+   one of its tiles, which no one can walk to — so every screen that has them
+   there draws them sitting or lying, from where they are alone (poseAt).
+   -------------------------------------------------------------------------- */
+
+/** Pieces to sit on, and where a sitter's feet go: px down from the top of the piece's tile (about 16px under the seat). */
+const SEAT_FEET: Partial<Record<FurnitureKind, number>> = { chair: 26, stool: 22, sofa: 22, throne: 24 };
+
+export type Rest = "sit" | "lie";
+
+export function restOf(kind: FurnitureKind): Rest | null {
+  return kind === "bed" ? "lie" : SEAT_FEET[kind] != null ? "sit" : null;
+}
+
+/** The floor piece on grid tile (x, y): its index among the room's items, or -1. */
+export function pieceAt(interior: Interior, x: number, y: number): number {
+  return interior.items.findIndex((it) => {
+    const spec = FURNITURE[it.k];
+    if (spec.layer !== "floor") return false;
+    const fx = x - 1;
+    const fy = y - 2;
+    return fx >= it.x && fx < it.x + spec.w && fy >= it.y && fy < it.y + spec.h;
+  });
+}
+
+/**
+ * How someone resting is drawn: feet at (x, y) in world px, at depth z,
+ * facing the room, with only the top `show` px of the 64px frame showing —
+ * the rest is folded onto the seat, or under the covers.
+ */
+export type Pose = { kind: Rest; x: number; y: number; z: number; show: number };
+
+/** Sitting or lying, if feet at world px (px, py) are on a seat or a bed; otherwise null. */
+export function poseAt(room: RoomScene, px: number, py: number): Pose | null {
+  const gx = Math.floor(px / T);
+  const i = pieceAt(room.interior, gx, Math.floor((py - 8) / T));
+  if (i < 0) return null;
+  const it = room.interior.items[i];
+  const spec = FURNITURE[it.k];
+  const left = (it.x + 1) * T;
+  const top = (it.y + 2) * T;
+  // Head on the pillow, tucked in to the chin; just in front of the bed.
+  if (it.k === "bed") return { kind: "lie", x: left + (spec.w * T) / 2, y: top + 54, z: top + spec.h * T + 1, show: 33 };
+  const feet = SEAT_FEET[it.k];
+  if (feet == null) return null;
+  // A sofa seats two, each on their own cushion; anything else, in the middle.
+  const x = it.k === "sofa" ? (gx + 0.5) * T : left + (spec.w * T) / 2;
+  // Pulled up to a table or a desk: sat lower, so it hides them from the
+  // waist down and the chair's back shows over their head.
+  const ahead = pieceAt(room.interior, gx, it.y + 2 + spec.h);
+  const tucked = ahead >= 0 && (room.interior.items[ahead].k === "table" || room.interior.items[ahead].k === "desk");
+  return { kind: "sit", x, y: top + feet + (tucked ? 15 : 0), z: top + spec.h * T + 1, show: tucked ? 64 : 50 };
+}
+
+/**
+ * Getting to piece `index` from grid tile `from` — to sit on it, lie on it,
+ * or open it: the open tile beside it to step up from (the nearest), and the
+ * piece's tile next to that one.
+ */
+export function restSpot(room: RoomScene, index: number, from: { x: number; y: number }): { on: { x: number; y: number }; beside: { x: number; y: number } } | null {
+  const it = room.interior.items[index];
+  if (!it || FURNITURE[it.k].layer !== "floor") return null;
+  const spec = FURNITURE[it.k];
+  let best: { on: { x: number; y: number }; beside: { x: number; y: number } } | null = null;
+  let bestD = Infinity;
+  for (let dy = 0; dy < spec.h; dy++)
+    for (let dx = 0; dx < spec.w; dx++) {
+      const on = { x: it.x + 1 + dx, y: it.y + 2 + dy };
+      for (const [ox, oy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+        const beside = { x: on.x + ox, y: on.y + oy };
+        if (!walkable(room, beside.x, beside.y) || (beside.x === room.door.x && beside.y === room.door.y)) continue;
+        const d = Math.hypot(beside.x - from.x, beside.y - from.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { on, beside };
+        }
+      }
+    }
+  return best;
+}
+
 /**
  * The piece the notebook sits on: my first desk, or failing that my first
- * table. In grid tiles, with its index among the room's items.
+ * table. In grid tiles, with its index among the room's items — and the seat
+ * that goes with it (-1 if none): one tucked in behind it, or else pulled up
+ * at its side or in front. `col`: the seat's column nearest the middle of the
+ * piece, where the notebook is put.
  */
-export function journalSpot(interior: Interior): { index: number; x: number; y: number; w: number; kind: "desk" | "table" } | null {
+export function journalSpot(
+  interior: Interior
+): { index: number; x: number; y: number; w: number; kind: "desk" | "table"; seat: number; col: number } | null {
   for (const kind of ["desk", "table"] as const) {
     const index = interior.items.findIndex((it) => it.k === kind);
-    if (index >= 0) {
-      const it = interior.items[index];
-      return { index, x: it.x + 1, y: it.y + 2, w: FURNITURE[kind].w, kind };
-    }
+    if (index < 0) continue;
+    const it = interior.items[index];
+    const w = FURNITURE[kind].w;
+    const spot = { index, x: it.x + 1, y: it.y + 2, w, kind, seat: -1, col: -1 };
+    // Floor columns the piece covers, and how a seat at (x, y, sw, sh) lies to it.
+    const overlaps = (x: number, sw: number) => x < it.x + w && x + sw > it.x;
+    const rank = (s: { x: number; y: number }, sw: number, sh: number) =>
+      s.y + sh === it.y && overlaps(s.x, sw) ? 0 : s.y <= it.y && s.y + sh > it.y && (s.x + sw === it.x || s.x === it.x + w) ? 1 : s.y === it.y + 1 && overlaps(s.x, sw) ? 2 : -1;
+    let bestRank = 3;
+    interior.items.forEach((s, i) => {
+      if (restOf(s.k) !== "sit") return;
+      const { w: sw, h: sh } = FURNITURE[s.k];
+      const r = rank(s, sw, sh);
+      if (r < 0 || r >= bestRank) return;
+      bestRank = r;
+      spot.seat = i;
+      // The seat's column closest to the piece's middle.
+      const mid = it.x + w / 2 - 0.5;
+      const c = Math.max(s.x, Math.min(s.x + sw - 1, Math.round(mid)));
+      spot.col = Math.max(it.x, Math.min(it.x + w - 1, c)) + 1;
+    });
+    return spot;
   }
   return null;
 }
 
 /** Am I close enough to write in the notebook? `tx`, `ty`: my place in grid tiles (feet, so a row's tile is its top + 0.75). */
 export function nearJournal(spot: { x: number; y: number; w: number }, tx: number, ty: number): boolean {
-  return tx >= spot.x - 1 && tx <= spot.x + spot.w + 1 && ty >= spot.y + 0.5 && ty < spot.y + 2.6;
+  return tx >= spot.x - 1 && tx <= spot.x + spot.w + 1 && ty >= spot.y - 1.5 && ty < spot.y + 2.6;
 }
 
 export function buildArena(): ArenaScene {

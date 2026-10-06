@@ -25,26 +25,23 @@ import {
 import { saveAppearance, saveDisplayName, saveEquipped } from "@/lib/actions";
 import type { Appearance, DyeSlot, Equipped, Profile, Slot } from "@/lib/types";
 
-type Tab = "look" | Slot;
+export type Tab = "look" | Slot;
 
-export default function CharacterStudio({
-  profile,
-  initialSlot,
-}: {
-  profile: Profile;
-  initialSlot?: Slot;
-}) {
-  const [appearance, setAppearance] = useState<Appearance>(profile.appearance);
-  const [equipped, setEquipped] = useState<Equipped>(profile.equipped);
-  const [name, setName] = useState(profile.display_name);
-  const [tab, setTab] = useState<Tab>(initialSlot ?? "look");
+/**
+ * What I'm wearing and how I look, changed a pick at a time and saved as
+ * I go: here, and at the wardrobe at home (village/WardrobePanel.tsx).
+ * `onSaved` hears each change once it's kept.
+ */
+export function useOutfit(
+  start: { appearance: Appearance; equipped: Equipped },
+  level: number,
+  onSaved?: (appearance: Appearance, equipped: Equipped) => void
+) {
+  const [appearance, setAppearance] = useState<Appearance>(start.appearance);
+  const [equipped, setEquipped] = useState<Equipped>(start.equipped);
   const [saving, startSaving] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-
-  // Earned levels are permanent, so the wardrobe gate follows the stored one.
-  const level = profile.level ?? levelFor(profile.xp);
-  const p = progressFor(profile.xp);
 
   function setLook(patch: Partial<Appearance>) {
     const next = { ...appearance, ...patch };
@@ -52,6 +49,7 @@ export default function CharacterStudio({
     startSaving(async () => {
       try {
         await saveAppearance(next);
+        onSaved?.(next, equipped);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not save");
       }
@@ -76,11 +74,32 @@ export default function CharacterStudio({
     startSaving(async () => {
       try {
         await saveEquipped(next);
+        onSaved?.(appearance, next);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not save");
       }
     });
   }
+
+  return { appearance, equipped, saving, startSaving, error, setError, flash, setLook, equip, dye };
+}
+
+export type Outfit = ReturnType<typeof useOutfit>;
+
+export default function CharacterStudio({
+  profile,
+  initialSlot,
+}: {
+  profile: Profile;
+  initialSlot?: Slot;
+}) {
+  // Earned levels are permanent, so the wardrobe gate follows the stored one.
+  const level = profile.level ?? levelFor(profile.xp);
+  const p = progressFor(profile.xp);
+  const outfit = useOutfit(profile, level);
+  const { appearance, equipped, saving, startSaving, error, setError, flash } = outfit;
+  const [name, setName] = useState(profile.display_name);
+  const [tab, setTab] = useState<Tab>(initialSlot ?? "look");
 
   return (
     <>
@@ -186,153 +205,179 @@ export default function CharacterStudio({
 
           {/* ---------------------------------------------------- options */}
           <div className="min-w-0">
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              <TabButton on={tab === "look"} onClick={() => setTab("look")}>
-                Appearance
-              </TabButton>
-              {SLOTS.map(({ slot, label }) => (
-                <TabButton
-                  key={slot}
-                  on={tab === slot}
-                  onClick={() => setTab(slot)}
-                >
-                  {label}
-                </TabButton>
-              ))}
-            </div>
-
-            {tab === "look" ? (
-              <div className="space-y-4">
-                <Group title="Body">
-                  <div className="flex flex-wrap gap-1.5">
-                    {BODY_TYPES.map((b) => (
-                      <Chip
-                        key={b.id}
-                        on={appearance.body === b.id}
-                        onClick={() => setLook({ body: b.id })}
-                      >
-                        {b.label}
-                      </Chip>
-                    ))}
-                  </div>
-                </Group>
-
-                <Group title="Skin">
-                  <div className="flex flex-wrap gap-2">
-                    {SKINS.map((s) => (
-                      <Swatch
-                        key={s.id}
-                        hex={s.hex}
-                        label={s.label}
-                        on={appearance.skin === s.id}
-                        onClick={() => setLook({ skin: s.id })}
-                      />
-                    ))}
-                  </div>
-                </Group>
-
-                <Group title="Hair color">
-                  <div className="flex flex-wrap gap-2">
-                    {HAIR_COLORS.map((h) => (
-                      <Swatch
-                        key={h.id}
-                        hex={h.hex}
-                        label={h.label}
-                        on={appearance.hairColor === h.id}
-                        onClick={() => setLook({ hairColor: h.id })}
-                      />
-                    ))}
-                  </div>
-                </Group>
-
-                <Group title="Hair style">
-                  <div className="flex flex-wrap gap-1.5">
-                    {HAIR_STYLES.map((h) => (
-                      <Chip
-                        key={h.id}
-                        on={appearance.hair === h.id}
-                        onClick={() => setLook({ hair: h.id })}
-                      >
-                        {h.label}
-                      </Chip>
-                    ))}
-                  </div>
-                </Group>
-
-                <Group title="Eye color">
-                  <div className="flex flex-wrap gap-2">
-                    {EYE_COLORS.map((e) => (
-                      <Swatch
-                        key={e.id}
-                        hex={e.hex}
-                        label={e.label}
-                        on={appearance.eyes === e.id}
-                        onClick={() => setLook({ eyes: e.id })}
-                      />
-                    ))}
-                  </div>
-                </Group>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Group
-                  title={SLOTS.find((s) => s.slot === tab)?.label ?? ""}
-                >
-                  <ul className="grid gap-1.5 sm:grid-cols-2">
-                    {itemsForSlot(tab).map((item) => {
-                      const locked = item.level > level;
-                      const on = equipped[tab] === item.id;
-                      return (
-                        <li key={`${tab}-${item.id}`}>
-                          <button
-                            onClick={() => equip(tab, item)}
-                            className={`flex w-full items-start gap-2.5 rounded-xl border-2 px-3 py-2 text-left transition ${
-                              on
-                                ? "border-grass-500 bg-grass-50"
-                                : locked
-                                  ? "cursor-not-allowed border-mud-200 bg-mud-50 opacity-60"
-                                  : "border-mud-200 bg-white/70 hover:border-mud-400 hover:bg-white"
-                            }`}
-                          >
-                            <span className="mt-0.5 text-sm">
-                              {locked ? "✕" : on ? "✓" : "·"}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-baseline justify-between gap-2">
-                                <span
-                                  className={`truncate text-sm font-bold ${
-                                    on ? "text-grass-700" : "text-mud-900"
-                                  }`}
-                                >
-                                  {item.name}
-                                </span>
-                                <span className="shrink-0 font-mono text-[10px] font-bold text-mud-400">
-                                  Lv {item.level}
-                                </span>
-                              </span>
-                              <span className="mt-0.5 block text-[11.5px] leading-snug text-mud-500">
-                                {item.blurb}
-                              </span>
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Group>
-
-                {isDyeSlot(tab) && (
-                  <DyeGroup
-                    slot={tab}
-                    equipped={equipped}
-                    onPick={(id) => dye(tab, id)}
-                  />
-                )}
-              </div>
-            )}
+            <OutfitOptions outfit={outfit} level={level} tab={tab} onTab={setTab} />
           </div>
         </div>
       </main>
+    </>
+  );
+}
+
+/**
+ * The choices: how I look, and a tab for each slot of gear with its dyes.
+ * `compact`: for a narrow panel (the wardrobe at home), one column, no cards.
+ */
+export function OutfitOptions({
+  outfit,
+  level,
+  tab,
+  onTab,
+  compact = false,
+}: {
+  outfit: Outfit;
+  level: number;
+  tab: Tab;
+  onTab: (tab: Tab) => void;
+  compact?: boolean;
+}) {
+  const { appearance, equipped, setLook, equip, dye } = outfit;
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        <TabButton on={tab === "look"} onClick={() => onTab("look")}>
+          Appearance
+        </TabButton>
+        {SLOTS.map(({ slot, label }) => (
+          <TabButton
+            key={slot}
+            on={tab === slot}
+            onClick={() => onTab(slot)}
+          >
+            {label}
+          </TabButton>
+        ))}
+      </div>
+
+      {tab === "look" ? (
+        <div className="space-y-4">
+          <Group compact={compact} title="Body">
+            <div className="flex flex-wrap gap-1.5">
+              {BODY_TYPES.map((b) => (
+                <Chip
+                  key={b.id}
+                  on={appearance.body === b.id}
+                  onClick={() => setLook({ body: b.id })}
+                >
+                  {b.label}
+                </Chip>
+              ))}
+            </div>
+          </Group>
+
+          <Group compact={compact} title="Skin">
+            <div className="flex flex-wrap gap-2">
+              {SKINS.map((s) => (
+                <Swatch
+                  key={s.id}
+                  hex={s.hex}
+                  label={s.label}
+                  on={appearance.skin === s.id}
+                  onClick={() => setLook({ skin: s.id })}
+                />
+              ))}
+            </div>
+          </Group>
+
+          <Group compact={compact} title="Hair color">
+            <div className="flex flex-wrap gap-2">
+              {HAIR_COLORS.map((h) => (
+                <Swatch
+                  key={h.id}
+                  hex={h.hex}
+                  label={h.label}
+                  on={appearance.hairColor === h.id}
+                  onClick={() => setLook({ hairColor: h.id })}
+                />
+              ))}
+            </div>
+          </Group>
+
+          <Group compact={compact} title="Hair style">
+            <div className="flex flex-wrap gap-1.5">
+              {HAIR_STYLES.map((h) => (
+                <Chip
+                  key={h.id}
+                  on={appearance.hair === h.id}
+                  onClick={() => setLook({ hair: h.id })}
+                >
+                  {h.label}
+                </Chip>
+              ))}
+            </div>
+          </Group>
+
+          <Group compact={compact} title="Eye color">
+            <div className="flex flex-wrap gap-2">
+              {EYE_COLORS.map((e) => (
+                <Swatch
+                  key={e.id}
+                  hex={e.hex}
+                  label={e.label}
+                  on={appearance.eyes === e.id}
+                  onClick={() => setLook({ eyes: e.id })}
+                />
+              ))}
+            </div>
+          </Group>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <Group
+            compact={compact}
+            title={SLOTS.find((s) => s.slot === tab)?.label ?? ""}
+          >
+            <ul className={`grid gap-1.5 ${compact ? "" : "sm:grid-cols-2"}`}>
+              {itemsForSlot(tab).map((item) => {
+                const locked = item.level > level;
+                const on = equipped[tab] === item.id;
+                return (
+                  <li key={`${tab}-${item.id}`}>
+                    <button
+                      onClick={() => equip(tab, item)}
+                      className={`flex w-full items-start gap-2.5 rounded-xl border-2 px-3 py-2 text-left transition ${
+                        on
+                          ? "border-grass-500 bg-grass-50"
+                          : locked
+                            ? "cursor-not-allowed border-mud-200 bg-mud-50 opacity-60"
+                            : "border-mud-200 bg-white/70 hover:border-mud-400 hover:bg-white"
+                      }`}
+                    >
+                      <span className="mt-0.5 text-sm">
+                        {locked ? "✕" : on ? "✓" : "·"}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span
+                            className={`truncate text-sm font-bold ${
+                              on ? "text-grass-700" : "text-mud-900"
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                          <span className="shrink-0 font-mono text-[10px] font-bold text-mud-400">
+                            Lv {item.level}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block text-[11.5px] leading-snug text-mud-500">
+                          {item.blurb}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Group>
+
+          {isDyeSlot(tab) && (
+            <DyeGroup
+              slot={tab}
+              equipped={equipped}
+              onPick={(id) => dye(tab, id)}
+            />
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -373,17 +418,19 @@ function DyeGroup({
   slot,
   equipped,
   onPick,
+  compact = false,
 }: {
   slot: DyeSlot;
   equipped: Equipped;
   onPick: (id: string) => void;
+  compact?: boolean;
 }) {
   const worn = findItem(slot, equipped[slot]);
   const swatches = dyesFor(worn);
   const current = resolveDye(worn, equipped.dyes?.[slot]);
 
   return (
-    <Group title={worn?.dye?.kind === "metal" ? "Finish" : "Dye"}>
+    <Group compact={compact} title={worn?.dye?.kind === "metal" ? "Finish" : "Dye"}>
       {swatches.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {swatches.map((d) => (
@@ -407,9 +454,9 @@ function DyeGroup({
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, children, compact = false }: { title: string; children: React.ReactNode; compact?: boolean }) {
   return (
-    <section className="panel rounded-2xl p-4">
+    <section className={compact ? "" : "panel rounded-2xl p-4"}>
       <h2 className="mb-2.5 font-display text-sm font-bold tracking-wide text-mud-700">
         {title}
       </h2>

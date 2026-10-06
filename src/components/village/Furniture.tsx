@@ -11,7 +11,7 @@ import { TreatShape } from "@/components/village/Treat";
    -------------------------------------------------------------------------- */
 
 export const LIFT: Record<FurnitureKind, number> = {
-  bed: 14, table: 10, chair: 16, stool: 6, plant: 22, rug: 0, lamp: 30, chest: 8,
+  bed: 14, table: 10, chair: 16, stool: 6, plant: 22, rug: 0, lamp: 30, wardrobe: 40,
   bookshelf: 44, desk: 14, sofa: 16, armorstand: 34, fireplace: 40, trophy: 22, throne: 44,
   painting: 0, window: 0, clock: 0, mirror: 0, banner: 0,
   piano: 30, aquarium: 26, telescope: 30, stainedglass: 0,
@@ -38,12 +38,19 @@ function body(kind: FurnitureKind, w: number, h: number): React.ReactNode {
         </g>
       );
     case "table":
+      // A plain wooden table: the top, its front edge, and four legs (the
+      // back two in shadow). Clear on top, for the notebook.
       return (
         <g>
-          <rect x={6} y={10} width={4} height={H - 10} fill={WOOD_D} />
-          <rect x={W - 10} y={10} width={4} height={H - 10} fill={WOOD_D} />
-          <rect x={1} y={-8} width={W - 2} height={20} rx={4} fill={WOOD_L} stroke={INK} strokeWidth={2} />
-          <rect x={W / 2 - 6} y={-5} width={12} height={8} rx={2} fill="#f4ecd6" />
+          <rect x={9} y={4} width={3} height={H - 8} fill="#5a3e28" />
+          <rect x={W - 12} y={4} width={3} height={H - 8} fill="#5a3e28" />
+          <rect x={3} y={6} width={5} height={H - 7} fill={WOOD_D} stroke={INK} strokeWidth={1.5} />
+          <rect x={W - 8} y={6} width={5} height={H - 7} fill={WOOD_D} stroke={INK} strokeWidth={1.5} />
+          <rect x={1} y={-9} width={W - 2} height={15} rx={2} fill={WOOD_L} stroke={INK} strokeWidth={2} />
+          <rect x={1} y={3} width={W - 2} height={6} fill={WOOD} stroke={INK} strokeWidth={2} />
+          <rect x={4} y={-6} width={W - 8} height={2} fill="#c9a27a" />
+          <rect x={10} y={-2} width={18} height={1} fill="#a07a50" />
+          <rect x={36} y={0} width={14} height={1} fill="#a07a50" />
         </g>
       );
     case "chair":
@@ -88,13 +95,25 @@ function body(kind: FurnitureKind, w: number, h: number): React.ReactNode {
           <path d="M6 -12 L26 -12 L21 -28 L11 -28 Z" fill="#f2d48a" stroke={INK} strokeWidth={2} />
         </g>
       );
-    case "chest":
+    case "wardrobe":
+      // Tall, with two doors, a drawer below, and a scarf caught in the doors.
       return (
         <g>
-          <rect x={3} y={4} width={26} height={24} rx={2} fill={WOOD} stroke={INK} strokeWidth={2} />
-          <path d="M3 10 Q16 -6 29 10" fill={WOOD_L} stroke={INK} strokeWidth={2} />
-          <rect x={3} y={9} width={26} height={3} fill="#c9a24a" />
-          <rect x={14} y={12} width={5} height={6} fill="#e2c26a" stroke={INK} strokeWidth={1} />
+          <rect x={2} y={-38} width={28} height={66} fill={WOOD} stroke={INK} strokeWidth={2} />
+          <rect x={0} y={-42} width={32} height={6} rx={1} fill={WOOD_D} stroke={INK} strokeWidth={2} />
+          <rect x={5} y={-33} width={10} height={44} fill={WOOD_L} stroke={INK} strokeWidth={1.5} />
+          <rect x={17} y={-33} width={10} height={44} fill={WOOD_L} stroke={INK} strokeWidth={1.5} />
+          <rect x={7} y={-29} width={6} height={16} fill="none" stroke={WOOD_D} strokeWidth={1} />
+          <rect x={19} y={-29} width={6} height={16} fill="none" stroke={WOOD_D} strokeWidth={1} />
+          <rect x={7} y={-9} width={6} height={16} fill="none" stroke={WOOD_D} strokeWidth={1} />
+          <rect x={19} y={-9} width={6} height={16} fill="none" stroke={WOOD_D} strokeWidth={1} />
+          <path d="M15 -2 L17 -2 L19 10 L16 8 L13 10 Z" fill="#b5523b" stroke={INK} strokeWidth={1} />
+          <rect x={13} y={-14} width={2} height={4} fill="#e2c26a" />
+          <rect x={17} y={-14} width={2} height={4} fill="#e2c26a" />
+          <rect x={5} y={15} width={22} height={9} fill={WOOD_D} stroke={INK} strokeWidth={1.5} />
+          <rect x={13} y={18} width={6} height={2} fill="#e2c26a" />
+          <rect x={3} y={28} width={4} height={3} fill={INK} />
+          <rect x={25} y={28} width={4} height={3} fill={INK} />
         </g>
       );
     case "bookshelf":
@@ -342,20 +361,41 @@ export default function Furniture({ kind, ghost = false }: { kind: FurnitureKind
 
 /**
  * The notebook that sits on the desk (or table) at home: a closed blue
- * notebook with a label and a ribbon. 26 × 20 px at 1×; the room places it
- * (scenes.tsx, RoomView).
+ * notebook with a label and a ribbon — or, while I'm sat writing in it, lying
+ * open with a quill. 26 × 20 px at 1×; the room places it (scenes.tsx,
+ * RoomView).
  */
 export const NOTEBOOK = { w: 26, h: 20 };
 
-export function Notebook() {
+export function Notebook({ open = false }: { open?: boolean }) {
   return (
     <svg viewBox={`0 0 ${NOTEBOOK.w} ${NOTEBOOK.h}`} width={NOTEBOOK.w} height={NOTEBOOK.h} shapeRendering="crispEdges" aria-hidden className="block h-full w-full">
-      <rect x={2} y={16} width={22} height={3} fill="#000" opacity={0.15} />
-      <rect x={2} y={3} width={22} height={13} rx={1} fill="#f4ecd6" stroke={INK} strokeWidth={1.5} />
-      <rect x={1} y={1} width={21} height={13} rx={1} fill="#3f6b8f" stroke={INK} strokeWidth={1.5} />
-      <rect x={2} y={2} width={4} height={11} fill="#2f5270" />
-      <rect x={10} y={4} width={9} height={5} fill="#e9d9a8" stroke={INK} strokeWidth={1} />
-      <rect x={17} y={13} width={2} height={6} fill="#b5523b" />
+      <rect x={1} y={16} width={24} height={3} fill="#000" opacity={0.15} />
+      {open ? (
+        <>
+          <rect x={0} y={6} width={26} height={11} rx={1} fill="#3f6b8f" stroke={INK} strokeWidth={1} />
+          <rect x={1} y={5} width={12} height={10} fill="#fbf7ee" stroke={INK} strokeWidth={1} />
+          <rect x={13} y={5} width={12} height={10} fill="#f4ecd6" stroke={INK} strokeWidth={1} />
+          {[8, 10, 12].map((y) => (
+            <g key={y}>
+              <rect x={3} y={y} width={8} height={1} fill="#a9b8c9" />
+              <rect x={15} y={y} width={y === 12 ? 4 : 8} height={1} fill="#a9b8c9" />
+            </g>
+          ))}
+          <rect x={12} y={14} width={2} height={5} fill="#b5523b" />
+          {/* The quill, mid-word */}
+          <path d="M19 12 L25 1 L26 3 L20 13 Z" fill="#fbf7ee" stroke={INK} strokeWidth={0.75} />
+          <rect x={19} y={12} width={1} height={2} fill={INK} />
+        </>
+      ) : (
+        <>
+          <rect x={2} y={3} width={22} height={13} rx={1} fill="#f4ecd6" stroke={INK} strokeWidth={1.5} />
+          <rect x={1} y={1} width={21} height={13} rx={1} fill="#3f6b8f" stroke={INK} strokeWidth={1.5} />
+          <rect x={2} y={2} width={4} height={11} fill="#2f5270" />
+          <rect x={10} y={4} width={9} height={5} fill="#e9d9a8" stroke={INK} strokeWidth={1} />
+          <rect x={17} y={13} width={2} height={6} fill="#b5523b" />
+        </>
+      )}
     </svg>
   );
 }
